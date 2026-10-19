@@ -513,7 +513,75 @@ text \<open>@{text det} now has a body: Laplace expansion along the first row
   definition layer computes the expected numbers.\<close>
 
 lemma T2_B2: "i \<noteq> j \<Longrightarrow> det (row_add_matrix m i j f) = 1"
-  sorry
+proof (induct m arbitrary: i j f)
+  case 0
+  show ?case by (simp add: row_add_matrix_def id_mat_def)
+next
+  case (Suc n)
+  show ?case
+  proof (cases "n < i")
+    case True
+    hence "Suc n \<le> i" by simp
+    hence eq: "row_add_matrix (Suc n) i j f = id_mat (Suc n)"
+      by (rule aux_t2_nofire_i)
+    have "det (id_mat (Suc n)) = (1::int)" by (rule aux_det_id_mat)
+    thus ?thesis using eq by simp
+  next
+    case False
+    hence im: "i < Suc n" by simp
+    show ?thesis
+    proof (cases "n < j")
+      case True
+      hence "Suc n \<le> j" by simp
+      hence eq: "row_add_matrix (Suc n) i j f = id_mat (Suc n)"
+        by (rule aux_t2_nofire_j)
+      have "det (id_mat (Suc n)) = (1::int)" by (rule aux_det_id_mat)
+      thus ?thesis using eq by simp
+    next
+      case False
+      hence jm: "j < Suc n" by simp
+      show ?thesis
+      proof (cases "i = 0")
+        case True
+        hence j0: "0 < j" using \<open>i \<noteq> j\<close> by simp
+        have "det (row_add_matrix (Suc n) 0 j f) = (1::int)"
+          by (rule aux_el_det_elementary_i0) (simp, rule j0, rule jm)
+        thus ?thesis using True by simp
+      next
+        case False
+        hence i0: "0 < i" by simp
+        have red: "det (row_add_matrix (Suc n) i j f)
+                 = det (map (del_col 0) (tl (row_add_matrix (Suc n) i j f)))"
+          by (rule aux_t2_head_reduce) (simp, rule i0)
+        show ?thesis
+        proof (cases "j = 0")
+          case True
+          have "map (del_col 0) (tl (row_add_matrix (Suc n) i 0 f)) = id_mat (Suc n - 1)"
+            by (rule aux_t2_minor0_j0) (simp, rule i0, rule im)
+          hence "det (map (del_col 0) (tl (row_add_matrix (Suc n) i 0 f))) = (1::int)"
+            using aux_det_id_mat by simp
+          thus ?thesis using red True by simp
+        next
+          case False
+          hence j0: "0 < j" by simp
+          have minor: "map (del_col 0) (tl (row_add_matrix (Suc n) i j f))
+                     = row_add_matrix (Suc n - 1) (i - 1) (j - 1) f"
+            by (rule aux_t2_minor0_jpos) (simp, rule i0, rule j0, rule im, rule jm)
+          have nE: "Suc n - 1 = n" by simp
+          have ij: "i - 1 \<noteq> j - 1"
+          proof
+            assume "i - 1 = j - 1"
+            hence "i = j" using i0 j0 by simp
+            thus False using \<open>i \<noteq> j\<close> by simp
+          qed
+          have ih: "det (row_add_matrix n (i - 1) (j - 1) f) = (1::int)"
+            by (rule Suc.hyps) (rule ij)
+          show ?thesis using red minor nE ih by simp
+        qed
+      qed
+    qed
+  qed
+qed
 
 lemma T2_B2_det2_id: "det2 (id_mat 2) = 1"
   by (simp add: det2_def id_mat_def entry_def)

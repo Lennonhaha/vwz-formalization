@@ -15,7 +15,7 @@ tiers; the counts below are generated, not asserted.
 
 | Session | Content | Lemmas | `sorry` |
 |---|---|---|---|
-| `VWZ_A3_Aligned` | Definition layers + obligation inventory | 56 | 18 |
+| `VWZ_A3_Aligned` | Definition layers + obligation inventory | 56 | 17 |
 
 `VWZ_A3_Aligned` is the only session that carries obligations. The remaining
 sessions are scaffolding:
@@ -40,7 +40,7 @@ aligned/                       the obligation-carrying session
   VWZ_Fq3329.thy               F_3329 as `residue_ring (int 3329)`, parameters, encoders
   VWZ_Matrix.thy               matrix layer: rows, cols, det (Laplace), row ops
   VWZ_Protocol.thy             protocol records and decoders
-  VWZ_Aux.thy                  auxiliary lemmas (determinants, zero rows, i = 0 branch)
+  VWZ_Aux.thy                  auxiliary lemmas (determinants, zero rows, T2_B2 support)
   VWZ_ObligationsAligned.thy   the obligation inventory, tiered T0..T3
 skeleton/  smoke/  neg/        scaffolding sessions
 tools/count.cjs                lemma / sorry counter (source of the table above)

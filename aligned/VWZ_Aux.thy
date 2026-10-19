@@ -927,4 +927,395 @@ proof -
   show ?thesis using unfold collapse g0 by simp
 qed
 
+(* seg: aux-t2-rowadd-20261019 *)
+text \<open>--- T2_B2 support: elementary row addition has determinant 1 ---
+
+  These lemmas serve T2_B2 only; per scheme C they are tooling, not obligations,
+  so they do not appear in the obligation ledger.
+
+  Key fact that removes all side conditions from T2_B2: an out-of-range index
+  never fires, so row_add_matrix degenerates to id_mat, whose determinant is 1.\<close>
+
+text \<open>--- A1: an out-of-range row index never fires ---\<close>
+lemma aux_t2_nofire_i:
+  assumes hi: "m \<le> i"
+  shows "row_add_matrix m i j f = id_mat m"
+  by (simp add: row_add_matrix_def id_mat_def) (use hi in simp)
+
+text \<open>--- A2: an out-of-range column index never fires either ---\<close>
+lemma aux_t2_nofire_j:
+  assumes hj: "m \<le> j"
+  shows "row_add_matrix m i j f = id_mat m"
+  by (simp add: row_add_matrix_def id_mat_def) (use hj in simp)
+
+text \<open>--- A3: with i > 0 the head row is the pure unit row, so det reduces to
+        the (0,0) minor ---\<close>
+lemma aux_t2_head_reduce:
+  assumes m0: "0 < m" and i0: "0 < i"
+  shows "det (row_add_matrix m i j f)
+       = det (map (del_col 0) (tl (row_add_matrix m i j f)))"
+proof -
+  let ?E = "row_add_matrix m i j f"
+  have lenE: "length ?E = m" by (simp add: row_add_matrix_def)
+  have ne: "?E \<noteq> []"
+  proof
+    assume "?E = []"
+    hence "m = 0" using lenE by simp
+    thus False using m0 by simp
+  qed
+  have hdrow: "hd ?E = (1::int) # replicate (m - 1) 0"
+  proof -
+    have h: "?E = map (\<lambda>r. map (\<lambda>c. if r = i \<and> c = j then f
+                else (if r = c then (1::int) else 0)) [0..<m]) [0..<m]"
+      by (simp add: row_add_matrix_def)
+    have s: "[0..<m] = 0 # [Suc 0..<m]"
+      by (rule upt_conv_Cons) (simp add: m0)
+    have ne0: "i \<noteq> 0" using i0 by simp
+    have row: "map (\<lambda>c. if 0 = i \<and> c = j then f
+                else (if 0 = c then (1::int) else 0)) [0..<m]
+             = (1::int) # replicate (m - 1) 0"
+    proof -
+      have a: "map (\<lambda>c. if 0 = i \<and> c = j then f
+                  else (if 0 = c then (1::int) else 0)) [0..<m]
+             = map (\<lambda>c. if c = 0 then (1::int) else 0) [0..<m]"
+        using ne0 by simp
+      have b: "map (\<lambda>c. if c = 0 then (1::int) else 0) [0..<m]
+             = (1::int) # map (\<lambda>c. if c = 0 then (1::int) else 0) [Suc 0..<m]"
+      proof -
+        have s2: "[0..<m] = 0 # [Suc 0..<m]"
+          by (rule upt_conv_Cons) (simp add: m0)
+        show ?thesis using s2 by simp
+      qed
+      have c: "map (\<lambda>c. if c = 0 then (1::int) else 0) [Suc 0..<m] = replicate (m - 1) 0"
+      proof (rule nth_equalityI)
+        show "length (map (\<lambda>c. if c = 0 then (1::int) else 0) [Suc 0..<m])
+            = length (replicate (m - 1) 0)" by simp
+      next
+        fix k
+        assume k: "k < length (map (\<lambda>c. if c = 0 then (1::int) else 0) [Suc 0..<m])"
+        have h1: "map (\<lambda>c. if c = 0 then (1::int) else 0) [Suc 0..<m] ! k
+                = (if [Suc 0..<m] ! k = 0 then (1::int) else 0)"
+          using k by (simp add: nth_map)
+        have h2: "[Suc 0..<m] ! k = Suc 0 + k" using k by (simp add: nth_upt)
+        have h3: "Suc 0 + k \<noteq> 0" by simp
+        have h4: "replicate (m - 1) (0::int) ! k = (0::int)" using k by simp
+        show "map (\<lambda>c. if c = 0 then (1::int) else 0) [Suc 0..<m] ! k
+            = replicate (m - 1) 0 ! k"
+          using h1 h2 h3 h4 by simp
+      qed
+      show ?thesis using a b c by simp
+    qed
+    show ?thesis using h s row by simp
+  qed
+  have step: "det (((1::int) # replicate (m - 1) 0) # tl ?E)
+            = det (map (del_col 0) (tl ?E))"
+  proof (rule aux_det_head_one_cons)
+    show "(1::int) = 1" by simp
+  next
+    fix k :: nat
+    assume k1: "0 < k" and k2: "k < Suc (length (replicate (m - 1) (0::int)))"
+    have len: "length (replicate (m - 1) (0::int)) = m - 1" by simp
+    hence km: "k - Suc 0 < m - 1" using k1 k2 by simp
+    show "replicate (m - 1) (0::int) ! (k - Suc 0) = (0::int)" using km by simp
+  qed
+  have Eeq: "?E = hd ?E # tl ?E"
+  proof -
+    have a: "hd ?E # tl ?E = ?E" by (rule hd_Cons_tl) (rule ne)
+    thus ?thesis by simp
+  qed
+  show ?thesis using Eeq hdrow step by simp
+qed
+
+text \<open>--- A4: with i > 0 and j = 0, the (0,0) minor is the identity ---\<close>
+lemma aux_t2_minor0_j0:
+  assumes m0: "0 < m" and i0: "0 < i" and im: "i < m"
+  shows "map (del_col 0) (tl (row_add_matrix m i 0 f)) = id_mat (m - 1)"
+proof (rule nth_equalityI)
+  have len: "length (row_add_matrix m i 0 f) = m" by (simp add: row_add_matrix_def)
+  have ne: "row_add_matrix m i 0 f \<noteq> []"
+  proof
+    assume "row_add_matrix m i 0 f = []"
+    hence "length (row_add_matrix m i 0 f) = 0" by simp
+    thus False using len m0 by simp
+  qed
+  have tl_len: "length (tl (row_add_matrix m i 0 f)) = m - 1"
+  proof -
+    have "length (tl (row_add_matrix m i 0 f)) = length (row_add_matrix m i 0 f) - 1"
+      by (simp add: ne)
+    thus ?thesis using len by simp
+  qed
+  show "length (map (del_col 0) (tl (row_add_matrix m i 0 f))) = length (id_mat (m - 1))"
+  proof -
+    have del_len: "length (map (del_col 0) (tl (row_add_matrix m i 0 f))) = m - 1"
+      using tl_len by simp
+    have id_len: "length (id_mat (m - 1)) = m - 1" by (rule aux_id_mat_len)
+    show ?thesis using del_len id_len by simp
+  qed
+next
+  fix k
+  have len: "length (row_add_matrix m i 0 f) = m" by (simp add: row_add_matrix_def)
+  have ne: "row_add_matrix m i 0 f \<noteq> []"
+  proof
+    assume "row_add_matrix m i 0 f = []"
+    hence "length (row_add_matrix m i 0 f) = 0" by simp
+    thus False using len m0 by simp
+  qed
+  have tl_len: "length (tl (row_add_matrix m i 0 f)) = m - 1"
+  proof -
+    have "length (tl (row_add_matrix m i 0 f)) = length (row_add_matrix m i 0 f) - 1"
+      by (simp add: ne)
+    thus ?thesis using len by simp
+  qed
+  assume k: "k < length (map (del_col 0) (tl (row_add_matrix m i 0 f)))"
+  hence km: "k < m - 1" using tl_len by simp
+  have rm: "Suc k < m" using km by simp
+  have row: "tl (row_add_matrix m i 0 f) ! k
+           = map (\<lambda>c. if Suc k = i \<and> c = 0 then f
+                else (if Suc k = c then (1::int) else 0)) [0..<m]"
+  proof -
+    have h: "row_add_matrix m i 0 f
+        = map (\<lambda>r. map (\<lambda>c. if r = i \<and> c = 0 then f
+              else (if r = c then (1::int) else 0)) [0..<m]) [0..<m]"
+      by (simp add: row_add_matrix_def)
+    have s: "[0..<m] = 0 # [Suc 0..<m]"
+      by (rule upt_conv_Cons) (simp add: m0)
+    have a: "tl (row_add_matrix m i 0 f)
+           = map (\<lambda>r. map (\<lambda>c. if r = i \<and> c = 0 then f
+                else (if r = c then (1::int) else 0)) [0..<m]) [Suc 0..<m]"
+      using h s by simp
+    have idx: "k < length [Suc 0..<m]" using km by simp
+    have nth: "[Suc 0..<m] ! k = Suc k" using idx by (simp add: nth_upt)
+    show ?thesis using a idx nth by simp
+  qed
+  have step: "del_col 0 (map (\<lambda>c. if Suc k = i \<and> c = 0 then f
+                else (if Suc k = c then (1::int) else 0)) [0..<m])
+            = map (\<lambda>c. if Suc k = c then (1::int) else 0) [Suc 0..<m]"
+  proof -
+    have a: "del_col 0 (map (\<lambda>c. if Suc k = i \<and> c = 0 then f
+                  else (if Suc k = c then (1::int) else 0)) [0..<m])
+           = tl (map (\<lambda>c. if Suc k = i \<and> c = 0 then f
+                  else (if Suc k = c then (1::int) else 0)) [0..<m])"
+      by (simp add: aux_del_col_zero)
+    have b: "tl (map (\<lambda>c. if Suc k = i \<and> c = 0 then f
+                  else (if Suc k = c then (1::int) else 0)) [0..<m])
+           = map (\<lambda>c. if Suc k = i \<and> c = 0 then f
+                  else (if Suc k = c then (1::int) else 0)) [Suc 0..<m]"
+    proof -
+      have x: "tl (map g [0..<m]) = map g (tl [0..<m])" for g
+        by (rule map_tl [symmetric])
+      have y: "tl [0..<m] = [Suc 0..<m]" by (rule tl_upt)
+      show ?thesis using x y by simp
+    qed
+    have c: "map (\<lambda>c. if Suc k = i \<and> c = 0 then f
+                  else (if Suc k = c then (1::int) else 0)) [Suc 0..<m]
+           = map (\<lambda>c. if Suc k = c then (1::int) else 0) [Suc 0..<m]"
+    proof (rule nth_equalityI)
+      show "length (map (\<lambda>c. if Suc k = i \<and> c = 0 then f
+                else (if Suc k = c then (1::int) else 0)) [Suc 0..<m])
+          = length (map (\<lambda>c. if Suc k = c then (1::int) else 0) [Suc 0..<m])" by simp
+    next
+      fix c
+      assume c: "c < length (map (\<lambda>c. if Suc k = i \<and> c = 0 then f
+                  else (if Suc k = c then (1::int) else 0)) [Suc 0..<m])"
+      have h1: "map (\<lambda>c. if Suc k = i \<and> c = 0 then f
+                  else (if Suc k = c then (1::int) else 0)) [Suc 0..<m] ! c
+              = (if Suc k = i \<and> [Suc 0..<m] ! c = 0 then f
+                 else (if Suc k = [Suc 0..<m] ! c then (1::int) else 0))"
+        using c by (simp add: nth_map)
+      have h2: "[Suc 0..<m] ! c = Suc 0 + c" using c by (simp add: nth_upt)
+      have h3: "Suc 0 + c \<noteq> 0" by simp
+      have h4: "map (\<lambda>c. if Suc k = c then (1::int) else 0) [Suc 0..<m] ! c
+              = (if Suc k = [Suc 0..<m] ! c then (1::int) else 0)"
+        using c by (simp add: nth_map)
+      show "map (\<lambda>c. if Suc k = i \<and> c = 0 then f
+                  else (if Suc k = c then (1::int) else 0)) [Suc 0..<m] ! c
+          = map (\<lambda>c. if Suc k = c then (1::int) else 0) [Suc 0..<m] ! c"
+        using h1 h2 h3 h4 by simp
+    qed
+    show ?thesis using a b c by simp
+  qed
+  have shift: "map (\<lambda>c. if Suc k = c then (1::int) else 0) [Suc 0..<m]
+             = map (\<lambda>c. if k = c then (1::int) else 0) [0..<m - 1]"
+    by (rule aux_el_shift_unit)
+  have idrow: "map (\<lambda>c. if k = c then (1::int) else 0) [0..<m - 1] = id_mat (m - 1) ! k"
+    using km by (simp add: id_mat_def nth_map)
+  have a1: "map (del_col 0) (tl (row_add_matrix m i 0 f)) ! k
+          = del_col 0 (tl (row_add_matrix m i 0 f) ! k)"
+    using k by (simp add: nth_map)
+  show "map (del_col 0) (tl (row_add_matrix m i 0 f)) ! k = id_mat (m - 1) ! k"
+    using a1 row step shift idrow by simp
+qed
+
+
+text \<open>--- A5: after deleting column 0, a row of E shifts down by one ---\<close>
+lemma aux_t2_row_shift:
+  assumes i0: "0 < i" and j0: "0 < j" and im: "i < m" and jm: "j < m"
+  and r0: "0 < r" and rm: "r < m"
+  shows "del_col 0 (map (\<lambda>c. if r = i \<and> c = j then f
+                          else (if r = c then (1::int) else 0)) [0..<m])
+       = map (\<lambda>c. if r - 1 = i - 1 \<and> c = j - 1 then f
+              else (if r - 1 = c then (1::int) else 0)) [0..<m - 1]"
+proof -
+  have a: "del_col 0 (map (\<lambda>c. if r = i \<and> c = j then f
+                          else (if r = c then (1::int) else 0)) [0..<m])
+         = tl (map (\<lambda>c. if r = i \<and> c = j then f
+                    else (if r = c then (1::int) else 0)) [0..<m])"
+    by (simp add: aux_del_col_zero)
+  have b: "tl (map (\<lambda>c. if r = i \<and> c = j then f
+                    else (if r = c then (1::int) else 0)) [0..<m])
+         = map (\<lambda>c. if r = i \<and> c = j then f
+              else (if r = c then (1::int) else 0)) [Suc 0..<m]"
+  proof -
+    have x: "tl (map g [0..<m]) = map g (tl [0..<m])" for g
+      by (rule map_tl [symmetric])
+    have y: "tl [0..<m] = [Suc 0..<m]" by (rule tl_upt)
+    show ?thesis using x y by simp
+  qed
+  have c: "map (\<lambda>c. if r = i \<and> c = j then f
+              else (if r = c then (1::int) else 0)) [Suc 0..<m]
+         = map (\<lambda>c. if r - 1 = i - 1 \<and> c = j - 1 then f
+              else (if r - 1 = c then (1::int) else 0)) [0..<m - 1]"
+  proof (rule nth_equalityI)
+    show "length (map (\<lambda>c. if r = i \<and> c = j then f
+              else (if r = c then (1::int) else 0)) [Suc 0..<m])
+        = length (map (\<lambda>c. if r - 1 = i - 1 \<and> c = j - 1 then f
+              else (if r - 1 = c then (1::int) else 0)) [0..<m - 1])" by simp
+  next
+    fix k
+    assume k: "k < length (map (\<lambda>c. if r = i \<and> c = j then f
+                else (if r = c then (1::int) else 0)) [Suc 0..<m])"
+    have h1: "map (\<lambda>c. if r = i \<and> c = j then f
+                else (if r = c then (1::int) else 0)) [Suc 0..<m] ! k
+            = (if r = i \<and> [Suc 0..<m] ! k = j then f
+               else (if r = [Suc 0..<m] ! k then (1::int) else 0))"
+      using k by (simp add: nth_map)
+    have h2: "[Suc 0..<m] ! k = Suc 0 + k" using k by (simp add: nth_upt)
+    have h3: "map (\<lambda>c. if r - 1 = i - 1 \<and> c = j - 1 then f
+                else (if r - 1 = c then (1::int) else 0)) [0..<m - 1] ! k
+            = (if r - 1 = i - 1 \<and> [0..<m - 1] ! k = j - 1 then f
+               else (if r - 1 = [0..<m - 1] ! k then (1::int) else 0))"
+      using k by (simp add: nth_map)
+    have h4: "[0..<m - 1] ! k = k" using k by (simp add: nth_upt)
+    have e1: "(r = i) = (r - Suc 0 = i - Suc 0)"
+    proof (cases "r = i")
+      case True
+      hence "r - Suc 0 = i - Suc 0" using r0 i0 by simp
+      thus ?thesis using True by simp
+    next
+      case False
+      hence "r - Suc 0 \<noteq> i - Suc 0" using r0 i0 by simp
+      thus ?thesis using False by simp
+    qed
+    have e2: "(Suc 0 + k = j) = (k = j - Suc 0)"
+    proof (cases "Suc 0 + k = j")
+      case True
+      hence "k = j - Suc 0" using j0 by simp
+      thus ?thesis using True by simp
+    next
+      case False
+      hence "k \<noteq> j - Suc 0" using j0 by simp
+      thus ?thesis using False by simp
+    qed
+    have e3: "(r = Suc 0 + k) = (r - Suc 0 = k)"
+    proof (cases "r = Suc 0 + k")
+      case True
+      hence "r - Suc 0 = k" using r0 by simp
+      thus ?thesis using True by simp
+    next
+      case False
+      hence "r - Suc 0 \<noteq> k" using r0 by simp
+      thus ?thesis using False by simp
+    qed
+    show "map (\<lambda>c. if r = i \<and> c = j then f
+                else (if r = c then (1::int) else 0)) [Suc 0..<m] ! k
+        = map (\<lambda>c. if r - 1 = i - 1 \<and> c = j - 1 then f
+                else (if r - 1 = c then (1::int) else 0)) [0..<m - 1] ! k"
+      using h1 h2 h3 h4 e1 e2 e3 by simp
+  qed
+  show ?thesis using a b c by simp
+qed
+
+text \<open>--- A6: with i > 0 and j > 0, the (0,0) minor is the reduced row addition ---\<close>
+lemma aux_t2_minor0_jpos:
+  assumes m0: "0 < m" and i0: "0 < i" and j0: "0 < j" and im: "i < m" and jm: "j < m"
+  shows "map (del_col 0) (tl (row_add_matrix m i j f))
+       = row_add_matrix (m - 1) (i - 1) (j - 1) f"
+proof (rule nth_equalityI)
+  have len: "length (row_add_matrix m i j f) = m" by (simp add: row_add_matrix_def)
+  have ne: "row_add_matrix m i j f \<noteq> []"
+  proof
+    assume "row_add_matrix m i j f = []"
+    hence "length (row_add_matrix m i j f) = 0" by simp
+    thus False using len m0 by simp
+  qed
+  have tl_len: "length (tl (row_add_matrix m i j f)) = m - 1"
+  proof -
+    have "length (tl (row_add_matrix m i j f)) = length (row_add_matrix m i j f) - 1"
+      by (simp add: ne)
+    thus ?thesis using len by simp
+  qed
+  show "length (map (del_col 0) (tl (row_add_matrix m i j f)))
+      = length (row_add_matrix (m - 1) (i - 1) (j - 1) f)"
+  proof -
+    have a: "length (map (del_col 0) (tl (row_add_matrix m i j f))) = m - 1"
+      using tl_len by simp
+    have b: "length (row_add_matrix (m - 1) (i - 1) (j - 1) f) = m - 1"
+      by (simp add: row_add_matrix_def)
+    show ?thesis using a b by simp
+  qed
+next
+  fix k
+  have len: "length (row_add_matrix m i j f) = m" by (simp add: row_add_matrix_def)
+  have ne: "row_add_matrix m i j f \<noteq> []"
+  proof
+    assume "row_add_matrix m i j f = []"
+    hence "length (row_add_matrix m i j f) = 0" by simp
+    thus False using len m0 by simp
+  qed
+  have tl_len: "length (tl (row_add_matrix m i j f)) = m - 1"
+  proof -
+    have "length (tl (row_add_matrix m i j f)) = length (row_add_matrix m i j f) - 1"
+      by (simp add: ne)
+    thus ?thesis using len by simp
+  qed
+  assume k: "k < length (map (del_col 0) (tl (row_add_matrix m i j f)))"
+  hence km: "k < m - 1" using tl_len by simp
+  have r0: "0 < Suc k" by simp
+  have rm: "Suc k < m" using km by simp
+  have row: "tl (row_add_matrix m i j f) ! k
+           = map (\<lambda>c. if Suc k = i \<and> c = j then f
+                else (if Suc k = c then (1::int) else 0)) [0..<m]"
+  proof -
+    have h: "row_add_matrix m i j f
+        = map (\<lambda>r. map (\<lambda>c. if r = i \<and> c = j then f
+              else (if r = c then (1::int) else 0)) [0..<m]) [0..<m]"
+      by (simp add: row_add_matrix_def)
+    have s: "[0..<m] = 0 # [Suc 0..<m]"
+      by (rule upt_conv_Cons) (simp add: m0)
+    have a: "tl (row_add_matrix m i j f)
+           = map (\<lambda>r. map (\<lambda>c. if r = i \<and> c = j then f
+                else (if r = c then (1::int) else 0)) [0..<m]) [Suc 0..<m]"
+      using h s by simp
+    have idx: "k < length [Suc 0..<m]" using km by simp
+    have nth: "[Suc 0..<m] ! k = Suc k" using idx by (simp add: nth_upt)
+    show ?thesis using a idx nth by simp
+  qed
+  have step: "del_col 0 (map (\<lambda>c. if Suc k = i \<and> c = j then f
+                else (if Suc k = c then (1::int) else 0)) [0..<m])
+            = map (\<lambda>c. if Suc k - 1 = i - 1 \<and> c = j - 1 then f
+                else (if Suc k - 1 = c then (1::int) else 0)) [0..<m - 1]"
+    by (rule aux_t2_row_shift) (rule i0, rule j0, rule im, rule jm, rule r0, rule rm)
+  have sp: "Suc k - 1 = k" by simp
+  have redrow: "row_add_matrix (m - 1) (i - 1) (j - 1) f ! k
+              = map (\<lambda>c. if k = i - 1 \<and> c = j - 1 then f
+                  else (if k = c then (1::int) else 0)) [0..<m - 1]"
+    using km by (simp add: row_add_matrix_def nth_map)
+  have a1: "map (del_col 0) (tl (row_add_matrix m i j f)) ! k
+          = del_col 0 (tl (row_add_matrix m i j f) ! k)"
+    using k by (simp add: nth_map)
+  show "map (del_col 0) (tl (row_add_matrix m i j f)) ! k
+      = row_add_matrix (m - 1) (i - 1) (j - 1) f ! k"
+    using a1 row step sp redrow by simp
+qed
+
 end

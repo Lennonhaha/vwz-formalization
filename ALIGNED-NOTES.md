@@ -626,3 +626,81 @@ Laplace expansion collapses to the single `(0,0)` minor.
 **Repository.** The artifacts live in `Lennonhaha/vwz-formalization`
 (commit `dffdf0d`), deliberately separate from the FIBEMATE product
 repositories.
+
+<!-- seg: rref-scope-20261019 -->
+## Addendum (2026-10-19): elementary row operations, and what RREF cannot do
+
+### What was added
+
+`aligned/VWZ_RREF.thy` (9,257 B, **zero `sorry`**) introduces the two
+elementary operations that were still missing and proves their structural
+laws:
+
+| Lemma | Statement |
+|---|---|
+| `aux_rref_swap_self` | `row_swap_matrix m i i = id_mat m` |
+| `aux_rref_swap_comm` | `row_swap_matrix m i j = row_swap_matrix m j i` |
+| `aux_rref_scale_one` | `row_scale_matrix m i 1 = id_mat m` |
+| `aux_rref_swap_nofire` | out-of-range indices leave `id_mat m` |
+| `aux_rref_scale_nofire` | same, for scaling |
+| `aux_rref_scale_zero_row` | scaling a row by 0 yields `replicate m 0` |
+| `aux_rref_det_scale_zero` | that row forces `det = 0` |
+| `aux_rref_map_zero_replicate` | pointwise-zero map is a `replicate` |
+| `aux_rref_sum_single` | `sum_list (map (\k. if k = i then x else 0) [0..<n]) = x` |
+| `aux_rref_dot_unit` | dot of two unit-like vectors is `a*b` on the diagonal |
+
+The session builds clean (`isabelle build -D aligned`, exit 0) and the ledger
+is unchanged: **56 lemmas / 17 `sorry`**, because these are tooling lemmas and
+do not enter the obligation table.
+
+### What RREF cannot do here -- the honest part
+
+Choosing route A was justified by "RREF will close the remaining T2
+obligations". That expectation does **not** survive contact with the code, and
+the reason is worth recording precisely.
+
+Every open T2 obligation is stated about an **uninterpreted constant**:
+
+| Lemma | Subject | Declaration |
+|---|---|---|
+| `T2_B3` | `X2a X2b X3a X3b` | `consts X2a :: mat` (no body) |
+| `T2_B5` | `M2 M3` | `consts` |
+| `T2_B7` | `psi_slice` | `consts psi_slice :: nat list => nat => mat` |
+| `T2_D4` | `rows3_of` | `consts` |
+| `T2_D5` | `Eval`, `Sset` | `consts` |
+| `T2_D6` | `P2a P2b Zset` | `consts` |
+| `T2_D1` | `Sign`, `Eval` | `consts` |
+
+A `consts` declaration fixes a value but supplies **no property**. So
+`invertible X2a` is not merely unproved -- it is **independent**: neither it
+nor its negation follows from the current theory. A RREF algorithm would give
+`mat_rank` and `dim_nullspace` real definitions, but it would still say
+nothing about what `X2a` *is*, so `mat_rank (psi_slice pk i) = 2` would remain
+underivable.
+
+Two negative controls in the probe suite make this concrete:
+
+- `r2_zero_not_invertible`: the zero matrix is **not** invertible, so
+  "invertible" is not a trivial property that could be assumed of any matrix.
+- `r4_not_all_invertible`: `~(\<forall>A. invertible A)` -- proved, so the
+  universal schema fails and the constant instance cannot be obtained by
+  generalisation either.
+
+**Conclusion.** The remaining 7 T2 obligations are blocked on the *definition
+layer*, not on linear-algebra machinery. Closing them requires defining
+`X2a`, `X2b`, `X3a`, `X3b`, `M2`, `M3`, `rows3_of`, `psi_slice`,
+`P2a`, `P2b`, `Sset`, `Zset` from the specification (Sec 6.4), which is a
+specification-transcription task, not a proof task. The same holds for T1-D's
+`B4` / `C2` (`KeyGen`, `hash_target`) and all of T3.
+
+This is recorded rather than glossed because a ledger that reports 17 `sorry`
+without saying *why* invites the reader to assume the gap is proof effort.
+It is not.
+
+### Method note
+
+The probe files (`_rrefprobe/R1..R4`) are scratch and stay out of the
+repository. Only the proved content moved into `aligned/VWZ_RREF.thy`; the
+three inverse laws that were still `sorry` in the probes
+(`r2_rowadd_inverse`, `r2_swap_inverse`, `r2_scale_inverse`) were **not**
+copied across, so the shipped file has no `sorry` at all.

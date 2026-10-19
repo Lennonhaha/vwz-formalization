@@ -579,3 +579,50 @@ TOTAL 56 lemmas / 18 sorry   （raw token 31）
 ### 未做的 PR（阻塞）
 
 `plans/` 在 workspace 仓库中**未跟踪**（0 tracked），而 workspace 仓库 remote 指向 `Lennonhaha/fibemate` 且带 **425 个暂存删除**。`fibemate` 主仓无任何 `.thy`；`fibemate-wt-lg`（`experimental/vwz-lg`）也无 `.thy`。**VWZ Isabelle 工作目前无远端归属**，PR 目标需业主指定。
+
+<!-- seg: t2b2-closed-20261019 -->
+## Addendum (2026-10-19, later): T2_B2 closed
+
+**Result.** `T2_B2` is now a proved lemma, not a `sorry`:
+
+```
+lemma T2_B2: "i \<noteq> j \<Longrightarrow> det (row_add_matrix m i j f) = 1"
+```
+
+Ledger moved from 56 lemmas / 18 `sorry` to **56 lemmas / 17 `sorry`**
+(T2: 8 -> 7). Obligation count is unchanged at 37: the new support lemmas are
+tooling (scheme C), not obligations.
+
+**Why the statement needs no side conditions.** This was the open question at
+the end of the previous session. If `i >= m` or `j >= m`, the index never
+matches any row or column index in `[0..<m]`, so `row_add_matrix` performs no
+substitution at all and returns `id_mat m` verbatim. `det (id_mat m) = 1`, so
+the out-of-range cases are *true*, not merely vacuously excluded. No
+`i < m` / `j < m` hypothesis is required.
+
+**Proof shape** (induction on `m`, generalised over `i j f`):
+
+| Case | Reduction | Closed by |
+|---|---|---|
+| `i >= m` or `j >= m` | degenerates to `id_mat m` | `aux_t2_nofire_i` / `aux_t2_nofire_j` + `aux_det_id_mat` |
+| `i = 0`, `j > 0` | elementary row addition on row 0 | `aux_el_det_elementary_i0` |
+| `i > 0`, `j = 0` | minor at (0,0) is `id_mat (m-1)` | `aux_t2_minor0_j0` |
+| `i > 0`, `j > 0` | minor at (0,0) is `row_add_matrix (m-1) (i-1) (j-1) f` | `aux_t2_minor0_jpos` + IH |
+
+The `i > 0` cases both begin with `aux_t2_head_reduce`: row 0 of the matrix is
+the pure unit row `e_0` (because the substitution sits on row `i > 0`), so the
+Laplace expansion collapses to the single `(0,0)` minor.
+
+**Two technical lessons.**
+
+1. `arith` and `simp` both fail on boolean index equivalences such as
+   `(r = i) = (r - 1 = i - 1)`. Splitting into `0 < i` and `0 < r` is not
+   enough. The working form is a `cases` split on the left-hand side, proving
+   each branch by `simp` with the relevant positivity facts in scope.
+2. `Suc 0 + k` and `Suc k` are *not* the same term to the simplifier. If the
+   target mentions `Suc k`, the helper equation must be stated as
+   `(Suc 0 + k = j) = (k = j - Suc 0)`, not as an equation about `Suc k`.
+
+**Repository.** The artifacts live in `Lennonhaha/vwz-formalization`
+(commit `dffdf0d`), deliberately separate from the FIBEMATE product
+repositories.

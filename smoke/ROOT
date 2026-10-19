@@ -1,0 +1,4 @@
+session VWZ_A3_Smoke = HOL +
+  theories
+    VWZ_A3_Field
+    VWZ_A3_Invariants

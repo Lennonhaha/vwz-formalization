@@ -1,0 +1,3 @@
+session VWZ_A3_Neg = HOL +
+  theories
+    VWZ_A3_Neg

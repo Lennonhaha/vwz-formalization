@@ -1,0 +1,18 @@
+# Isabelle build output
+heaps/
+*.heap
+*.log
+.log/
+isabelle-build/
+output/
+
+# Editor / OS noise
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# Local scratch (probe scripts, build wrappers, transient logs)
+_tmp/
+_scratch/
+_*

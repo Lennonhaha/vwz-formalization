@@ -1,0 +1,4 @@
+session VWZ_A3_Skeleton = HOL +
+  options [quick_and_dirty]
+  theories
+    VWZ_A3_Skeleton

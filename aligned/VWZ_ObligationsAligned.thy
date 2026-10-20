@@ -9,7 +9,7 @@
       T1-A       algebraic axioms + closed ser. id. -- 16 lemmas, 0 sorry
       T1-D       definition-dependent (TODO bodies) --  5 lemmas, 2 sorry
       T2   ( 8)  linear algebra / matrices          -- 10 lemmas, 6 sorry
-      T3   ( 8)  security / probabilistic / parser  --  8 lemmas, 7 sorry
+      T3   ( 8)  security / probabilistic / parser  --  8 lemmas, 4 sorry
     (T1-A / T1-D split the former single T1 bucket at the lemma level; the 37
      is an obligation count, the figures above are Isabelle-lemma counts.  See
      plans/vwz-a3-aligned_20261018.md, Addendum.)
@@ -731,16 +731,53 @@ lemma T3_D8_empirical:
 
 subsection \<open>T3 :: E1 -- pk parser totality\<close>
 
+text \<open>This one closes, and it is worth being blunt about how little that means: for
+  ANY @{typ "nat list \<Rightarrow> nat list option"}, totality in this sense is
+  definitional.  The statement asks only that a total HOL function returns
+  either @{const None} or @{const Some}, which is the case distinction on
+  @{typ "nat list option"}.  Closing it removes a placeholder, not a doubt:
+  the real parser obligation is the semantic one (what the bytes mean), and that
+  needs @{text parse_pk} to have a body, which it does not yet.\<close>
+
 lemma T3_E1_parse_pk_total:
   "\<forall>bs. parse_pk bs = None \<or> (\<exists>v. parse_pk bs = Some v)"
-  sorry
+proof (intro allI)
+  fix bs
+  show "parse_pk bs = None \<or> (\<exists>v. parse_pk bs = Some v)"
+    by (cases "parse_pk bs") simp_all
+qed
 
 subsection \<open>T3 :: E2 -- length mismatch is rejected\<close>
+
+text \<open>This one has real content: it uses the body of @{text accepts_len}, not a
+  case distinction on an option.  The argument is the length clause of the
+  predicate.  If the verifier accepted @{text bs}, then
+  @{text "length bs = 1 + 4 * par_m (hd bs)"} and @{text "hd bs = k"} (the key
+  field has to agree with the head of the pk vector, and that head is @{text k}
+  because the vector is a non-empty replicate).  Hence the accepted length is
+  exactly @{text "1 + 4 * par_m k"}, which is the length the premise excludes.\<close>
 
 lemma T3_E2:
   "\<forall>k bs. length bs \<noteq> 1 + 4 * par_m k \<longrightarrow>
      \<not> accepts_len (replicate (1 + 2 * (par_n k * (par_m k * par_m k))) k) bs"
-  sorry
+proof (intro allI impI)
+  fix k :: nat and bs :: "nat list"
+  let ?N = "1 + 2 * (par_n k * (par_m k * par_m k))"
+  assume hlen: "length bs \<noteq> 1 + 4 * par_m k"
+  show "\<not> accepts_len (replicate ?N k) bs"
+  proof
+    assume acc: "accepts_len (replicate ?N k) bs"
+    have Npos: "?N \<noteq> 0" by simp
+    have hpk: "hd (replicate ?N k) = k"
+      using Npos by (cases ?N) simp_all
+    from acc have hhd: "hd (replicate ?N k) = hd bs"
+      and hlen2: "length bs = 1 + 4 * par_m (hd bs)"
+      by (auto simp: accepts_len_def)
+    have hbs: "hd bs = k" using hhd hpk by simp
+    have "length bs = 1 + 4 * par_m k" using hlen2 hbs by simp
+    with hlen show False by simp
+  qed
+qed
 
 subsection \<open>T3 :: E3b -- general rejection soundness (CONJECTURAL per spec Sec 10.1)\<close>
 
@@ -755,8 +792,16 @@ lemma T3_E3b_conjectural:
 
 subsection \<open>T3 :: E4 -- signature parser totality\<close>
 
+text \<open>Same shape as E1, same caveat: totality of a function into
+  @{typ "nat list option"} is a case distinction, not a property of a parser.
+  It closes; nothing about the signature format is thereby known.\<close>
+
 lemma T3_E4_parse_sig_total:
   "\<forall>bs. parse_sig bs = None \<or> (\<exists>v. parse_sig bs = Some v)"
-  sorry
+proof (intro allI)
+  fix bs
+  show "parse_sig bs = None \<or> (\<exists>v. parse_sig bs = Some v)"
+    by (cases "parse_sig bs") simp_all
+qed
 
 end

@@ -919,3 +919,28 @@ than it is. If a theory that used to take 8 s suddenly takes minutes, check
 **文件状态**：`aligned/ROOT` 恢复为原 8 个 theory + `VWZ_MatAlgebra`（新增，只含已证求和引理）；`Scratch.thy` 已从 ROOT 移除（文件仍在盘上，未入库）；`aligned/VWZ_ObligationsAligned.thy` 的 T2_B3 注释改写为三条缺桥 + eval 实测 + TODO(proof) 定性；构建 `isabelle build -D aligned` RC=0（约 19 s）。
 
 **方法论**：定义落地 ≠ 定理关闭。这一轮把「差什么」写成了可检查的清单（三条引理的名字与形状），而不是「再试一次」——下次接手的人不用重新摸索。
+<!-- seg: seg-t3-6eaccadff8a5 -->
+
+<!-- seg: seg-t3-closures-b41d92ac7e05 -->
+### T3 收口三条 + 剩余火力盘点（2026-10-20 17:00）
+
+**本轮关闭三条（15 → 12 sorry）**：`T3_E1_parse_pk_total`、`T3_E2`、`T3_E4_parse_sig_total`。构建 `isabelle build -D aligned` RC=0（18 s）。Ledger：**56 lemmas / 12 sorry**（T0 17/0、T1-A 16/0、T1-D 5/2、T2 10/6、T3 8/4）。
+
+**三条的成色必须分开记**：
+- `T3_E1` / `T3_E4`：**闭了，但近乎零信息量**。语句是「任意 `nat list ⇒ nat list option` 的函数要么返回 None 要么返回 Some」，即 option 类型的分类讨论。注释里已写明：这消掉的是占位符，不是疑问；真正的解析器义务需要 `parse_pk` 有 body。
+- `T3_E2`：**有实质**。用 `accepts_len` 的 body 做长度子句推理：接受 ⇒ `length bs = 1 + 4 * par_m (hd bs)` 且 `hd bs = k`（pk 为非空 replicate，其 hd 就是 k），于是被接受的长度恰是 `1 + 4 * par_m k`，与前提矛盾。
+
+**剩余火力盘点（除 T2_B3 外）**：
+
+| 引理 | 状态 | 卡在哪 |
+|---|---|---|
+| T2_B7 | **语句为假** | 已机器否证（`VWZ_Refutations.thy`），属陈述缺陷，不是证明债 |
+| T2_D4 | TODO(define) | `rows3_of` 仍是 consts，`dim_nullspace` 作用在未解释矩阵上 |
+| T2_D5 / T2_D6 | TODO(define) | `Eval` / `P2a` / `P2b` / `Sset` / `Zset` 未定义 |
+| T2_D1_correctness | TODO(define) | `Sign` / `Eval` / `hash_target` 未定义 |
+| T3_C1 | TODO(define) | `weight` / `hash_target` 是 consts，等式无主体 |
+| T3_C3 | TODO(define) | `unbiased` 是 consts，且本质是概率陈述 |
+| T3_D8_empirical | 非定理 | 正文已声明 empirical，对对抗性目标可能为假；不计可证义务 |
+| T3_E3b_conjectural | 非定理 | 规范 §10.1 声明一般拒绝可靠性不可证 |
+
+结论：**账本里再没有「便宜且诚实」的胜利**。剩下的要么等 `TODO(define)` 的主体，要么撞 `T2_B3` 的结合律墙，要么本来就是假命题/猜想。下一步真正的杠杆是**补 consts 的 body**（randrange、Sset、Zset、weight、parse_pk/parse_sig、Eval、Sign、Verify、nullspace、solve_linear），而不是继续找边角料扫尾。

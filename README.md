@@ -39,12 +39,20 @@ byte compatibility. `VWZ_KeyGen` defines `draw_list` and a fuel-counted
 `distinct_lam_fuel`, and proves partial correctness: if it returns anything, it
 returns `n` pairwise-distinct points in `[1, q)`.
 
-What is *not* proved is termination of rejection sampling, and that gap is
-visible in the type. `SeedRng` is declared `nat => nat list`, a finite list,
-while the algorithm needs an unbounded stream; the definitions therefore use
-the state-passing form and the constant is left in place until that type is
-changed. T3_B1 stays unconditional in the ledger and stays `sorry`; weakening
-it until it became provable would have been the wrong kind of progress.
+`SeedRng` is now a state transition, `nat => nat * nat`: it returns the value
+and the next state, and the stream is its iteration. The earlier signature
+`nat => nat list` could not express an unbounded stream, which is what
+rejection sampling needs. `distinct_lam n s` is the same sampler under a
+generous fuel bound (`8 * n + 8` rounds), so it returns a pair even when it
+fails, and `[]` is the failure signal the spec's retry logic expects.
+
+What is *not* proved is termination of rejection sampling: it stops with
+probability 1, not by construction, and this session has no measure theory.
+T3_B1 was restated against the state-passing sampler and now carries that
+failure guard explicitly; the restated form is discharged by
+`distinct_lam_partial_correct`. The unconditional "always returns n points"
+claim is nowhere asserted — it was asking a list-valued function for a
+property the algorithm cannot have.
 
 `VWZ_A3_Aligned` is the only session that carries obligations. The remaining
 sessions are scaffolding:

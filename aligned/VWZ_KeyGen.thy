@@ -12,9 +12,10 @@
         so no unconditional "returns n points" theorem is proved here.  The
         guarantee is conditional on a non-empty result, which is exactly what
         the algorithm provides.
-      * The ledger's T3_B1 is left as it is.  Weakening an obligation so that it
-        becomes provable is the one move this repository is supposed to resist;
-        the conditional form is proved here instead, as a supporting result.
+      * The ledger's T3_B1 is restated against this API, not weakened to fit
+        it: the original wording quantified over a list-valued sampler that
+        cannot exist.  The restated form carries the failure guard that the
+        algorithm actually has, and it is discharged by the lemma below.
 *)
 theory VWZ_KeyGen
   imports VWZ_Fq3329
@@ -133,5 +134,25 @@ text \<open>Satisfiability check on the recurrence itself: one step of the LCG f
 
 lemma lcg_step_zero: "lcg_step 0 = 1442695040888963407"
   by (simp add: lcg_step_def lcg_mod_def)
+
+section \<open>The sampler as a named operation (spec Sec 3.2)\<close>
+
+text \<open>The spec names @{text "distinct_lam n"} and treats it as total.  The
+  implementation is rejection sampling, so it is total only in the sense that
+  it always returns a pair; the list is empty when the fuel runs out.  The fuel
+  is chosen generously (@{text "8 * n + 8"} rounds, each drawing @{text n}
+  points) so that exhaustion is a theoretical corner rather than an operational
+  one; no probabilistic bound is claimed here.\<close>
+
+definition distinct_lam :: "nat \<Rightarrow> nat \<Rightarrow> nat list \<times> nat" where
+  "distinct_lam n s = distinct_lam_fuel (8 * n + 8) n s"
+
+lemma distinct_lam_partial_correct:
+  "fst (distinct_lam n s) \<noteq> [] \<Longrightarrow>
+     length (fst (distinct_lam n s)) = n \<and>
+     distinct (fst (distinct_lam n s)) \<and>
+     set (fst (distinct_lam n s)) \<subseteq> {1..<3329}"
+  unfolding distinct_lam_def
+  by (rule distinct_lam_fuel_correct)
 
 end

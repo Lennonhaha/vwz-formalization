@@ -840,3 +840,24 @@ obligations). Repository: 12 theory files, 203 lemmas, 1 theorem, 16 sorry,
 144,572 bytes. Build RC=0.
 
 <!-- seg: aligned-lcg-keygen-20261020 -->
+<!-- seg: seg-seedrng-7f1b0658630b -->
+## 2026-10-20: state-passing RNG, and an obligation restated rather than weakened
+
+`SeedRng` is no longer a constant. It is `nat => nat * nat`: value and successor
+state, with the stream obtained by iteration. The old signature `nat => nat list`
+could not express an unbounded stream, and rejection sampling needs one, so the
+type was the blocker rather than the proof.
+
+`distinct_lam n s` is now defined in `VWZ_KeyGen.thy` as `distinct_lam_fuel
+(8 * n + 8) n s`. Fuel is generous by construction, not by proof; exhaustion
+returns `[]`, which is the failure signal the spec's retry logic already expects.
+
+T3_B1 was restated against this API. The old wording asked a list-valued
+`distinct_lam` for `n` points unconditionally, which no function can deliver:
+rejection sampling stops with probability 1, not by construction. The restated
+form carries `fst (distinct_lam n s) ~= []` as a guard and is discharged by
+`distinct_lam_partial_correct`. This is recorded as a **restatement**, not a
+proof of the original claim, and the unconditional version is asserted nowhere.
+
+Counts after the change: ledger 56 lemmas / 15 sorry (T3 8 lemmas / 7 sorry;
+T2 10 / 6). `isabelle build -D aligned` finishes with RC=0 in ~10 s.

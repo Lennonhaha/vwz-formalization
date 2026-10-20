@@ -102,10 +102,12 @@ transitions on @{typ nat} reduced modulo @{text "2 ^ 64"}, which is exact --
   @{typ nat} does not overflow, so the modulo does the truncation the spec asks
   for and no @{text uint64} library is needed.
 
-  Note on shape: @{text SeedRng} is declared above as @{typ "nat \<Rightarrow> nat list"},
-  a finite list, but rejection sampling needs an unbounded stream.  The type is
-  therefore wrong for the job, and the definitions below use the state-passing
-  form instead.  The constant is left alone until that type is changed.
+  Note on shape: @{text SeedRng} is a *state transition*, @{typ "nat \<Rightarrow> nat \<times> nat"}:
+  it takes the current state and returns the value together with the next state.
+  An earlier draft declared it as @{typ "nat \<Rightarrow> nat list"}, which cannot express
+  an unbounded stream, and rejection sampling needs one.  The stream is obtained
+  by iterating the transition, not by a function that returns a list, so the
+  constant now has a body (below) instead of being uninterpreted.
 
   One more detail that matters for byte compatibility: @{text next_u16_mod}
   truncates to 32 bits *before* reducing modulo the argument.  That is
@@ -130,6 +132,11 @@ text \<open>@{text next_u64} returns the new state and that state is also the va
 
 definition next_u64 :: "nat \<Rightarrow> nat \<times> nat" where
   "next_u64 s = (let s' = lcg_step s in (s', s'))"
+
+(* State-passing API: value and successor state.  Iterating this gives the
+   stream the spec describes; a list-valued signature cannot. *)
+definition SeedRng :: "nat \<Rightarrow> nat \<times> nat" where
+  "SeedRng s = next_u64 s"
 
 definition next_u16_mod :: "nat \<Rightarrow> nat \<Rightarrow> nat \<times> nat" where
   "next_u16_mod modulus s =
@@ -163,12 +170,6 @@ section \<open>Protocol objects (bodies deferred)\<close>
 text \<open>Each object below is an <em>uninterpreted</em> constant: its mathematical
   content is not yet formalised.  They exist so that the T0 obligations have a
   well-typed subject; bodies follow the spec sections named in the TODO tags.\<close>
-
-consts SeedRng :: "nat \<Rightarrow> nat list"
-        \<comment> \<open>TODO(define): spec Sec 3.1 -- 64-bit LCG state stream\<close>
-
-consts distinct_lam :: "nat list \<Rightarrow> nat \<Rightarrow> nat list"
-        \<comment> \<open>TODO(define): spec Sec 3.2 -- pairwise-distinct evaluation points\<close>
 
 consts KeyGen :: "nat \<Rightarrow> nat list \<Rightarrow> (nat list \<times> nat list)"
         \<comment> \<open>TODO(define): spec Sec 3 -- (k, seed) |-> (pk, sk)\<close>

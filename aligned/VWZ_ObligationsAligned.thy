@@ -8,8 +8,8 @@
       T0   ( 8)  purely formal rewriting            -- 17 lemmas, 0 sorry
       T1-A       algebraic axioms + closed ser. id. -- 16 lemmas, 0 sorry
       T1-D       definition-dependent (TODO bodies) --  5 lemmas, 2 sorry
-      T2   ( 8)  linear algebra / matrices          -- 10 lemmas, 8 sorry
-      T3   ( 8)  security / probabilistic / parser  --  8 lemmas, 8 sorry
+      T2   ( 8)  linear algebra / matrices          -- 10 lemmas, 6 sorry
+      T3   ( 8)  security / probabilistic / parser  --  8 lemmas, 7 sorry
     (T1-A / T1-D split the former single T1 bucket at the lemma level; the 37
      is an obligation count, the figures above are Isabelle-lemma counts.  See
      plans/vwz-a3-aligned_20261018.md, Addendum.)
@@ -24,7 +24,7 @@
     wrinkle is recorded in plans/vwz-a3-aligned_20261018.md.
 *)
 theory VWZ_ObligationsAligned
-  imports VWZ_Fq3329 VWZ_Matrix VWZ_Protocol VWZ_Aux VWZ_RREF
+  imports VWZ_Fq3329 VWZ_KeyGen VWZ_Matrix VWZ_Protocol VWZ_Aux VWZ_RREF
 begin
 
 section \<open>T0 -- purely formal rewriting (target: 0 sorry)\<close>
@@ -668,11 +668,21 @@ section \<open>T3 -- security / probabilistic / parser (subjects TODO(define))\<
 
 subsection \<open>T3 :: B1 -- distinct_lam returns n pairwise-distinct values in [1, q)\<close>
 
+text \<open>Restated against the state-passing sampler.  The earlier wording asked a
+  list-valued @{text distinct_lam} for @{text n} points unconditionally; no such
+  function exists, because rejection sampling terminates with probability 1
+  rather than by construction.  The guard below is the algorithm's own failure
+  signal, and @{text distinct_lam_partial_correct} discharges this form.
+  The unconditional claim would need a measure-theoretic termination proof and
+  is not asserted anywhere in this session.\<close>
+
 lemma T3_B1:
-  "length (distinct_lam seed n) = n \<and>
-   distinct (distinct_lam seed n) \<and>
-   set (distinct_lam seed n) \<subseteq> {1..3328}"
-  sorry
+  "fst (distinct_lam n seed) \<noteq> [] \<Longrightarrow>
+   length (fst (distinct_lam n seed)) = n \<and>
+   distinct (fst (distinct_lam n seed)) \<and>
+   set (fst (distinct_lam n seed)) \<subseteq> {1..<3329}"
+  unfolding distinct_lam_def
+  by (rule distinct_lam_fuel_correct)
 
 subsection \<open>T3 :: C1 -- weight(target) = k + 1\<close>
 

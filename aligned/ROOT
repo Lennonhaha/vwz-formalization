@@ -7,3 +7,4 @@ session VWZ_A3_Aligned = "HOL-Number_Theory" +
     VWZ_Aux
     VWZ_RREF
     VWZ_ObligationsAligned
+    VWZ_Refutations

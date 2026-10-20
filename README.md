@@ -15,17 +15,20 @@ tiers; the counts below are generated, not asserted.
 
 | Session | Content | Lemmas | `sorry` |
 |---|---|---|---|
-| `VWZ_A3_Aligned` | Definition layers + obligation inventory | 56 | 17 |
+| `VWZ_A3_Aligned` | Definition layers + obligation inventory | 56 | 16 |
 
-Rank and nullity are no longer uninterpreted. `VWZ_RREF.thy` defines a
-fuel-parameterised Gauss-Jordan reduction and derives
-`mat_rank A = length (filter (\<lambda>r. \<not> all_zero_row r) (rref A))` and
-`dim_nullspace A = n_rows A - mat_rank A`. Fuel makes the recursion structural,
-so no termination proof is needed. Correctness of the reduction (that it reaches
-a normal form, and that `mat_rank` is the field rank) is **not** claimed; five
+Rank, nullity and inversion are no longer uninterpreted. `VWZ_RREF.thy` defines
+a fuel-parameterised Gauss-Jordan reduction and derives
+`mat_rank A = length (filter (\<lambda>r. \<not> all_zero_row r) (rref A))`,
+`dim_nullspace A = n_rows A - mat_rank A`, and `mat_inv A` by reducing `[A | I]`.
+Fuel makes the recursion structural, so no termination proof is needed.
+Correctness of the reduction (that it reaches a normal form, that `mat_rank` is
+the field rank, that `mat_inv` is a two-sided inverse) is **not** claimed; seven
 `eval` lemmas check that the definitions compute on concrete matrices.
-`mat_inv` and `mat_solve` remain undefined constants, because both need the
-augmented-matrix solve.
+
+`M2` and `M3` are now spelled as spec Sec 3.4 spells them (`X2b * X2a^-1`), so
+`T2_B5` closes by unfolding. That is transcription, not proof, and it is
+recorded as such.
 
 `VWZ_A3_Aligned` is the only session that carries obligations. The remaining
 sessions are scaffolding:
@@ -51,8 +54,9 @@ aligned/                       the obligation-carrying session
   VWZ_Matrix.thy               matrix layer: rows, cols, det (Laplace), row ops
   VWZ_Protocol.thy             protocol records and decoders
   VWZ_Aux.thy                  auxiliary lemmas (determinants, zero rows, T2_B2 support)
-  VWZ_RREF.thy                 elementary row operations, fuel-counted Gauss-Jordan, rank / nullity
+  VWZ_RREF.thy                 elementary row operations, fuel-counted Gauss-Jordan, rank / nullity / inverse
   VWZ_ObligationsAligned.thy   the obligation inventory, tiered T0..T3
+  VWZ_Refutations.thy          machine-checked refutations of ledger statements that are false as written
 skeleton/  smoke/  neg/        scaffolding sessions
 tools/count.cjs                lemma / sorry counter (source of the table above)
 ALIGNED-NOTES.md               working notes: what is proved, what is assumed, why
@@ -100,6 +104,10 @@ rediscovered:
   claim is false for a slice that happens to be zero. A well-formedness
   hypothesis is missing and is noted rather than silently added on the
   obligation's behalf.
+- That is not a matter of opinion: `VWZ_Refutations.thy` proves the negation of
+  the repaired statement, with a key of the right shape, an index in range, and
+  rank 0. Refutations live outside the ledger file so they are not counted as
+  obligations.
 - Two obligations are explicitly **not** counted as provable: one is empirical
   (`T3_D8`), one is declared unprovable in the specification (`T3_E3b`).
 

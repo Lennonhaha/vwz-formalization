@@ -205,13 +205,10 @@ definition det3 :: "mat \<Rightarrow> int" where
           - entry A 0 1 * entry A 1 0 * entry A 2 2
           - entry A 0 0 * entry A 1 2 * entry A 2 1"
 
-text \<open>Deferred: inverse and general Gauss-Jordan solve (the 2x2 bodies are
-  det2 / mat_solve2 above).  Rank and nullspace dimension are no longer
-  uninterpreted: they are defined from the RREF algorithm in
-  \<open>VWZ_RREF\<close>, which is downstream of this file.\<close>
-
-consts mat_inv :: "mat \<Rightarrow> mat"
-       \<comment> \<open>TODO(define): spec Sec 6.4 -- for now only the 2x2 body (mat_solve2) exists\<close>
+text \<open>Deferred: general Gauss-Jordan solve (the 2x2 body is mat_solve2 above).
+  Rank, nullspace dimension and the inverse are no longer uninterpreted: all
+  three are defined from the RREF algorithm in \<open>VWZ_RREF\<close>, which is
+  downstream of this file.\<close>
 
 consts mat_solve :: "mat \<Rightarrow> vec \<Rightarrow> vec option"
        \<comment> \<open>TODO(define): spec Sec 6.4.3 -- general Gauss-Jordan solve\<close>

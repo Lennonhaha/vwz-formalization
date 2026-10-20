@@ -307,6 +307,35 @@ lemma mat_rank_unfold:
   "mat_rank A = length (filter (\<lambda>r. \<not> all_zero_row r) (rref A))"
   by (simp add: mat_rank_def)
 
+section \<open>Inverse by Gauss-Jordan on the augmented matrix\<close>
+
+text \<open>Spec Sec 3.4 defines the secret values as @{text "X2a\<inverse>"} and
+  @{text "M2 = X2b \<cdot> X2a\<inverse>"}.  The inverse is therefore a definition, not a
+  primitive: put @{text A} next to the identity, reduce, and keep the right
+  block.  As with @{text rref}, this defines what the algorithm computes; that
+  the result is a two-sided inverse is a theorem and is not proved here.\<close>
+
+definition augment_cols :: "mat \<Rightarrow> mat \<Rightarrow> mat" where
+  "augment_cols A B = map2 (@) A B"
+
+definition take_cols :: "nat \<Rightarrow> mat \<Rightarrow> mat" where
+  "take_cols n A = map (take n) A"
+
+definition drop_cols :: "nat \<Rightarrow> mat \<Rightarrow> mat" where
+  "drop_cols n A = map (drop n) A"
+
+definition mat_inv :: "mat \<Rightarrow> mat" where
+  "mat_inv A = drop_cols (n_cols A) (rref (augment_cols A (id_mat (n_rows A))))"
+
+text \<open>Sanity checks: the identity is its own inverse, and a non-identity 2x2
+  inverts to its known inverse over @{text "F_3329"}.\<close>
+
+lemma mat_inv_identity_2: "mat_inv [[1,0],[0,1]] = [[1,0],[0,1]]"
+  by eval
+
+lemma mat_inv_swap_2: "mat_inv [[0,1],[1,0]] = [[0,1],[1,0]]"
+  by eval
+
 text \<open>Three evaluation checks.  These are not theorems about rank in general:
   they show that the definitions compute, on the identity, on a rank-1 2x2
   matrix, and on the nullspace count.  If the fuel bound were too small, or a

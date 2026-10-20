@@ -173,17 +173,21 @@ consts X3a :: "mat"
 consts X3b :: "mat"
         \<comment> \<open>TODO(define): spec Sec 6.4 -- generator matrix X3b (type anchored on VWZ_Matrix)\<close>
 
-consts M2 :: "mat"
-        \<comment> \<open>TODO(define): spec Sec 6.4.2 -- adapted matrix M2 (type anchored on VWZ_Matrix)\<close>
+text \<open>Spec Sec 3.4 defines these, it does not assume them: @{text "M2 = X2b \<cdot> X2a\<inverse>"}
+  and @{text "M3 = X3b \<cdot> X3a\<inverse>"}.  Now that @{text mat_inv} has a body, they
+  can be spelled the way the spec spells them.\<close>
 
-consts M3 :: "mat"
-        \<comment> \<open>TODO(define): spec Sec 6.4.2 -- adapted matrix M3 (type anchored on VWZ_Matrix)\<close>
+definition M2 :: "mat" where
+  "M2 = mat_mult X2b (mat_inv X2a)"
+
+definition M3 :: "mat" where
+  "M3 = mat_mult X3b (mat_inv X3a)"
 
 consts rows3_of :: "nat \<Rightarrow> mat"
         \<comment> \<open>TODO(define): spec Sec 6.4.1 -- rows3 for parameter k (type anchored on VWZ_Matrix)\<close>
 
-consts psi_slice :: "nat list \<Rightarrow> nat \<Rightarrow> mat"
-        \<comment> \<open>TODO(define): spec Sec 4 -- the i-th rank-2 slice of psi (type anchored on VWZ_Matrix)\<close>
+definition psi_slice :: "pkey \<Rightarrow> nat \<Rightarrow> mat" where
+  "psi_slice pk i = pk_psi pk ! i"
 
 consts weight :: "nat list \<Rightarrow> nat"
         \<comment> \<open>TODO(define): Hamming weight\<close>
@@ -598,26 +602,40 @@ lemma T2_B3:
 
 subsection \<open>T2 :: B5 -- M2, M3 are well-defined\<close>
 
+text \<open>This closes by unfolding, and the closure is worth stating plainly: once
+  @{text M2} and @{text M3} are spelled as the spec spells them, the obligation
+  is a tautology.  It was an obligation only while they were placeholders.  The
+  honest reading is that this is transcription, not proof -- the substantive
+  claim (that those products are the ones the protocol needs) lives in the
+  derivation of Sec 6.4, not here.\<close>
+
 lemma T2_B5:
   "invertible X2a \<Longrightarrow> invertible X3a \<Longrightarrow>
      mat_mult X2b (mat_inv X2a) = M2 \<and> mat_mult X3b (mat_inv X3a) = M3"
-  sorry
+  by (simp add: M2_def M3_def)
 
 subsection \<open>T2 :: B7 -- each rank-2 slice is the transpose of its predecessor's\<close>
 
-text \<open>\<open>mat_rank\<close> now has a body (fuel-counted Gauss-Jordan, see
-  \<open>VWZ_RREF\<close>), so this is no longer a statement about an uninterpreted
-  function.  It is still not provable, and the reason has moved: \<open>psi_slice\<close>
-  is a \<open>const\<close> with no body and no axioms, so nothing constrains
-  \<open>mat_rank (psi_slice pk i)\<close>.  The obligation as stated is also stronger
-  than the construction supports -- \<open>pk\<close> ranges over every \<open>pkey\<close> value,
-  including one whose slice is the zero matrix -- so a well-formedness
-  hypothesis (that \<open>pk\<close> is in the image of \<open>KeyGen\<close>) is missing from the
-  statement.  Recorded as TODO(define) on \<open>psi_slice\<close>, not as TODO(proof):
-  a rank theorem about an undefined matrix is not a proof gap.\<close>
+text \<open>Both sides have bodies now: @{text mat_rank} (fuel-counted Gauss-Jordan,
+  see @{file VWZ_RREF.thy}) and @{text psi_slice} (projection of @{text pk_psi}).
+  The obligation is therefore a statement about actual matrices, and it is
+  FALSE.  The premise @{text "i < length (pk_psi pk)"} does not exclude a zero
+  slice, and @{text T2_B7_counterexample} below proves that a key of the right
+  shape whose slice is zero has rank 0, not 2.
 
-lemma T2_B7: "mat_rank (psi_slice pk i) = 2"
+  What is missing is not a tactic but a hypothesis: that @{text pk} is in the
+  image of @{text KeyGen}.  Until @{text KeyGen} has a body, this is a defect
+  in the statement, not a proof obligation, so it is NOT labelled TODO(proof).
+  It stays as @{text sorry} only so the ledger count does not move by being
+  edited around.\<close>
+
+lemma T2_B7: "i < length (pk_psi pk) \<Longrightarrow> mat_rank (psi_slice pk i) = 2"
   sorry
+
+text \<open>Machine-checked refutation of the statement as it stands lives in
+  @{file VWZ_Refutations.thy}: the key is the right shape, the index is in
+  range, and the rank is 0.  It is kept out of this file so that a refutation is
+  not counted as an obligation.\<close>
 
 text \<open>The obligation, rewritten so that the rank side is unfolded, is the generic
   fact @{text mat_rank_unfold} in @{file VWZ_RREF.thy}.  It is deliberately

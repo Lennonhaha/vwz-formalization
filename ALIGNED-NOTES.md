@@ -746,3 +746,48 @@ obligation and counting it would inflate the ledger). Repository: 10 theory
 files, 191 lemmas, 1 theorem, 17 sorry, 132,006 bytes.
 
 <!-- seg: aligned-rref-landing-20261020 -->
+<!-- seg: seg-inv-5fd5013f2ff9 -->
+﻿### 2026-10-20 (later) -- the inverse lands, T2_B5 closes by unfolding, T2_B7 gets refuted
+
+`mat_inv` is a definition now: reduce `[A | I]` and keep the right block, using
+the same fuel-counted Gauss-Jordan. Two `eval` checks (identity, the 2x2 swap).
+As with rank, this defines what the algorithm computes; that it is a two-sided
+inverse is a theorem, unproved.
+
+With `mat_inv` available, `M2` and `M3` can be spelled as spec Sec 3.4 spells
+them (`X2b * X2a^-1`). `T2_B5` then closes by unfolding -- because it *is* the
+definition. Recorded plainly as transcription rather than proof: the
+substantive claim, that these products are the ones the protocol needs, lives
+in the Sec 6.4 derivation and is not being proved here.
+
+`psi_slice` is defined as the projection `pk_psi pk ! i`, and `T2_B7` gained the
+premise `i < length (pk_psi pk)`. It is still false, and now that is a
+machine-checked fact rather than an argument: `VWZ_Refutations.thy` proves the
+negation with a key of the right shape, index in range, zero slice, rank 0.
+
+Two housekeeping points, both about the counter measuring the right thing:
+
+- A counterexample is not an obligation. It lives in `VWZ_Refutations.thy`, a
+  separate theory, because `count.cjs` counts every `lemma` in the ledger file
+  and a refutation would otherwise raise the lemmas number (56 -> 57) while
+  closing a defect.
+- `T2_B7` stays `sorry` and is still not labelled TODO(proof). What is missing
+  is a hypothesis that `pk` is in the image of `KeyGen`; `KeyGen` has no body,
+  so there is no hypothesis to write yet.
+
+Constants: 31 -> 25. Remaining 10 in `VWZ_Fq3329` (`SeedRng`, `distinct_lam`,
+`KeyGen`, `hash_target`, `Eval`, `Sign`, `Verify`, `sample_below`, `nullspace`,
+`solve_linear`), 1 in `VWZ_Matrix` (`mat_solve`), 14 in the ledger file
+(`randrange`, `Sset`, `Zset`, `P2a`, `P2b`, `X2a`..`X3b`, `rows3_of`, `weight`,
+`unbiased`, `parse_pk`, `parse_sig`).
+
+Note on `X2a`..`X3b`: spec Sec 3.3 builds them from an identity by `m*m` random
+row additions, so they are products of `row_add_matrix` (determinant 1 by
+construction, hence invertible). They are therefore KeyGen outputs, not fixed
+matrices, and cannot be defined until `SeedRng` is. What can be done without
+inventing a seed is the *generator*; that is the next piece.
+
+Counts: ledger 56 lemmas / 16 sorry (T2 6). Repository: 11 theory files, 195
+lemmas, 1 theorem, 16 sorry, 136,093 bytes. Build RC=0.
+
+<!-- seg: aligned-inverse-refutation-20261020 -->

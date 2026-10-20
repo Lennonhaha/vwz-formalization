@@ -15,7 +15,7 @@ tiers; the counts below are generated, not asserted.
 
 | Session | Content | Lemmas | `sorry` |
 |---|---|---|---|
-| `VWZ_A3_Aligned` | Definition layers + obligation inventory | 56 | 16 |
+| `VWZ_A3_Aligned` | Definition layers + obligation inventory | 56 | 15 |
 
 Rank, nullity and inversion are no longer uninterpreted. `VWZ_RREF.thy` defines
 a fuel-parameterised Gauss-Jordan reduction and derives
@@ -54,6 +54,26 @@ failure guard explicitly; the restated form is discharged by
 claim is nowhere asserted — it was asking a list-valued function for a
 property the algorithm cannot have.
 
+### Key generation now has a body
+
+`KeyGen` was the last uninterpreted name on the critical path. It is now a definition (`VWZ_KeyGen.thy`):
+
+- `random_invertible_matrix m s` runs the Sec 3.3 loop exactly `m * m` times from `id_mat m`,
+  drawing `i`, then `j` (both consumed even when `i = j`), then the factor, and
+  applying `add_row_mult`. No fuel is invented: the round count is structural.
+- `mats_of m s` draws the four matrices in the order Sec 3.3 fixes (`X2a, X2b, X3a, X3b`),
+  and `X2a_of` / `X2b_of` / `X3a_of` / `X3b_of` are views on it, not extra draws.
+- `KeyGen k seed` follows the draw order the spec makes normative (lambdas, then
+  matrices, then `x1`), builds `psi` slice by slice with `map2` over the two
+  outer-product factors, and fills the secret record with the Sec 3.6 fields,
+  using `mat_inv` / `mat_mult` from `VWZ_RREF`.
+
+What is still open is T2_B3: that the four generated matrices are invertible.
+The definitions make the claim well-posed, and the reason it is true (row
+additions only, so determinant 1) is now visible in the code, but the bridge --
+a lemma that a row addition preserves invertibility, or equivalently that `det`
+is invariant under it -- does not exist yet. T2_B3 stays `sorry` and says so.
+
 `VWZ_A3_Aligned` is the only session that carries obligations. The remaining
 sessions are scaffolding:
 
@@ -75,7 +95,7 @@ ROOTS                          session registry
 aligned/                       the obligation-carrying session
   ROOT
   VWZ_Fq3329.thy               F_3329 as `residue_ring (int 3329)`, parameters, encoders, Sec 3.1 LCG
-  VWZ_KeyGen.thy               draws and distinct evaluation points, with partial correctness
+  VWZ_KeyGen.thy               draws, Sec 3.3 matrix generator, psi, and KeyGen
   VWZ_Matrix.thy               matrix layer: rows, cols, det (Laplace), row ops
   VWZ_Protocol.thy             protocol records and decoders
   VWZ_Aux.thy                  auxiliary lemmas (determinants, zero rows, T2_B2 support)

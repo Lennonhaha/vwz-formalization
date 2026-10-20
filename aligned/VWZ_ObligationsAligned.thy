@@ -161,27 +161,18 @@ consts P2a :: "nat \<Rightarrow> int"
 consts P2b :: "nat \<Rightarrow> int"
         \<comment> \<open>TODO(define): spec Sec 6.4.1 -- right annihilator\<close>
 
-consts X2a :: "mat"
-        \<comment> \<open>TODO(define): spec Sec 6.4 -- generator matrix X2a (type anchored on VWZ_Matrix)\<close>
-
-consts X2b :: "mat"
-        \<comment> \<open>TODO(define): spec Sec 6.4 -- generator matrix X2b (type anchored on VWZ_Matrix)\<close>
-
-consts X3a :: "mat"
-        \<comment> \<open>TODO(define): spec Sec 6.4 -- generator matrix X3a (type anchored on VWZ_Matrix)\<close>
-
-consts X3b :: "mat"
-        \<comment> \<open>TODO(define): spec Sec 6.4 -- generator matrix X3b (type anchored on VWZ_Matrix)\<close>
-
 text \<open>Spec Sec 3.4 defines these, it does not assume them: @{text "M2 = X2b \<cdot> X2a\<inverse>"}
-  and @{text "M3 = X3b \<cdot> X3a\<inverse>"}.  Now that @{text mat_inv} has a body, they
-  can be spelled the way the spec spells them.\<close>
+  and @{text "M3 = X3b \<cdot> X3a\<inverse>"}.  The four matrices are no longer opaque
+  constants: @{file VWZ_KeyGen.thy} generates them with the Sec 3.3 row-addition
+  loop, so @{text "X2a_of m s"} is the first draw from state @{text s} and the rest
+  follow in the order the spec fixes.  @{text M2} and @{text M3} therefore take
+  the same parameters as the generator rather than standing alone.\<close>
 
-definition M2 :: "mat" where
-  "M2 = mat_mult X2b (mat_inv X2a)"
+definition M2 :: "nat \<Rightarrow> nat \<Rightarrow> mat" where
+  "M2 m s = mat_mult (X2b_of m s) (mat_inv (X2a_of m s))"
 
-definition M3 :: "mat" where
-  "M3 = mat_mult X3b (mat_inv X3a)"
+definition M3 :: "nat \<Rightarrow> nat \<Rightarrow> mat" where
+  "M3 m s = mat_mult (X3b_of m s) (mat_inv (X3a_of m s))"
 
 consts rows3_of :: "nat \<Rightarrow> mat"
         \<comment> \<open>TODO(define): spec Sec 6.4.1 -- rows3 for parameter k (type anchored on VWZ_Matrix)\<close>
@@ -596,8 +587,17 @@ lemma T2_B2_det2_rowadd:
 
 subsection \<open>T2 :: B3 -- X2a, X2b, X3a, X3b are invertible\<close>
 
+text \<open>The subject is now @{text mats_of}: four calls to
+  @{text random_invertible_matrix}, which starts from the identity and applies
+  only row additions.  That is why the spec says determinant 1 by construction.
+  The proof still needs the missing link -- that a row addition preserves
+  invertibility (equivalently, that @{text det} is invariant under it) -- and no
+  such lemma exists in this development yet, so this stays open rather than
+  being papered over with an assumption.\<close>
+
 lemma T2_B3:
-  "invertible X2a \<and> invertible X2b \<and> invertible X3a \<and> invertible X3b"
+  "invertible (X2a_of m s) \<and> invertible (X2b_of m s) \<and>
+   invertible (X3a_of m s) \<and> invertible (X3b_of m s)"
   sorry
 
 subsection \<open>T2 :: B5 -- M2, M3 are well-defined\<close>
@@ -610,8 +610,9 @@ text \<open>This closes by unfolding, and the closure is worth stating plainly: 
   derivation of Sec 6.4, not here.\<close>
 
 lemma T2_B5:
-  "invertible X2a \<Longrightarrow> invertible X3a \<Longrightarrow>
-     mat_mult X2b (mat_inv X2a) = M2 \<and> mat_mult X3b (mat_inv X3a) = M3"
+  "invertible (X2a_of m s) \<Longrightarrow> invertible (X3a_of m s) \<Longrightarrow>
+     mat_mult (X2b_of m s) (mat_inv (X2a_of m s)) = M2 m s \<and>
+     mat_mult (X3b_of m s) (mat_inv (X3a_of m s)) = M3 m s"
   by (simp add: M2_def M3_def)
 
 subsection \<open>T2 :: B7 -- each rank-2 slice is the transpose of its predecessor's\<close>

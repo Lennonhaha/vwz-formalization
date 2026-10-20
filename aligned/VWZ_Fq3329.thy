@@ -171,9 +171,6 @@ text \<open>Each object below is an <em>uninterpreted</em> constant: its mathema
   content is not yet formalised.  They exist so that the T0 obligations have a
   well-typed subject; bodies follow the spec sections named in the TODO tags.\<close>
 
-consts KeyGen :: "nat \<Rightarrow> nat list \<Rightarrow> (nat list \<times> nat list)"
-        \<comment> \<open>TODO(define): spec Sec 3 -- (k, seed) |-> (pk, sk)\<close>
-
 consts hash_target :: "nat \<Rightarrow> nat list \<Rightarrow> nat list"
         \<comment> \<open>TODO(define): spec Sec 5 -- (k, msg) |-> sparse target t (via H)\<close>
 

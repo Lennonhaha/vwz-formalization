@@ -861,3 +861,42 @@ proof of the original claim, and the unconditional version is asserted nowhere.
 
 Counts after the change: ledger 56 lemmas / 15 sorry (T3 8 lemmas / 7 sorry;
 T2 10 / 6). `isabelle build -D aligned` finishes with RC=0 in ~10 s.
+<!-- seg: seg-keygen-715d0473ace6 -->
+## 2026-10-20: KeyGen gets a body, and the four matrices stop being opaque
+
+`KeyGen` is defined (`nat => nat => pkey * skey`), in the order the spec makes
+normative: lambdas (Sec 3.2), matrices (Sec 3.3), then `x1` (Sec 3.4). Reordering
+those draws would change every output byte, so the lets follow the spec, not
+dependency order.
+
+`random_invertible_matrix m s` runs exactly `m * m` rounds from `id_mat m`,
+drawing `i`, then `j` (both consumed even when `i = j`, as the spec requires),
+then the factor, and applying `add_row_mult`. No fuel parameter: the round count
+is structural, so inventing one would have been decoration. `mats_of` threads
+the state through the four draws in the fixed order; `X2a_of`..`X3b_of` are
+views on that one tuple, not independent draws.
+
+`psi` is built with `map2` over the two outer-product factors rather than by
+indexing, so the `(i2, i3)` pairing is carried by construction.
+
+What changed in the ledger:
+
+- `consts KeyGen` (Fq3329) and `consts X2a/X2b/X3a/X3b` (Obligations) deleted.
+- `M2`/`M3` are now functions of `(m, s)` over the generator, not constants.
+- `T2_B3` restated against `X2a_of m s` .. `X3b_of m s`. Still `sorry`.
+
+Why T2_B3 is still open, stated plainly: the claim is true (the loop applies
+only row additions, so determinant 1), and the code now shows that reason, but
+the bridge lemma -- a row addition preserves invertibility, equivalently `det`
+is invariant under it -- does not exist in this development. Proving it needs
+either determinant multiplicativity or an elementary-matrix inverse, and both
+are real work rather than a one-line unfolding. It is not faked.
+
+Counts: 56 lemmas / 15 sorry (unchanged); 209 lemmas and 154,993 bytes in the
+repository; uninterpreted constants down by five (KeyGen + the four matrices).
+Build: RC=0 in about 10 s.
+
+Note on the toolchain, for the next session: several stale `poly` workers from
+killed builds were still running and made every `by eval` look 10-20x slower
+than it is. If a theory that used to take 8 s suddenly takes minutes, check
+`Get-Process poly` before touching the proofs.

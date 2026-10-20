@@ -589,11 +589,35 @@ subsection \<open>T2 :: B3 -- X2a, X2b, X3a, X3b are invertible\<close>
 
 text \<open>The subject is now @{text mats_of}: four calls to
   @{text random_invertible_matrix}, which starts from the identity and applies
-  only row additions.  That is why the spec says determinant 1 by construction.
-  The proof still needs the missing link -- that a row addition preserves
-  invertibility (equivalently, that @{text det} is invariant under it) -- and no
-  such lemma exists in this development yet, so this stays open rather than
-  being papered over with an assumption.\<close>
+  only row additions.  The spec is right that the determinant is 1 by
+  construction.  What is missing is the bridge from "the body is a list of row
+  additions" to @{term invertible}, and that bridge is three lemmas, none of
+  which exists in this development yet:
+
+  (1) @{text "mat_mult (row_add_matrix m i j f) A = add_row_mult A i j f"} --
+      one elementary matrix on the left is exactly one row addition;
+  (2) @{text "mat_mult (row_add_matrix m i j f) (row_add_matrix m i j (-f)) =
+      id_mat m"} -- the elementary matrix is invertible, with the obvious
+      inverse;
+  (3) associativity of @{text mat_mult} on rectangular matrices, which is what
+      transports a witness along the iteration: with @{text A} invertible via
+      @{text B}, the matrix @{text "mat_mult E A"} is invertible via
+      @{text "mat_mult B (row_add_matrix m i j (-f))"}, and closing that
+      calculation needs @{text "(E * A) * (B * E_inv) = E * (A * B) * E_inv"}.
+
+  Lemma (3) is the load-bearing one and it is not cheap: @{text mat_mult} is
+  defined through @{text dot} and @{text sum_list}, so associativity is an
+  exchange of summation order over two index ranges.  That exchange was
+  attempted (the helper sum lemmas survive in @{file VWZ_MatAlgebra.thy}), but
+  the exchange itself did not close inside the current budget, and a related
+  experiment showed why this is not a matter of patience alone: @{text "by
+  eval"} on @{text "det (X2a_of 2 7)"} alone ran for more than 115 seconds
+  without returning, so brute-force evaluation is not an escape either.
+
+  This obligation is therefore TODO(proof), not TODO(define): the bodies exist
+  and are executable, the statement is true, and the missing object is a piece
+  of matrix algebra (associativity plus the row-operation bridge), not a
+  missing subject.  Nothing here is assumed to make the statement pass.\<close>
 
 lemma T2_B3:
   "invertible (X2a_of m s) \<and> invertible (X2b_of m s) \<and>

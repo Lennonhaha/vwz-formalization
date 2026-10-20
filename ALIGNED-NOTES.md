@@ -900,3 +900,22 @@ Note on the toolchain, for the next session: several stale `poly` workers from
 killed builds were still running and made every `by eval` look 10-20x slower
 than it is. If a theory that used to take 8 s suddenly takes minutes, check
 `Get-Process poly` before touching the proofs.
+<!-- seg: seg-t2b3-69c656be34ba -->
+
+<!-- seg: seg-t2b3-bridge-9c41e0d7b6a2 -->
+### T2_B3 战术转向：确认「缺桥」，标记 TODO(proof)（2026-10-20 16:50）
+
+**决定**：停止在 `mat_mult` 的结合律上继续硬啃，把 T2_B3 明确标为 `TODO(proof)`（不是 `TODO(define)`），陈述与主体不动，`sorry` 保留。计数不变：ledger **56 lemmas / 15 sorry**（T2 仍 10 / 6）。
+
+**为什么不是「再等等就好」**：三条缺桥，缺一不可。
+1. `mat_mult (row_add_matrix m i j f) A = add_row_mult A i j f` —— 左乘初等矩阵 = 一次行加法；
+2. `mat_mult (row_add_matrix m i j f) (row_add_matrix m i j (-f)) = id_mat m` —— 初等矩阵可逆，逆元就是参数取负；
+3. `mat_mult` 在矩形矩阵上的结合律 —— 有了它才能把见证沿迭代搬运：`A` 可逆（见证 `B`）⇒ `E*A` 可逆（见证 `B*E⁻¹`），计算需要 `(E*A)*(B*E⁻¹) = E*(A*B)*E⁻¹`。
+
+第 3 条是承重墙，不是耐心问题：`mat_mult` 由 `dot` + `sum_list` 定义，结合律 = 两个指标区间的求和换序（Fubini on lists）。本仓没有这一层，新建的 `VWZ_MatAlgebra.thy` 只落地了能证的求和引理（`sum_list_map_add` / `sum_list_map_mult_right` / `sum_list_map_mult_left` / `sum_list_map_const_zero`），换序引理**未证**故**未入库**（文件里明写 deferred，不留未证断言）。
+
+**顺带实测（否掉一条逃生路线）**：`by eval` 在 `det (X2a_of 2 7)` 上 >115 秒不返回；m=3 时 `det (X2a_of 3 12345)` >213 秒。⇒ 想用「具体种子算一遍」替代一般证明也不可行，数值自测不能当证据用。`VWZ_Checks.thy` 因此**不入库**（本地草稿，避免埋一个跑到天亮的 target）。
+
+**文件状态**：`aligned/ROOT` 恢复为原 8 个 theory + `VWZ_MatAlgebra`（新增，只含已证求和引理）；`Scratch.thy` 已从 ROOT 移除（文件仍在盘上，未入库）；`aligned/VWZ_ObligationsAligned.thy` 的 T2_B3 注释改写为三条缺桥 + eval 实测 + TODO(proof) 定性；构建 `isabelle build -D aligned` RC=0（约 19 s）。
+
+**方法论**：定义落地 ≠ 定理关闭。这一轮把「差什么」写成了可检查的清单（三条引理的名字与形状），而不是「再试一次」——下次接手的人不用重新摸索。

@@ -944,3 +944,19 @@ than it is. If a theory that used to take 8 s suddenly takes minutes, check
 | T3_E3b_conjectural | 非定理 | 规范 §10.1 声明一般拒绝可靠性不可证 |
 
 结论：**账本里再没有「便宜且诚实」的胜利**。剩下的要么等 `TODO(define)` 的主体，要么撞 `T2_B3` 的结合律墙，要么本来就是假命题/猜想。下一步真正的杠杆是**补 consts 的 body**（randrange、Sset、Zset、weight、parse_pk/parse_sig、Eval、Sign、Verify、nullspace、solve_linear），而不是继续找边角料扫尾。
+<!-- seg: seg-bodies-c3ba48bc27df -->
+
+<!-- seg: seg-bodies-wave1-7ad4c0f19e63 -->
+### 补身体第一波：randrange / parse_pk / parse_sig / weight（2026-10-20 17:02）
+
+构建 RC=0（18 s）。Ledger **56 lemmas / 12 sorry**（未变——本轮只换主体，不解 sorry）。
+
+**四条的实际处置（都不是「新写语义」）**：
+1. `randrange` — **本来就有真定义**（`VWZ_Fq3329.thy:145`，state-passing，带 `randrange_range` 引理）。`Obligations` 里那条 `consts randrange :: nat list ⇒ nat ⇒ nat ⇒ nat` 是**类型错误且零引用**的残留，已删除。教训：先 grep 再定义，别把「账本里的占位符」当成「全仓没有实现」。
+2. `parse_pk` / `parse_sig` — §8.3 **早已有 body**：`VWZ_Protocol.thy` 的 `deser_pk` / `deser_sig`，单字节 k + 按 k 定长 + 16-bit LE 成对解码，与规范逐字对应。本轮把它们从 `consts` 改成 `definition parse_pk = deser_pk`（零发明）。**同步改写正文**：旧注释写「parse_pk 还没有 body」会在改完后变成假话，已改成「有 body 了，但 E1 的信息量仍为零；§8.3 的实质是长度规则（由 E2 覆盖）与往返（由 T1-A 覆盖）」。
+3. `weight` — 真定义：`length (filter (λx. x ≠ 0) xs)`。**但不解 T3_C1**：该引理断言 `weight (hash_target k msg) = k + 1`，`hash_target` 仍是 consts，所以等式仍无主体；注释已写明这一点，避免把「有 body」误报成「可证」。
+4. `Sset` / `Zset` — **没动**，原因不是懒：规范 §9 的 α 是 `t[i] * x1[i]⁻¹`（依赖秘密 x1），S/Z 是 α 的零/非零划分；现存签名 `nat list ⇒ nat set`（只吃 msg）**表达不了**这件事。要改签名（需带 sk 或 α），属**建模决策**，需拍板，不能顺手改。
+
+**仍为 consts 的 13 个**：`Sset Zset P2a P2b rows3_of unbiased hash_target Eval Sign Verify sample_below nullspace solve_linear`。其中 `unbiased` 本质是概率陈述、`hash_target` 是 §5 的稀疏目标生成（需 §5 的位级规格），都不是「一行定义」的活。
+
+**记账自律（本轮自纠）**：给 `weight` 加的三条平凡辅助引理（`weight_nil` 等）把 ledger 从 56 顶到 **59**——当归一化计数器把「Deferred subjects」段也算进账本时，辅助引理会被计入义务。已立即删除，计数回到 56。定义展开与辅助引理不是义务，不能让计数虚涨。

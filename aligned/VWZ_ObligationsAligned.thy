@@ -146,8 +146,10 @@ text \<open>Subjects whose semantics are not yet formalised.  They exist only so
   no longer declared here -- they are anchored to the definitions in
   VWZ_Protocol.)\<close>
 
-consts randrange :: "nat list \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> nat"
-        \<comment> \<open>TODO(define): spec Sec 3.1 -- value in [lo, hi)\<close>
+text \<open>The sampler is already defined in @{file VWZ_Fq3329.thy} (state-passing
+  @{text randrange}, spec Sec 3.1), so there is no placeholder to fill here.  The
+  old duplicate constant with a list-shaped state was deleted: it had the wrong
+  type and no user.\<close>
 
 consts Sset :: "nat list \<Rightarrow> nat set"
         \<comment> \<open>TODO(define): spec Sec 6.4 -- shared index set S\<close>
@@ -180,17 +182,34 @@ consts rows3_of :: "nat \<Rightarrow> mat"
 definition psi_slice :: "pkey \<Rightarrow> nat \<Rightarrow> mat" where
   "psi_slice pk i = pk_psi pk ! i"
 
-consts weight :: "nat list \<Rightarrow> nat"
-        \<comment> \<open>TODO(define): Hamming weight\<close>
+text \<open>Hamming weight, as used by the target-density obligations.  Giving it a
+  body does NOT unblock @{text T3_C1}: that lemma is about
+  @{text "hash_target k msg"}, which is still uninterpreted, so the count is not
+  yet a statement about anything.  The body is here so that the count itself is
+  no longer opaque once @{text hash_target} lands.\<close>
+
+definition weight :: "nat list \<Rightarrow> nat" where
+  "weight xs = length (filter (\<lambda>x. x \<noteq> 0) xs)"
+
 
 consts unbiased :: "nat \<Rightarrow> bool"
         \<comment> \<open>TODO(define): spec Sec 5.1 -- rejection-sampling uniformity\<close>
 
-consts parse_pk :: "nat list \<Rightarrow> nat list option"
-        \<comment> \<open>TODO(define): spec Sec 8.3 -- inverse of ser_pk\<close>
+text \<open>Section 8.3 already has bodies: @{file VWZ_Protocol.thy} defines
+  @{text deser_pk} and @{text deser_sig} exactly as the parsing rules require
+  (single-byte @{text k}, length keyed on that byte, then 16-bit little-endian
+  pairs).  These two constants were leftovers from before that work, so they are
+  now aliases rather than placeholders -- no semantics were invented here.
 
-consts parse_sig :: "nat list \<Rightarrow> nat list option"
-        \<comment> \<open>TODO(define): spec Sec 8.3 -- inverse of ser_sig\<close>
+  The substantive obligation is not totality but the round trip
+  (@{text "parse_pk (ser_pk k psi) = Some psi"} under the range side condition),
+  which is the serialization identity already closed in T1-A.\<close>
+
+definition parse_pk :: "nat list \<Rightarrow> nat list option" where
+  "parse_pk = deser_pk"
+
+definition parse_sig :: "nat list \<Rightarrow> nat list option" where
+  "parse_sig = deser_sig"
 
 section \<open>T1-A -- algebraic axioms (16 lemmas / 0 sorry)\<close>
 
@@ -733,11 +752,11 @@ subsection \<open>T3 :: E1 -- pk parser totality\<close>
 
 text \<open>This one closes, and it is worth being blunt about how little that means: for
   ANY @{typ "nat list \<Rightarrow> nat list option"}, totality in this sense is
-  definitional.  The statement asks only that a total HOL function returns
-  either @{const None} or @{const Some}, which is the case distinction on
-  @{typ "nat list option"}.  Closing it removes a placeholder, not a doubt:
-  the real parser obligation is the semantic one (what the bytes mean), and that
-  needs @{text parse_pk} to have a body, which it does not yet.\<close>
+  definitional -- the statement asks only that a total HOL function returns
+  either @{const None} or @{const Some}.  Since the last round @{text parse_pk}
+  does have a body (the alias of @{text deser_pk}), but that changes nothing
+  here: the content of Sec 8.3 is the length rule and the round trip, and the
+  length rule is exercised by @{text T3_E2}, the round trip by T1-A.\<close>
 
 lemma T3_E1_parse_pk_total:
   "\<forall>bs. parse_pk bs = None \<or> (\<exists>v. parse_pk bs = Some v)"

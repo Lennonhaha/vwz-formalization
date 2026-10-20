@@ -7,6 +7,8 @@ This repository is deliberately separate from the FIBEMATE business
 repositories: formal methods artifacts have a different build toolchain
 (Isabelle), a different release cadence, and a much larger footprint than the
 product code. Keeping them apart keeps both sides honest.
+Status, known gaps, and how to contribute: [docs/ANNOUNCEMENT-EN.md](https://github.com/Lennonhaha/fibemate/blob/main/docs/ANNOUNCEMENT-EN.md) · [contributor guide](https://github.com/Lennonhaha/fibemate/blob/main/docs/CONTRIBUTORS-GUIDE.md).
+
 
 ## Status
 

@@ -10,9 +10,24 @@
     Honest status: the row-operation matrices and their degeneration laws are
     proved.  The inverse laws (mat_mult E E' = id_mat) are NOT proved here --
     they are recorded in the formalization notes as open work, because they
-    need a full sum-splitting argument over mat_mult.  mat_rank, mat_inv and
-    dim_nullspace remain uninterpreted constants: no RREF algorithm is
-    implemented in this file.
+    need a full sum-splitting argument over mat_mult.
+
+    What IS here: a fuel-parameterised Gauss-Jordan reduction (rref), and the
+    two definitions that were previously uninterpreted constants -- mat_rank
+    and dim_nullspace.  Fuel makes the recursion structural, so no termination
+    proof is needed; correctness of the reduction (that it reaches a normal
+    form, and that mat_rank is the field rank) is NOT claimed and is not
+    proved.  The definitions are executable, and the evaluation lemmas at the
+    end of the RREF section are the evidence for that.
+
+    mat_inv and mat_solve remain uninterpreted constants in VWZ_Matrix: both
+    need the augmented-matrix solve, which is the next step.
+
+    Convention on dim_nullspace: it is n_rows A - mat_rank A, not
+    n_cols A - mat_rank A.  That is the convention T2_D4 is stated in (it
+    bounds k - 1 for a (k+1)-row matrix), and it matches the spec's use of the
+    row count.  The textbook nullity of the column space is the other one;
+    the difference is recorded here rather than papered over.
 *)
 theory VWZ_RREF
   imports VWZ_Aux
@@ -210,13 +225,125 @@ proof -
   finally show ?thesis .
 qed
 
+section \<open>Gauss-Jordan reduction, fuel-parameterised\<close>
+
+text \<open>The reduction carries an explicit fuel argument, so the recursion is
+  structural in the fuel and no termination proof is needed.  Fuel is consumed
+  whether or not a pivot is found, and the bound used by @{text rref} is one
+  more than the number of cells, which covers the worst case (every column
+  scanned, every row used).\<close>
+
+definition fq :: "int \<Rightarrow> int" where
+  "fq x = x mod 3329"
+
+definition all_zero_row :: "int list \<Rightarrow> bool" where
+  "all_zero_row r = (\<forall>x \<in> set r. fq x = 0)"
+
+text \<open>First row at or below @{text r} whose entry in column @{text c} is
+  nonzero modulo @{text q}.  Fuel-bounded for the same reason as the
+  reduction itself.\<close>
+
+fun find_pivot_fuel :: "nat \<Rightarrow> mat \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> nat option" where
+  "find_pivot_fuel 0 A r c = None"
+| "find_pivot_fuel (Suc f) A r c =
+     (if r < n_rows A \<and> fq (entry A r c) \<noteq> 0 then Some r
+      else if r < n_rows A then find_pivot_fuel f A (r + 1) c
+      else None)"
+
+definition swap_rows :: "mat \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> mat" where
+  "swap_rows A i j = (A[i := A ! j])[j := A ! i]"
+
+definition scale_row :: "mat \<Rightarrow> nat \<Rightarrow> int \<Rightarrow> mat" where
+  "scale_row A i k = A[i := map (\<lambda>x. fq (k * x)) (A ! i)]"
+
+definition add_row_mult :: "mat \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> int \<Rightarrow> mat" where
+  "add_row_mult A i j k = A[i := map2 (\<lambda>x y. fq (x + k * y)) (A ! i) (A ! j)]"
+
+text \<open>Subtract from every other row the multiple of the pivot row that clears
+  column @{text c}.  Rows are visited by index, which keeps the definition
+  executable without a separate map-with-index.\<close>
+
+definition eliminate_col :: "mat \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> mat" where
+  "eliminate_col A r c =
+     foldl (\<lambda>B k. if k = r then B else add_row_mult B k r (- (entry B k c)))
+           A [0..<n_rows A]"
+
+fun rref_fuel :: "nat \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> mat \<Rightarrow> mat" where
+  "rref_fuel 0 r c A = A"
+| "rref_fuel (Suc f) r c A =
+     (if r < n_rows A \<and> c < n_cols A then
+        (case find_pivot_fuel (n_rows A) A r c of
+           None \<Rightarrow> rref_fuel f r (c + 1) A
+         | Some i \<Rightarrow>
+             (let A1 = swap_rows A r i;
+                  p  = entry A1 r c;
+                  A2 = scale_row A1 r (invmod p);
+                  A3 = eliminate_col A2 r c
+              in rref_fuel f (r + 1) (c + 1) A3))
+      else A)"
+
+definition rref :: "mat \<Rightarrow> mat" where
+  "rref A = rref_fuel (n_rows A * n_cols A + n_rows A + 1) 0 0 A"
+
+text \<open>Rank as the number of nonzero rows of the reduced form.  This is the
+  definition the T2 obligations now refer to; that it agrees with the field
+  rank is a theorem, not a definition, and it is not proved yet.\<close>
+
+definition mat_rank :: "mat \<Rightarrow> nat" where
+  "mat_rank A = length (filter (\<lambda>r. \<not> all_zero_row r) (rref A))"
+
+text \<open>Nullspace dimension in the row-count convention of the spec and of
+  T2_D4: @{text "n_rows A - mat_rank A"}.  This is the nullity of the transpose
+  map, not of the column space; see the file header.\<close>
+
+definition dim_nullspace :: "mat \<Rightarrow> nat" where
+  "dim_nullspace A = n_rows A - mat_rank A"
+
+text \<open>The one lemma about the definition that is worth having: unfolding it.
+  Kept here rather than in the obligation file so that the ledger counts only
+  obligations.\<close>
+
+lemma mat_rank_unfold:
+  "mat_rank A = length (filter (\<lambda>r. \<not> all_zero_row r) (rref A))"
+  by (simp add: mat_rank_def)
+
+text \<open>Three evaluation checks.  These are not theorems about rank in general:
+  they show that the definitions compute, on the identity, on a rank-1 2x2
+  matrix, and on the nullspace count.  If the fuel bound were too small, or a
+  step did not fire, these would fail.\<close>
+
+lemma rref_rank_identity_2: "mat_rank [[1,0],[0,1]] = 2"
+  by eval
+
+lemma rref_rank_singular_2: "mat_rank [[1,2],[2,4]] = 1"
+  by eval
+
+lemma rref_dim_nullspace_singular_2: "dim_nullspace [[1,2],[2,4]] = 1"
+  by eval
+
+text \<open>Probes shaped like the T2_B7 subject: a 3x3 slice of full rank, and the
+  same slice with its last row zeroed.  If these came out as anything other
+  than 3 and 2, the rank definition would be wrong before any obligation is
+  attempted.\<close>
+
+lemma rref_rank_full_3: "mat_rank [[1,2,3],[0,1,4],[0,0,1]] = 3"
+  by eval
+
+lemma rref_rank_slice_3: "mat_rank [[1,0,0],[0,1,0],[0,0,0]] = 2"
+  by eval
+
 section \<open>Scope note\<close>
 
 text \<open>The determinant of \<open>row_add_matrix\<close> is proved in \<open>VWZ_Aux\<close>
   (\<open>T2_B2\<close>).  The determinant laws for swaps and scalings are not
   formalised: the sign law for a swap needs an alternation argument, which is
-  a separate development.  Accordingly \<open>mat_rank\<close>, \<open>mat_inv\<close> and
-  \<open>dim_nullspace\<close> keep their uninterpreted status, and the T2 obligations
-  that mention them stay open.\<close>
+  a separate development.
+
+  \<open>mat_rank\<close> and \<open>dim_nullspace\<close> are now DEFINED (by fuel-counted
+  Gauss-Jordan), so the T2 obligations that mention them are no longer
+  statements about uninterpreted functions.  They remain open for a different
+  reason: \<open>psi_slice\<close> and \<open>rows3_of\<close> -- the matrices those obligations
+  are about -- are themselves uninterpreted constants.  A rank obligation
+  about an undefined matrix cannot be closed by proving a rank theorem.\<close>
 
 end

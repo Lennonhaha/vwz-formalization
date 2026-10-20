@@ -24,7 +24,7 @@
     wrinkle is recorded in plans/vwz-a3-aligned_20261018.md.
 *)
 theory VWZ_ObligationsAligned
-  imports VWZ_Fq3329 VWZ_Matrix VWZ_Protocol VWZ_Aux
+  imports VWZ_Fq3329 VWZ_Matrix VWZ_Protocol VWZ_Aux VWZ_RREF
 begin
 
 section \<open>T0 -- purely formal rewriting (target: 0 sorry)\<close>
@@ -492,11 +492,11 @@ text \<open>Vocabulary is imported from \<open>VWZ_Matrix\<close> -- one source 
   the structural helpers (`n_rows`, `n_cols`, `entry`, `row_vec`, `col_vec`,
   `dot`, `zero_mat`, `det2`, `mat_slice2`, `mat_rank1`, `mat_rank2`,
   `mat_solve2`, `mat_nullspace`, `mat_inner`), the real definitions
-  (`id_mat`, `mat_mult`, `row_add_matrix`, `invertible`), and the constants
-  still awaiting bodies (`det`, `mat_inv`, `mat_rank`, `mat_solve`,
-  `dim_nullspace`).  The protocol objects (`psi_slice`, `M2`, `M3`, `X2a` ...)
-  are declared over the types of that layer, so a later body can mention them
-  without re-typing anything.\<close>
+  (`id_mat`, `mat_mult`, `row_add_matrix`, `invertible`), the rank and nullity
+  definitions from `VWZ_RREF` (`rref`, `mat_rank`, `dim_nullspace`), and the
+  constants still awaiting bodies (`mat_inv`, `mat_solve`).  The protocol
+  objects (`psi_slice`, `M2`, `M3`, `X2a` ...) are declared over the types of
+  that layer, so a later body can mention them without re-typing anything.\<close>
 
 subsection \<open>T2 :: B2 -- row-addition matrices have determinant 1\<close>
 
@@ -605,8 +605,24 @@ lemma T2_B5:
 
 subsection \<open>T2 :: B7 -- each rank-2 slice is the transpose of its predecessor's\<close>
 
+text \<open>\<open>mat_rank\<close> now has a body (fuel-counted Gauss-Jordan, see
+  \<open>VWZ_RREF\<close>), so this is no longer a statement about an uninterpreted
+  function.  It is still not provable, and the reason has moved: \<open>psi_slice\<close>
+  is a \<open>const\<close> with no body and no axioms, so nothing constrains
+  \<open>mat_rank (psi_slice pk i)\<close>.  The obligation as stated is also stronger
+  than the construction supports -- \<open>pk\<close> ranges over every \<open>pkey\<close> value,
+  including one whose slice is the zero matrix -- so a well-formedness
+  hypothesis (that \<open>pk\<close> is in the image of \<open>KeyGen\<close>) is missing from the
+  statement.  Recorded as TODO(define) on \<open>psi_slice\<close>, not as TODO(proof):
+  a rank theorem about an undefined matrix is not a proof gap.\<close>
+
 lemma T2_B7: "mat_rank (psi_slice pk i) = 2"
   sorry
+
+text \<open>The obligation, rewritten so that the rank side is unfolded, is the generic
+  fact @{text mat_rank_unfold} in @{file VWZ_RREF.thy}.  It is deliberately
+  not restated here: a definitional unfolding is not an obligation, and
+  counting it as one would inflate the ledger.\<close>
 
 subsection \<open>T2 :: D4 -- dim(nullspace(rows3)) \<ge> k - 1  for k \<ge> 2\<close>
 

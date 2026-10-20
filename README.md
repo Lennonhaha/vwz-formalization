@@ -17,6 +17,16 @@ tiers; the counts below are generated, not asserted.
 |---|---|---|---|
 | `VWZ_A3_Aligned` | Definition layers + obligation inventory | 56 | 17 |
 
+Rank and nullity are no longer uninterpreted. `VWZ_RREF.thy` defines a
+fuel-parameterised Gauss-Jordan reduction and derives
+`mat_rank A = length (filter (\<lambda>r. \<not> all_zero_row r) (rref A))` and
+`dim_nullspace A = n_rows A - mat_rank A`. Fuel makes the recursion structural,
+so no termination proof is needed. Correctness of the reduction (that it reaches
+a normal form, and that `mat_rank` is the field rank) is **not** claimed; five
+`eval` lemmas check that the definitions compute on concrete matrices.
+`mat_inv` and `mat_solve` remain undefined constants, because both need the
+augmented-matrix solve.
+
 `VWZ_A3_Aligned` is the only session that carries obligations. The remaining
 sessions are scaffolding:
 
@@ -41,6 +51,7 @@ aligned/                       the obligation-carrying session
   VWZ_Matrix.thy               matrix layer: rows, cols, det (Laplace), row ops
   VWZ_Protocol.thy             protocol records and decoders
   VWZ_Aux.thy                  auxiliary lemmas (determinants, zero rows, T2_B2 support)
+  VWZ_RREF.thy                 elementary row operations, fuel-counted Gauss-Jordan, rank / nullity
   VWZ_ObligationsAligned.thy   the obligation inventory, tiered T0..T3
 skeleton/  smoke/  neg/        scaffolding sessions
 tools/count.cjs                lemma / sorry counter (source of the table above)
@@ -81,6 +92,14 @@ rediscovered:
   "complete" because its easy half is done.
 - Obligations whose subjects are still undefined constants are marked
   `TODO(define)` rather than proved against a placeholder.
+- A definitional unfolding is not an obligation and is not counted as one; such
+  lemmas live outside the ledger file, which is why the ledger count did not
+  move when `mat_rank` got a body.
+- `T2_B7` is recorded with a defect in its *statement*, not just a missing
+  proof: `pk` ranges over every `pkey`, so once `psi_slice` is defined the
+  claim is false for a slice that happens to be zero. A well-formedness
+  hypothesis is missing and is noted rather than silently added on the
+  obligation's behalf.
 - Two obligations are explicitly **not** counted as provable: one is empirical
   (`T3_D8`), one is declared unprovable in the specification (`T3_E3b`).
 

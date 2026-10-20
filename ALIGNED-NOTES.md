@@ -704,3 +704,45 @@ repository. Only the proved content moved into `aligned/VWZ_RREF.thy`; the
 three inverse laws that were still `sorry` in the probes
 (`r2_rowadd_inverse`, `r2_swap_inverse`, `r2_scale_inverse`) were **not**
 copied across, so the shipped file has no `sorry` at all.
+<!-- seg: seg-rref-4e2669767f48 -->
+﻿### 2026-10-20 -- Gauss-Jordan lands; T2_B7 turns out to be a statement defect
+
+`VWZ_RREF.thy` now carries a fuel-parameterised reduction. Fuel (`rref_fuel
+f r c A`) makes the recursion structural, so termination is free; the bound
+`n_rows * n_cols + n_rows + 1` covers the worst case. `mat_rank` and
+`dim_nullspace` are definitions now, not `consts`, so the T2 obligations that
+mention them are no longer statements about uninterpreted functions.
+
+Five `by eval` lemmas are the evidence the definitions compute (identity 2x2,
+singular 2x2, a 3x3 of full rank, the same 3x3 with a zero row, and the
+nullspace count). They also pin down a shape: a 3x3 slice with one zero row
+gives rank 2, which is the shape T2_B7 wants.
+
+What is *not* claimed: that `rref` reaches a normal form, or that `mat_rank`
+equals the field rank. Both are theorems, both are unproved, and the README
+says so. The definition is honest (it computes what it says) without being a
+correctness claim.
+
+`mat_inv` and `mat_solve` stay undefined: both need the augmented-matrix solve,
+which is the next piece of work, not a by-product of this one.
+
+#### T2_B7 is a statement defect, not a proof gap
+
+With `mat_rank` defined, `T2_B7: mat_rank (psi_slice pk i) = 2` can be looked at
+properly, and it does not survive the look. `pk` is a bare `pkey` record, so it
+ranges over every value of `pk_psi`. As soon as `psi_slice` gets the body the
+spec wants (`pk_psi pk ! i`, or any projection), the claim is false for a zero
+slice. There is no `i < n` either.
+
+So the obligation is missing a well-formedness hypothesis (pk in the image of
+`KeyGen`). That is a *spec* defect; fixing it silently inside the ledger would
+be the same species of error the paper is about -- a statement made true by
+choosing the statement. It is recorded here and in the README, and the
+statement is left as it is until the spec is corrected.
+
+Counts after this change: ledger 56 lemmas / 17 sorry (unchanged -- the
+unfolding lemma lives in `VWZ_RREF`, since a definitional unfolding is not an
+obligation and counting it would inflate the ledger). Repository: 10 theory
+files, 191 lemmas, 1 theorem, 17 sorry, 132,006 bytes.
+
+<!-- seg: aligned-rref-landing-20261020 -->

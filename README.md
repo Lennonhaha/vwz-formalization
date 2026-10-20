@@ -15,7 +15,7 @@ tiers; the counts below are generated, not asserted.
 
 | Session | Content | Lemmas | `sorry` |
 |---|---|---|---|
-| `VWZ_A3_Aligned` | Definition layers + obligation inventory | 56 | 15 |
+| `VWZ_A3_Aligned` | Definition layers + obligation inventory | 56 | 12 |
 
 Rank, nullity and inversion are no longer uninterpreted. `VWZ_RREF.thy` defines
 a fuel-parameterised Gauss-Jordan reduction and derives
@@ -54,6 +54,26 @@ failure guard explicitly; the restated form is discharged by
 claim is nowhere asserted — it was asking a list-valued function for a
 property the algorithm cannot have.
 
+### T3: two parsers, a weight, and the index split
+
+`T3_E1`, `T3_E2` and `T3_E4` are closed, taking the ledger from 15 to 12. The
+split is recorded honestly: E1 and E4 are option-case splits with almost no
+information content (a total function into an option returns `None` or `Some`),
+while E2 has substance -- an accepted length forces `hd bs = k`, which contradicts
+the stated premise.
+
+Three names on that path are no longer uninterpreted: `parse_pk` / `parse_sig` are
+the existing `deser_pk` / `deser_sig` (spec Sec 8.3), and `weight` is a real
+filter. `Sset` / `Zset` are the zero / non-zero split of `adapted_of` over
+`(t, x1)`; the split needs the secret `x1`, which a signature taking only the
+message could not express, so the two obligations were restated and that
+restatement is recorded in the file.
+
+`hash_target` and `rows3_of` stay uninterpreted on purpose. A hash needs a digest
+function this session does not have, and `rows3` needs the secret `lambda_c`,
+`M3` and the split point; a placeholder that ignored them would turn the lemmas
+into statements about a made-up matrix.
+
 ### Key generation now has a body
 
 `KeyGen` was the last uninterpreted name on the critical path. It is now a definition (`VWZ_KeyGen.thy`):
@@ -76,7 +96,6 @@ is invariant under it -- does not exist yet. T2_B3 stays `sorry` and says so.
 
 `VWZ_A3_Aligned` is the only session that carries obligations. The remaining
 sessions are scaffolding:
-
 - `smoke` — field and invariant smoke tests
 - `skeleton` — early skeleton, kept for provenance
 

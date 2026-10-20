@@ -151,11 +151,17 @@ text \<open>The sampler is already defined in @{file VWZ_Fq3329.thy} (state-pass
   old duplicate constant with a list-shaped state was deleted: it had the wrong
   type and no user.\<close>
 
-consts Sset :: "nat list \<Rightarrow> nat set"
-        \<comment> \<open>TODO(define): spec Sec 6.4 -- shared index set S\<close>
+text \<open>Sec 9 splits the index set by whether @{text "alpha i = t[i] * x1[i]\<inverse>"} is zero.
+  Both arguments are therefore required: a signature that takes only the message
+  cannot state the split, because @{text x1} is secret.  The bodies below are the
+  split of @{text adapted_of} (which already carries the modular inverse), not a
+  new notion.\<close>
 
-consts Zset :: "nat list \<Rightarrow> nat set"
-        \<comment> \<open>TODO(define): spec Sec 6.4 -- leftover index set Z\<close>
+definition Sset :: "int list \<Rightarrow> int list \<Rightarrow> nat set" where
+  "Sset t x1 = {i. i < length (adapted_of t x1) \<and> adapted_of t x1 ! i \<noteq> 0}"
+
+definition Zset :: "int list \<Rightarrow> int list \<Rightarrow> nat set" where
+  "Zset t x1 = {i. i < length (adapted_of t x1) \<and> adapted_of t x1 ! i = 0}"
 
 consts P2a :: "nat \<Rightarrow> int"
         \<comment> \<open>TODO(define): spec Sec 6.4.1 -- left annihilator\<close>
@@ -688,18 +694,35 @@ text \<open>The obligation, rewritten so that the rank side is unfolded, is the 
 
 subsection \<open>T2 :: D4 -- dim(nullspace(rows3)) \<ge> k - 1  for k \<ge> 2\<close>
 
+text \<open>Still blocked, and deliberately not faked.  Sec 6.4.1 defines
+  @{text rows3} as @{text "[vand(lambda_c[i], m) for i in Za] @
+  [M3\<^sup>T . vand(lambda_c[i], m) for i in Zb]"}, so its body needs four things
+  this signature cannot carry: the secret @{text lambda_c}, the matrix @{text M3},
+  the split point @{text a}, and the resulting @{text Za}/@{text Zb}.  Writing a
+  placeholder that ignores them would make the lemma a statement about a made-up
+  matrix, which is worse than a tagged hole.  What the body needs: change the
+  signature to take @{text "lambda_c"}, @{text M3} and the two sets, then the
+  dimension count becomes @{text "n_rows = k + 2"} and @{text "n_cols = m"}.\<close>
+
 lemma T2_D4: "2 \<le> k \<Longrightarrow> k - 1 \<le> dim_nullspace (rows3_of k)"
   sorry
 
 subsection \<open>T2 :: D5 -- the u2 rows reproduce adapted on S\<close>
 
+text \<open>Restated against the two-argument @{text Sset}, with @{text t} the target
+  (coerced to @{typ int}, since @{text adapted_of} works over @{typ int}) and
+  @{text x1} the secret vector of @{text sk}.  Still blocked on @{text Eval},
+  which has no body.\<close>
+
 lemma T2_D5:
-  "i \<in> Sset msg \<Longrightarrow> Eval pk w2 w3 ! i = hash_target k msg ! i"
+  "i \<in> Sset (map int (hash_target k msg)) (x1_of sk) \<Longrightarrow>
+     Eval pk w2 w3 ! i = hash_target k msg ! i"
   sorry
 
 subsection \<open>T2 :: D6 -- annihilation of the two P2 factors on Z\<close>
 
-lemma T2_D6: "i \<in> Zset msg \<Longrightarrow> P2a i = 0 \<or> P2b i = 0"
+lemma T2_D6:
+  "i \<in> Zset (map int (hash_target k msg)) (x1_of sk) \<Longrightarrow> P2a i = 0 \<or> P2b i = 0"
   sorry
 
 subsection \<open>T2 :: D1 -- verifier correctness\<close>

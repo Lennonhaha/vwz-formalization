@@ -960,3 +960,20 @@ than it is. If a theory that used to take 8 s suddenly takes minutes, check
 **仍为 consts 的 13 个**：`Sset Zset P2a P2b rows3_of unbiased hash_target Eval Sign Verify sample_below nullspace solve_linear`。其中 `unbiased` 本质是概率陈述、`hash_target` 是 §5 的稀疏目标生成（需 §5 的位级规格），都不是「一行定义」的活。
 
 **记账自律（本轮自纠）**：给 `weight` 加的三条平凡辅助引理（`weight_nil` 等）把 ledger 从 56 顶到 **59**——当归一化计数器把「Deferred subjects」段也算进账本时，辅助引理会被计入义务。已立即删除，计数回到 56。定义展开与辅助引理不是义务，不能让计数虚涨。
+<!-- seg: seg-szsets-89661f761ac8 -->
+
+<!-- seg: seg-szsets-2c9f4b7d01aa -->
+### Sset / Zset 落地（2026-10-20 17:15）
+
+按拍板签名 `int list ⇒ int list ⇒ nat set`（t, x1）替换 consts。构建 RC=0。Ledger 仍 **56 / 12**（换主体，不解 sorry）。
+
+- `Sset t x1 = {i. i < length (adapted_of t x1) ∧ adapted_of t x1 ! i ≠ 0}`
+- `Zset t x1 = {i. i < length (adapted_of t x1) ∧ adapted_of t x1 ! i = 0}`
+- `adapted_of` 是既有的 `map2 (λa b. a * invmod b mod 3329)`，即 α = t[i]·x1[i]⁻¹；没有新造概念。
+- 因此 `T2_D5` / `T2_D6` 的陈述同步改写为 `Sset (map int (hash_target k msg)) (x1_of sk)` —— `hash_target` 返回 `nat list`，而 `adapted_of` 在 `int` 上工作，必须显式 `map int`；这不是装饰，是把类型边界写明白。
+
+**被拒绝的两件「顺手」**：
+1. **`hash_target` 不造定义**。§5 的稀疏目标依赖真实摘要函数；Isabelle 里没有可用摘要，硬写一个"位模式"就是编造语义，会让 `T3_C1` 变成关于一个自造对象的真命题——比挂着更糟。
+2. **`rows3_of` 不改签名、不写占位**。§6.4.1 的 body 需要四样现有签名装不下的东西：秘密 `lambda_c`、矩阵 `M3`、切分点 `a`、以及由此得到的 `Za`/`Zb`。写一个"忽略参数、返回固定矩阵"的占位，会让 `T2_D4` 变成关于假矩阵的陈述。注释里已写明正确改法（签名带上 λc/M3/两个集合，则 `n_rows = k+2`、`n_cols = m`）。
+
+**记账自律复现**：本轮又差点让两条 `Sset`/`Zset` 辅助引理把计数顶到 58，已删。**规则固化：`Deferred subjects` 段里的 lemma 会被计数器计入义务，辅助引理一律不放该段。**

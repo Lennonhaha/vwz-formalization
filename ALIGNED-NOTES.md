@@ -791,3 +791,52 @@ Counts: ledger 56 lemmas / 16 sorry (T2 6). Repository: 11 theory files, 195
 lemmas, 1 theorem, 16 sorry, 136,093 bytes. Build RC=0.
 
 <!-- seg: aligned-inverse-refutation-20261020 -->
+<!-- seg: seg-lcg-b3e2eaa25743 -->
+﻿### 2026-10-20 (later still) -- the LCG lands, and the type is the real blocker
+
+Spec Sec 3.1 is a 64-bit LCG: state stepped by `s * 6364136223846793005 +
+1442695040888963407` modulo `2^64`, `next_u16_mod` truncating to 32 bits
+*before* the modular reduction (normative, Sec 12 D-3, not a simplification
+I made), and `randrange` adding the low bound.
+
+It is defined in `VWZ_Fq3329` over `nat` modulo `2^64`. That is exact rather
+than an approximation: `nat` does not overflow, so the modulo does the
+truncation the spec asks for and `Word_Lib` is not needed. One step from zero
+returns the increment, which is the cheapest check that the two constants are
+not swapped.
+
+`VWZ_KeyGen` then defines `draw_list` (n draws from a state) and
+`distinct_lam_fuel` (the rejection loop, fuel-bounded like `rref`). What is
+proved is partial correctness: if `distinct_lam_fuel` returns anything, it
+returns n points, pairwise distinct, inside `[1, q)`. What is *not* proved is
+termination -- rejection sampling terminates with probability 1, and that is a
+probabilistic statement, not a structural one.
+
+That gap is why the constant is still there, and the reason is a type, not a
+lack of effort. `SeedRng :: nat => nat list` is a *finite* list; rejection
+sampling needs an unbounded stream. The definitions use the state-passing
+form; the constant keeps its declared type until someone changes it. T3_B1
+consequently stays unconditional in the ledger and stays `sorry`.
+
+The temptation here was real and worth recording: T3_B1 becomes provable the
+moment it gains "if the fuel did not run out". That is a weaker statement, not
+a solved one, and weakening an obligation until it passes is the failure mode
+this repository exists to document. The conditional form is proved in
+`VWZ_KeyGen` as a supporting result instead; the ledger is untouched.
+
+Two friction points, both cheap in hindsight and expensive at the time:
+
+- `by eval` over the 64-bit recurrence did not finish in 90 s -- twice, at
+  8x3 and at 64x8. Brute-force evaluation is not a usable build step at this
+  numeral width, so the generator is covered by the partial-correctness lemma
+  and one symbolic LCG step, not by evaluation.
+- `1` and `Suc 0` are not the same term for the simplifier here. Three proofs
+  failed on that alone until the rewrite facts were stated in the form the
+  goal actually used. Numeral normalisation is a rewrite rule, not a
+  definitional equality the matcher will find.
+
+Counts: ledger 56 lemmas / 16 sorry (unchanged -- definitions are not
+obligations). Repository: 12 theory files, 203 lemmas, 1 theorem, 16 sorry,
+144,572 bytes. Build RC=0.
+
+<!-- seg: aligned-lcg-keygen-20261020 -->

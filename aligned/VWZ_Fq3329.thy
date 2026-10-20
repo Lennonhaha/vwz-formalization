@@ -66,7 +66,7 @@ lemma par_n_eq_par_m_plus_1: "par_n k = par_m k + 1"
 lemma par_w_eq_half_n: "2 * par_w k = par_n k"
   unfolding par_w_def par_n_def by arith
 
-section \<open>Serialization primitives (spec Sec 8)\<close>
+section \<open>Protocol objects (bodies deferred)\<close>
 
 definition le1 :: "nat \<Rightarrow> nat list" where "le1 x = [x mod 256]"
 
@@ -93,6 +93,70 @@ lemma ser_pk_len [simp]: "length (ser_pk k psi) = 1 + 2 * length psi"
 
 lemma ser_sig_len [simp]: "length (ser_sig k w) = 1 + 2 * length w"
   by (simp add: ser_sig_def)
+
+section \<open>Deterministic PRNG (spec Sec 3.1)\<close>
+
+text \<open>The spec calls this a 64-bit LCG and describes it as a state machine: an
+  initial state, then @{text next_u64} repeatedly.  It is modelled here as
+transitions on @{typ nat} reduced modulo @{text "2 ^ 64"}, which is exact --
+  @{typ nat} does not overflow, so the modulo does the truncation the spec asks
+  for and no @{text uint64} library is needed.
+
+  Note on shape: @{text SeedRng} is declared above as @{typ "nat \<Rightarrow> nat list"},
+  a finite list, but rejection sampling needs an unbounded stream.  The type is
+  therefore wrong for the job, and the definitions below use the state-passing
+  form instead.  The constant is left alone until that type is changed.
+
+  One more detail that matters for byte compatibility: @{text next_u16_mod}
+  truncates to 32 bits *before* reducing modulo the argument.  That is
+  normatively required (spec Sec 12 D-3), so it is not a simplification.\<close>
+
+definition lcg_mod :: nat where "lcg_mod = 2 ^ 64"
+
+definition lcg_init :: "nat \<Rightarrow> nat" where
+  "lcg_init seed = (seed + 0xDEADBEEFCAFEBABE) mod lcg_mod"
+
+definition lcg_step :: "nat \<Rightarrow> nat" where
+  "lcg_step s = (s * 6364136223846793005 + 1442695040888963407) mod lcg_mod"
+
+lemma lcg_step_range [simp]: "lcg_step s < 2 ^ 64"
+  by (simp add: lcg_step_def lcg_mod_def)
+
+lemma lcg_init_range [simp]: "lcg_init seed < 2 ^ 64"
+  by (simp add: lcg_init_def lcg_mod_def)
+
+text \<open>@{text next_u64} returns the new state and that state is also the value, which
+  is what the spec's two-line body says.\<close>
+
+definition next_u64 :: "nat \<Rightarrow> nat \<times> nat" where
+  "next_u64 s = (let s' = lcg_step s in (s', s'))"
+
+definition next_u16_mod :: "nat \<Rightarrow> nat \<Rightarrow> nat \<times> nat" where
+  "next_u16_mod modulus s =
+     (let (v, s') = next_u64 s in ((v mod 2 ^ 32) mod modulus, s'))"
+
+definition randrange :: "nat \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> nat \<times> nat" where
+  "randrange lo hi s = (let (v, s') = next_u16_mod (hi - lo) s in (lo + v, s'))"
+
+lemma next_u16_mod_lt:
+  "0 < modulus \<Longrightarrow> fst (next_u16_mod modulus s) < modulus"
+  by (simp add: next_u16_mod_def next_u64_def Let_def mod_less_divisor)
+
+lemma randrange_range:
+  "lo < hi \<Longrightarrow> lo \<le> fst (randrange lo hi s) \<and> fst (randrange lo hi s) < hi"
+proof -
+  assume "lo < hi"
+  then have pos: "0 < hi - lo" by simp
+  have h: "fst (next_u16_mod (hi - lo) s) < hi - lo"
+    using pos by (rule next_u16_mod_lt)
+  obtain v s' where v: "next_u16_mod (hi - lo) s = (v, s')"
+    by (cases "next_u16_mod (hi - lo) s") auto
+  have hv: "v < hi - lo" using v h by simp
+  have ge: "lo \<le> lo + v" by simp
+  have lt: "lo + v < hi" using hv pos by linarith
+  show ?thesis
+    using ge lt v by (simp add: randrange_def Let_def)
+qed
 
 section \<open>Protocol objects (bodies deferred)\<close>
 

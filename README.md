@@ -30,6 +30,22 @@ the field rank, that `mat_inv` is a two-sided inverse) is **not** claimed; seven
 `T2_B5` closes by unfolding. That is transcription, not proof, and it is
 recorded as such.
 
+The generator is no longer a single opaque constant, though it is not a
+replacement yet. `VWZ_Fq3329` now carries the Sec 3.1 LCG as a state machine on
+`nat` reduced modulo `2^64` (exact, since `nat` does not overflow, and no
+`Word_Lib` needed), together with `next_u16_mod` -- including the 32-bit
+truncation *before* the modular reduction, which the spec makes normative for
+byte compatibility. `VWZ_KeyGen` defines `draw_list` and a fuel-counted
+`distinct_lam_fuel`, and proves partial correctness: if it returns anything, it
+returns `n` pairwise-distinct points in `[1, q)`.
+
+What is *not* proved is termination of rejection sampling, and that gap is
+visible in the type. `SeedRng` is declared `nat => nat list`, a finite list,
+while the algorithm needs an unbounded stream; the definitions therefore use
+the state-passing form and the constant is left in place until that type is
+changed. T3_B1 stays unconditional in the ledger and stays `sorry`; weakening
+it until it became provable would have been the wrong kind of progress.
+
 `VWZ_A3_Aligned` is the only session that carries obligations. The remaining
 sessions are scaffolding:
 
@@ -50,7 +66,8 @@ isabelle build -D neg   # expected: FAILED
 ROOTS                          session registry
 aligned/                       the obligation-carrying session
   ROOT
-  VWZ_Fq3329.thy               F_3329 as `residue_ring (int 3329)`, parameters, encoders
+  VWZ_Fq3329.thy               F_3329 as `residue_ring (int 3329)`, parameters, encoders, Sec 3.1 LCG
+  VWZ_KeyGen.thy               draws and distinct evaluation points, with partial correctness
   VWZ_Matrix.thy               matrix layer: rows, cols, det (Laplace), row ops
   VWZ_Protocol.thy             protocol records and decoders
   VWZ_Aux.thy                  auxiliary lemmas (determinants, zero rows, T2_B2 support)

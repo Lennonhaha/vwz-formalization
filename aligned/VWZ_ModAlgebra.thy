@@ -665,4 +665,353 @@ proof (rule fq_sum_cong)
     by (rule fq_cong_mult[OF refl fq_idem])
 qed
 
+section \<open>Shape facts and the entry lemma for the reduced product\<close>
+
+lemma mat_len: "length (mat_mult A B) = n_rows A"
+proof -
+  have h1: "length (mat_mult A B) = n_rows (mat_mult A B)" by (simp add: n_rows_def)
+  have h2: "n_rows (mat_mult A B) = n_rows A" by (rule n_rows_mat_mult)
+  show ?thesis using h1 h2 by simp
+qed
+
+lemma mat_ne: "n_rows A > 0 \<Longrightarrow> mat_mult A B \<noteq> []"
+proof -
+  assume h: "n_rows A > 0"
+  have len: "length (mat_mult A B) = length A"
+    using mat_len[of A B] by (simp add: n_rows_def)
+  have pos: "length A > 0" using h by (simp add: n_rows_def)
+  have poslen: "length (mat_mult A B) > 0" using len pos by simp
+  show ?thesis using poslen by (simp add: length_greater_0_conv)
+qed
+
+lemma n_cols_map_map: "X \<noteq> [] \<Longrightarrow> n_cols (map (map f) X) = n_cols X"
+  by (simp add: n_cols_def)
+
+lemma n_rows_mod: "n_rows (mat_mult_mod X Y) = n_rows X"
+proof -
+  have h: "length (mat_mult_mod X Y) = length X"
+    using mat_len[of X Y] by (simp add: mat_mult_mod_def n_rows_def)
+  show ?thesis using h by (simp add: n_rows_def)
+qed
+
+lemma len_mod: "length (mat_mult_mod X Y) = n_rows X"
+proof -
+  have h: "length (mat_mult_mod X Y) = length X"
+    using mat_len[of X Y] by (simp add: mat_mult_mod_def n_rows_def)
+  show ?thesis using h by (simp add: n_rows_def)
+qed
+
+lemma is_rect_mod:
+  assumes rX: "is_rect X" and nX: "n_rows X = m" and cY: "n_cols Y = m" and m0: "0 < m"
+  shows "is_rect (mat_mult_mod X Y)"
+proof -
+  have mpos: "n_rows X > 0" using nX m0 by simp
+  have ne: "mat_mult X Y \<noteq> []" using mat_ne[OF mpos] .
+  have ir: "is_rect (mat_mult X Y)" using is_rect_mat_mult[OF mpos] .
+  have h: "\<forall>r\<in>set (mat_mult X Y). length r = n_cols (mat_mult X Y)"
+    using ir by (simp add: is_rect_def)
+  show ?thesis
+    using h ne by (simp add: mat_mult_mod_def is_rect_def n_cols_map_map)
+qed
+
+lemma n_cols_mod:
+  assumes nX: "n_rows X = m" and cY: "n_cols Y = m" and m0: "0 < m"
+  shows "n_cols (mat_mult_mod X Y) = m"
+proof -
+  have mpos: "n_rows X > 0" using nX m0 by simp
+  have ne: "mat_mult X Y \<noteq> []" using mat_ne[OF mpos] .
+  show ?thesis
+    using n_cols_mat_mult[OF mpos, of Y] ne cY by (simp add: mat_mult_mod_def n_cols_map_map)
+qed
+
+lemma entry_mod_left_inner:
+  assumes rA: "is_rect A" and nA: "n_rows A = m" and cA: "n_cols A = m"
+    and rB: "is_rect B" and nB: "n_rows B = m" and cB: "n_cols B = m"
+    and rC: "is_rect C" and nC: "n_rows C = m" and cC: "n_cols C = m"
+    and m0: "0 < m" and i: "i < m" and j: "j < m"
+  shows "entry (mat_mult (mat_mult_mod A B) C) i j
+       = sum_list (map (\<lambda>k. entry (mat_mult_mod A B) i k * entry C k j) [0..<m])"
+proof -
+  have Mr: "is_rect (mat_mult_mod A B)" using rA nA cB m0 by (rule is_rect_mod)
+  have Mn: "n_rows (mat_mult_mod A B) = m" using nA by (simp add: n_rows_mod)
+  have Mc: "n_cols (mat_mult_mod A B) = m" using nA cB m0 by (rule n_cols_mod)
+  have im: "i < n_rows (mat_mult_mod A B)" using Mn i by simp
+  have jc: "j < n_cols C" using cC j by simp
+  have eq: "n_cols (mat_mult_mod A B) = n_rows C" using Mc nC by simp
+  have h: "entry (mat_mult (mat_mult_mod A B) C) i j
+      = sum_list (map (\<lambda>k. entry (mat_mult_mod A B) i k * entry C k j)
+                   [0..<n_cols (mat_mult_mod A B)])"
+    using im jc eq Mr by (rule entry_mult)
+  show ?thesis using h Mc by simp
+qed
+
+lemma entry_mod_left_fq:
+  assumes rA: "is_rect A" and nA: "n_rows A = m" and cA: "n_cols A = m"
+    and rB: "is_rect B" and nB: "n_rows B = m" and cB: "n_cols B = m"
+    and rC: "is_rect C" and nC: "n_rows C = m" and cC: "n_cols C = m"
+    and m0: "0 < m" and i: "i < m" and j: "j < m"
+  shows "sum_list (map (\<lambda>k. entry (mat_mult_mod A B) i k * entry C k j) [0..<m])
+       = sum_list (map (\<lambda>k. fq (entry (mat_mult A B) i k) * entry C k j) [0..<m])"
+proof (rule arg_cong[where f=sum_list])
+  show "map (\<lambda>k. entry (mat_mult_mod A B) i k * entry C k j) [0..<m]
+      = map (\<lambda>k. fq (entry (mat_mult A B) i k) * entry C k j) [0..<m]"
+  proof (rule map_cong[OF refl])
+    fix k assume "k \<in> set [0..<m]"
+    hence km: "k < m" by (simp add: set_upt)
+    show "entry (mat_mult_mod A B) i k * entry C k j
+        = fq (entry (mat_mult A B) i k) * entry C k j"
+      using entry_mat_mult_mod[OF rA nA cA rB nB cB m0 i km] by simp
+  qed
+qed
+
+lemma entry_int_left:
+  assumes rA: "is_rect A" and nA: "n_rows A = m" and cA: "n_cols A = m"
+    and rB: "is_rect B" and nB: "n_rows B = m" and cB: "n_cols B = m"
+    and rC: "is_rect C" and nC: "n_rows C = m" and cC: "n_cols C = m"
+    and m0: "0 < m" and i: "i < m" and j: "j < m"
+  shows "entry (mat_mult (mat_mult A B) C) i j
+       = sum_list (map (\<lambda>k. entry (mat_mult A B) i k * entry C k j) [0..<m])"
+proof -
+  have mpos: "n_rows A > 0" using nA m0 by simp
+  have ABr: "is_rect (mat_mult A B)" using is_rect_mat_mult[OF mpos] .
+  have ABn: "n_rows (mat_mult A B) = m"
+    using mat_len[of A B] nA by (simp add: n_rows_def)
+  have ABc: "n_cols (mat_mult A B) = m"
+    using n_cols_mat_mult[OF mpos, of B] cB by simp
+  have im: "i < n_rows (mat_mult A B)" using ABn i by simp
+  have jc: "j < n_cols C" using cC j by simp
+  have eq: "n_cols (mat_mult A B) = n_rows C" using ABc nC by simp
+  have h: "entry (mat_mult (mat_mult A B) C) i j
+      = sum_list (map (\<lambda>k. entry (mat_mult A B) i k * entry C k j)
+                   [0..<n_cols (mat_mult A B)])"
+    using im jc eq ABr by (rule entry_mult)
+  show ?thesis using h ABc by simp
+qed
+
+lemma entry_mod_left:
+  assumes rA: "is_rect A" and nA: "n_rows A = m" and cA: "n_cols A = m"
+    and rB: "is_rect B" and nB: "n_rows B = m" and cB: "n_cols B = m"
+    and rC: "is_rect C" and nC: "n_rows C = m" and cC: "n_cols C = m"
+    and m0: "0 < m" and i: "i < m" and j: "j < m"
+  shows "entry (mat_mult_mod (mat_mult_mod A B) C) i j
+       = fq (entry (mat_mult (mat_mult A B) C) i j)"
+proof -
+  have Mr: "is_rect (mat_mult_mod A B)" using rA nA cB m0 by (rule is_rect_mod)
+  have Mn: "n_rows (mat_mult_mod A B) = m" using nA by (simp add: n_rows_mod)
+  have Mc: "n_cols (mat_mult_mod A B) = m" using nA cB m0 by (rule n_cols_mod)
+  have S1: "entry (mat_mult_mod (mat_mult_mod A B) C) i j
+      = fq (entry (mat_mult (mat_mult_mod A B) C) i j)"
+    using Mr Mn Mc rC nC cC m0 i j by (rule entry_mat_mult_mod)
+  have S2: "entry (mat_mult (mat_mult_mod A B) C) i j
+      = sum_list (map (\<lambda>k. entry (mat_mult_mod A B) i k * entry C k j) [0..<m])"
+    using rA nA cA rB nB cB rC nC cC m0 i j by (rule entry_mod_left_inner)
+  have S4: "sum_list (map (\<lambda>k. entry (mat_mult_mod A B) i k * entry C k j) [0..<m])
+      = sum_list (map (\<lambda>k. fq (entry (mat_mult A B) i k) * entry C k j) [0..<m])"
+    using rA nA cA rB nB cB rC nC cC m0 i j by (rule entry_mod_left_fq)
+  have S5: "fq (sum_list (map (\<lambda>k. fq (entry (mat_mult A B) i k) * entry C k j) [0..<m]))
+      = fq (sum_list (map (\<lambda>k. entry (mat_mult A B) i k * entry C k j) [0..<m]))"
+    by (rule fq_pull_left)
+  have S6: "entry (mat_mult (mat_mult A B) C) i j
+      = sum_list (map (\<lambda>k. entry (mat_mult A B) i k * entry C k j) [0..<m])"
+    using rA nA cA rB nB cB rC nC cC m0 i j by (rule entry_int_left)
+  have A1: "entry (mat_mult_mod (mat_mult_mod A B) C) i j
+      = fq (sum_list (map (\<lambda>k. entry (mat_mult_mod A B) i k * entry C k j) [0..<m]))"
+    using S1 S2 by (simp only: S1 S2)
+  have A2: "fq (sum_list (map (\<lambda>k. entry (mat_mult_mod A B) i k * entry C k j) [0..<m]))
+      = fq (sum_list (map (\<lambda>k. fq (entry (mat_mult A B) i k) * entry C k j) [0..<m]))"
+    using S4 by (simp only: S4)
+  have A3: "fq (sum_list (map (\<lambda>k. fq (entry (mat_mult A B) i k) * entry C k j) [0..<m]))
+      = fq (sum_list (map (\<lambda>k. entry (mat_mult A B) i k * entry C k j) [0..<m]))"
+    by (rule S5)
+  have A4: "fq (sum_list (map (\<lambda>k. entry (mat_mult A B) i k * entry C k j) [0..<m]))
+      = fq (entry (mat_mult (mat_mult A B) C) i j)"
+    using S6 by (simp only: S6)
+  show ?thesis using A1 A2 A3 A4 by simp
+qed
+
+section \<open>The same on the right factor\<close>
+
+lemma entry_mod_right_inner:
+  assumes rA: "is_rect A" and nA: "n_rows A = m" and cA: "n_cols A = m"
+    and rB: "is_rect B" and nB: "n_rows B = m" and cB: "n_cols B = m"
+    and rC: "is_rect C" and nC: "n_rows C = m" and cC: "n_cols C = m"
+    and m0: "0 < m" and i: "i < m" and j: "j < m"
+  shows "entry (mat_mult A (mat_mult_mod B C)) i j
+       = sum_list (map (\<lambda>k. entry A i k * entry (mat_mult_mod B C) k j) [0..<m])"
+proof -
+  have Mr: "is_rect (mat_mult_mod B C)" using rB nB cC m0 by (rule is_rect_mod)
+  have Mn: "n_rows (mat_mult_mod B C) = m" using nB by (simp add: n_rows_mod)
+  have Mc: "n_cols (mat_mult_mod B C) = m" using nB cC m0 by (rule n_cols_mod)
+  have im: "i < n_rows A" using nA i by simp
+  have jc: "j < n_cols (mat_mult_mod B C)" using Mc j by simp
+  have eq: "n_cols A = n_rows (mat_mult_mod B C)" using cA Mn by simp
+  have h: "entry (mat_mult A (mat_mult_mod B C)) i j
+      = sum_list (map (\<lambda>k. entry A i k * entry (mat_mult_mod B C) k j)
+                   [0..<n_cols A])"
+    using im jc eq rA by (rule entry_mult)
+  show ?thesis using h cA by simp
+qed
+
+lemma entry_mod_right_fq:
+  assumes rA: "is_rect A" and nA: "n_rows A = m" and cA: "n_cols A = m"
+    and rB: "is_rect B" and nB: "n_rows B = m" and cB: "n_cols B = m"
+    and rC: "is_rect C" and nC: "n_rows C = m" and cC: "n_cols C = m"
+    and m0: "0 < m" and i: "i < m" and j: "j < m"
+  shows "sum_list (map (\<lambda>k. entry A i k * entry (mat_mult_mod B C) k j) [0..<m])
+       = sum_list (map (\<lambda>k. entry A i k * fq (entry (mat_mult B C) k j)) [0..<m])"
+proof (rule arg_cong[where f=sum_list])
+  show "map (\<lambda>k. entry A i k * entry (mat_mult_mod B C) k j) [0..<m]
+      = map (\<lambda>k. entry A i k * fq (entry (mat_mult B C) k j)) [0..<m]"
+  proof (rule map_cong[OF refl])
+    fix k assume "k \<in> set [0..<m]"
+    hence km: "k < m" by (simp add: set_upt)
+    show "entry A i k * entry (mat_mult_mod B C) k j
+        = entry A i k * fq (entry (mat_mult B C) k j)"
+      using entry_mat_mult_mod[OF rB nB cB rC nC cC m0 km j] by simp
+  qed
+qed
+
+lemma entry_int_right:
+  assumes rA: "is_rect A" and nA: "n_rows A = m" and cA: "n_cols A = m"
+    and rB: "is_rect B" and nB: "n_rows B = m" and cB: "n_cols B = m"
+    and rC: "is_rect C" and nC: "n_rows C = m" and cC: "n_cols C = m"
+    and m0: "0 < m" and i: "i < m" and j: "j < m"
+  shows "entry (mat_mult A (mat_mult B C)) i j
+       = sum_list (map (\<lambda>k. entry A i k * entry (mat_mult B C) k j) [0..<m])"
+proof -
+  have mpos: "n_rows B > 0" using nB m0 by simp
+  have BCr: "is_rect (mat_mult B C)" using is_rect_mat_mult[OF mpos] .
+  have BCn: "n_rows (mat_mult B C) = m"
+    using mat_len[of B C] nB by (simp add: n_rows_def)
+  have BCc: "n_cols (mat_mult B C) = m"
+    using n_cols_mat_mult[OF mpos, of C] cC by simp
+  have im: "i < n_rows A" using nA i by simp
+  have jc: "j < n_cols (mat_mult B C)" using BCc j by simp
+  have eq: "n_cols A = n_rows (mat_mult B C)" using cA BCn by simp
+  have h: "entry (mat_mult A (mat_mult B C)) i j
+      = sum_list (map (\<lambda>k. entry A i k * entry (mat_mult B C) k j)
+                   [0..<n_cols A])"
+    using im jc eq rA by (rule entry_mult)
+  show ?thesis using h cA by simp
+qed
+
+lemma entry_mod_right:
+  assumes rA: "is_rect A" and nA: "n_rows A = m" and cA: "n_cols A = m"
+    and rB: "is_rect B" and nB: "n_rows B = m" and cB: "n_cols B = m"
+    and rC: "is_rect C" and nC: "n_rows C = m" and cC: "n_cols C = m"
+    and m0: "0 < m" and i: "i < m" and j: "j < m"
+  shows "entry (mat_mult_mod A (mat_mult_mod B C)) i j
+       = fq (entry (mat_mult A (mat_mult B C)) i j)"
+proof -
+  have Mr: "is_rect (mat_mult_mod B C)" using rB nB cC m0 by (rule is_rect_mod)
+  have Mn: "n_rows (mat_mult_mod B C) = m" using nB by (simp add: n_rows_mod)
+  have Mc: "n_cols (mat_mult_mod B C) = m" using nB cC m0 by (rule n_cols_mod)
+  have S1: "entry (mat_mult_mod A (mat_mult_mod B C)) i j
+      = fq (entry (mat_mult A (mat_mult_mod B C)) i j)"
+    using rA nA cA Mr Mn Mc m0 i j by (rule entry_mat_mult_mod)
+  have S2: "entry (mat_mult A (mat_mult_mod B C)) i j
+      = sum_list (map (\<lambda>k. entry A i k * entry (mat_mult_mod B C) k j) [0..<m])"
+    using rA nA cA rB nB cB rC nC cC m0 i j by (rule entry_mod_right_inner)
+  have S4: "sum_list (map (\<lambda>k. entry A i k * entry (mat_mult_mod B C) k j) [0..<m])
+      = sum_list (map (\<lambda>k. entry A i k * fq (entry (mat_mult B C) k j)) [0..<m])"
+    using rA nA cA rB nB cB rC nC cC m0 i j by (rule entry_mod_right_fq)
+  have S5: "fq (sum_list (map (\<lambda>k. entry A i k * fq (entry (mat_mult B C) k j)) [0..<m]))
+      = fq (sum_list (map (\<lambda>k. entry A i k * entry (mat_mult B C) k j) [0..<m]))"
+    by (rule fq_pull_right)
+  have S6: "entry (mat_mult A (mat_mult B C)) i j
+      = sum_list (map (\<lambda>k. entry A i k * entry (mat_mult B C) k j) [0..<m])"
+    using rA nA cA rB nB cB rC nC cC m0 i j by (rule entry_int_right)
+  have A1: "entry (mat_mult_mod A (mat_mult_mod B C)) i j
+      = fq (sum_list (map (\<lambda>k. entry A i k * entry (mat_mult_mod B C) k j) [0..<m]))"
+    using S1 S2 by (simp only: S1 S2)
+  have A2: "fq (sum_list (map (\<lambda>k. entry A i k * entry (mat_mult_mod B C) k j) [0..<m]))
+      = fq (sum_list (map (\<lambda>k. entry A i k * fq (entry (mat_mult B C) k j)) [0..<m]))"
+    using S4 by (simp only: S4)
+  have A3: "fq (sum_list (map (\<lambda>k. entry A i k * fq (entry (mat_mult B C) k j)) [0..<m]))
+      = fq (sum_list (map (\<lambda>k. entry A i k * entry (mat_mult B C) k j) [0..<m]))"
+    by (rule S5)
+  have A4: "fq (sum_list (map (\<lambda>k. entry A i k * entry (mat_mult B C) k j) [0..<m]))
+      = fq (entry (mat_mult A (mat_mult B C)) i j)"
+    using S6 by (simp only: S6)
+  show ?thesis using A1 A2 A3 A4 by simp
+qed
+
+section \<open>Associativity of the reduced product\<close>
+
+lemma entry_mod_assoc:
+  assumes rA: "is_rect A" and nA: "n_rows A = m" and cA: "n_cols A = m"
+    and rB: "is_rect B" and nB: "n_rows B = m" and cB: "n_cols B = m"
+    and rC: "is_rect C" and nC: "n_rows C = m" and cC: "n_cols C = m"
+    and m0: "0 < m" and i: "i < m" and j: "j < m"
+  shows "entry (mat_mult_mod (mat_mult_mod A B) C) i j
+       = entry (mat_mult_mod A (mat_mult_mod B C)) i j"
+proof -
+  have L: "entry (mat_mult_mod (mat_mult_mod A B) C) i j
+      = fq (entry (mat_mult (mat_mult A B) C) i j)"
+    using rA nA cA rB nB cB rC nC cC m0 i j by (rule entry_mod_left)
+  have R: "entry (mat_mult_mod A (mat_mult_mod B C)) i j
+      = fq (entry (mat_mult A (mat_mult B C)) i j)"
+    using rA nA cA rB nB cB rC nC cC m0 i j by (rule entry_mod_right)
+  have I: "mat_mult (mat_mult A B) C = mat_mult A (mat_mult B C)"
+    using rA rB rC nA cA nB cB nC cC m0 by (rule mat_mult_assoc_square)
+  show ?thesis using L R I by simp
+qed
+
+lemma mat_mult_mod_assoc:
+  assumes rA: "is_rect A" and nA: "n_rows A = m" and cA: "n_cols A = m"
+    and rB: "is_rect B" and nB: "n_rows B = m" and cB: "n_cols B = m"
+    and rC: "is_rect C" and nC: "n_rows C = m" and cC: "n_cols C = m"
+    and m0: "0 < m"
+  shows "mat_mult_mod (mat_mult_mod A B) C = mat_mult_mod A (mat_mult_mod B C)"
+proof (rule nth_equalityI)
+  have ln1: "length (mat_mult_mod (mat_mult_mod A B) C) = m"
+  proof -
+    have a: "length (mat_mult_mod (mat_mult_mod A B) C) = n_rows (mat_mult_mod A B)"
+      by (rule len_mod)
+    have b: "n_rows (mat_mult_mod A B) = m" using nA by (simp add: n_rows_mod)
+    show ?thesis using a b by simp
+  qed
+  have ln2: "length (mat_mult_mod A (mat_mult_mod B C)) = m"
+  proof -
+    have a: "length (mat_mult_mod A (mat_mult_mod B C)) = n_rows A" by (rule len_mod)
+    show ?thesis using a nA by simp
+  qed
+  show "length (mat_mult_mod (mat_mult_mod A B) C)
+      = length (mat_mult_mod A (mat_mult_mod B C))"
+    using ln1 ln2 by simp
+  fix i assume hi: "i < length (mat_mult_mod (mat_mult_mod A B) C)"
+  hence im: "i < m" using ln1 by simp
+  have Mr: "is_rect (mat_mult_mod A B)" using rA nA cB m0 by (rule is_rect_mod)
+  have Mn: "n_rows (mat_mult_mod A B) = m" using nA by (simp add: n_rows_mod)
+  have Mc: "n_cols (mat_mult_mod A B) = m" using nA cB m0 by (rule n_cols_mod)
+  have Lrect: "is_rect (mat_mult_mod (mat_mult_mod A B) C)"
+    using Mr Mn cC m0 by (rule is_rect_mod)
+  have BCc: "n_cols (mat_mult_mod B C) = m" using nB cC m0 by (rule n_cols_mod)
+  have Rrect: "is_rect (mat_mult_mod A (mat_mult_mod B C))"
+    using rA nA BCc m0 by (rule is_rect_mod)
+  have Lc: "n_cols (mat_mult_mod (mat_mult_mod A B) C) = m"
+    using Mn cC m0 by (rule n_cols_mod)
+  have Llen: "length ((mat_mult_mod (mat_mult_mod A B) C) ! i) = m"
+    using is_rect_rows[OF Lrect, of i] im Lc ln1 by (simp add: n_rows_def)
+  have Rc: "n_cols (mat_mult_mod A (mat_mult_mod B C)) = m"
+    using nA BCc m0 by (rule n_cols_mod)
+  have Rlen: "length ((mat_mult_mod A (mat_mult_mod B C)) ! i) = m"
+    using is_rect_rows[OF Rrect, of i] im Rc ln2 by (simp add: n_rows_def)
+  show "(mat_mult_mod (mat_mult_mod A B) C) ! i
+      = (mat_mult_mod A (mat_mult_mod B C)) ! i"
+  proof (rule nth_equalityI)
+    show "length ((mat_mult_mod (mat_mult_mod A B) C) ! i)
+        = length ((mat_mult_mod A (mat_mult_mod B C)) ! i)"
+      using Llen Rlen by simp
+    fix j assume hj: "j < length ((mat_mult_mod (mat_mult_mod A B) C) ! i)"
+    hence jm: "j < m" using Llen by simp
+    have E: "entry (mat_mult_mod (mat_mult_mod A B) C) i j
+        = entry (mat_mult_mod A (mat_mult_mod B C)) i j"
+      using rA nA cA rB nB cB rC nC cC m0 im jm by (rule entry_mod_assoc)
+    show "((mat_mult_mod (mat_mult_mod A B) C) ! i) ! j
+        = ((mat_mult_mod A (mat_mult_mod B C)) ! i) ! j"
+      using E by (simp add: entry_def)
+  qed
+qed
+
 end

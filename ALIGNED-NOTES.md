@@ -1357,3 +1357,40 @@ theory that derives the three shape facts alone.
 Environment: a killed `isabelle build` leaves `poly` children behind. Six of them were running
 after a few timeouts and each still held CPU; a clean build of this session is 12-20 s, so any
 build that suddenly takes minutes should first be checked with `Get-Process poly`.
+<!-- seg: seg-assoc-dd755fd54eef -->
+<!-- seg: seg-20261021-assoc-c4d1b0e7f2a9 -->
+
+### 2026-10-21 15:5x：`entry_mod_left` 的发散已定位并消除，`mat_mult_mod_assoc` 落地
+
+**发散根因（二分实证，非推测）**：把整段证明拆成独立 lemma 后，探针文件 12 秒构建通过（RC=0）。逐条加回原代码，唯一会挂死的是原来那句一次性链式重写：
+
+```
+by (simp only: step1 step2 step4 step5 step6[symmetric])
+```
+
+六个等式一次进 `simp only`，其中 `step6` 还用反向（`[symmetric]`），于是 `entry → sum_list → entry → sum_list` 形成可互相触发的重写族，项结构持续膨胀。拆成四条 `have`（每条只喂 1–2 个事实）后全部通过，且没有一条需要 3 个以上事实。结论：**`simp only` 的链长本身就是风险参数；等式链应按「一次一个转换」拆成 `have ... by (simp only: h)`**。
+
+**过程中确认的三条工程事实**
+
+1. `n_rows_def` 的化简方向是 `n_rows A → length A`，**单向**。因此所有目标写成 `length ...` 时，`n_rows_mat_mult` / `n_rows_mod` 这类 `n_rows` 形式的引理**完全不会被触发**。必须先证 `length (mat_mult X Y) = n_rows (mat_mult X Y)`（`by (simp add: n_rows_def)`，等价式），再与 `n_rows` 形式串联 transf。本次 `mat_len` / `n_rows_mod` / `len_mod` 三个引理都是为此而写。
+2. `using assms by (rule lem)` **不能**把打包的 `assms` 当作前提序列喂给 `rule`；必须写 `by (rule lem[OF rA nA cA ...])`，且 OF 的参数个数必须与前提个数精确相等（多一个即报 `More instantiations than variables in theorem`）。
+3. `have h := 事实` 不是合法 Isar（`Outer syntax error: proposition expected`），要用 `note h = 事实`。
+
+**本轮落地（`aligned/VWZ_ModAlgebra.thy`）**
+
+- 形状/长度层：`mat_len`、`mat_ne`、`n_cols_map_map`、`n_rows_mod`、`len_mod`、`is_rect_mod`、`n_cols_mod`
+- 逐项层：`entry_mod_left_inner`、`entry_mod_left_fq`、`entry_int_left`、`entry_mod_right_inner`、`entry_mod_right_fq`、`entry_int_right`
+- 合成层：`entry_mod_left`、`entry_mod_right`、`entry_mod_assoc`
+- **`mat_mult_mod_assoc`**：`mat_mult_mod (mat_mult_mod A B) C = mat_mult_mod A (mat_mult_mod B C)`，方阵 `m×m`、`0 < m` 前提下成立。证明结构是两层 `nth_equalityI`（先行后列），每个元素由 `entry_mod_assoc` 闭合；长度子目标由 `len_mod` / `is_rect_rows` / `n_cols_mod` 逐个给出，不交给 simp 猜。
+
+构建：`isabelle build -D aligned` → RC=0，15 秒。账本未变：**56 lemmas / 11 sorry**（T2 10/6、T3 8/3），`ledger 11, outside 0`。T2_B3 仍是 `sorry`。
+
+**T2_B3 的剩余工作已收敛为三件（都不是代数问题）**
+
+1. `mat_mult_mod` 的单位元律（`id_mat` 左/右单位元，整数侧先证再降模；`id_mat_fq` 已有）。
+2. 可逆性沿 `rim_iter` 保持：见证按 `B' = mat_mult_mod B (mat_mult_mod (row_add_matrix m i j (-f)) ...)` 搬运，现在有 `mat_mult_mod_assoc` 与 `mat_mult_mod_elem_inverse` 支撑。
+3. 对 `rim_iter` 的 fuel 做结构归纳，初值为 `id_mat`。
+
+探针文件 `aligned/Probe_Entry.thy` 已从 `aligned/ROOT` 移除（它和主文件的 `n_cols_map_map` 同名会重复声明），留在磁盘作未跟踪草稿，不参与构建、不入库。
+
+<!-- seg: seg-20261021-assoc-c4d1b0e7f2a9 -->

@@ -94,15 +94,30 @@ into statements about a made-up matrix.
 
 What is still open is T2_B3: that the four generated matrices are invertible.
 The definitions make the claim well-posed, and the reason it is true (row
-additions only, so determinant 1) is visible in the code.  The algebraic
-foundation the bridge needs now exists: `VWZ_MatAlgebra` proves the exchange of
+additions only, so determinant 1) is visible in the code.  The foundation the
+restatement needs is now in place.  `VWZ_MatAlgebra` proves the exchange of
 summation order (`swap_idx`), the index form of a product entry (`entry_mult`),
-and associativity of `mat_mult` in the square case (`mat_mult_assoc_square`).
-The row-operation bridge turned out not to be missing but false as stated:
-`add_row_mult` reduces entries modulo `q`, while `mat_mult` does not, so
-left-multiplying by an elementary matrix differs from the row operation by one
-reduction (machine-checked in `VWZ_Probe`). T2_B3 is therefore in restatement
-over `F_q`, and it stays `sorry` until that lands.
+and associativity of the integer product in the square case
+(`mat_mult_assoc_square`).  `VWZ_ModAlgebra` adds the modular product
+`mat_mult_mod`, the notion `invertible_mod`, the reduction congruence
+(`cong_q`, `fq_sum`), the entry-level reduction lemmas (`entry_mod_left`,
+`entry_mod_right`), and finally associativity of the modular product
+(`mat_mult_mod_assoc`).
+
+Two facts about the bridge are worth recording, because both were wrong in the
+first plan.  First, the bridge as stated is false: `add_row_mult` reduces
+entries modulo `q` while `mat_mult` does not, so left-multiplying by an
+elementary matrix differs from the row operation by a reduction.  It holds only
+under the invariant that the matrix entries are already in `[0, q)`, which is
+proved as `mat_mult_mod_row_add` and is preserved by the generator, since it
+starts from `id_mat` and only applies `add_row_mult` with positive
+coefficients.  Second, an elementary matrix is invertible modulo `q` with the
+explicit witness `row_add_matrix m i j (-f)` (`mat_mult_mod_elem_inverse`), so
+the modular statement does not need determinants at all.
+
+What remains for T2_B3 is therefore not algebra but plumbing: identity laws for
+`mat_mult_mod`, preservation of invertibility along `rim_iter`, and the
+induction on its fuel.  Until those land, T2_B3 stays `sorry`.
 
 `VWZ_A3_Aligned` is the only session that carries obligations. The remaining
 sessions are scaffolding:

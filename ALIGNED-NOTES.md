@@ -1455,3 +1455,26 @@ by (simp only: step1 step2 step4 step5 step6[symmetric])
 ### 下一步的判断（P2a/P2b 为何这轮没动）
 
 给 `P2a`/`P2b` 补 body 必须改签名（`nat ⇒ int` 装不下 λa/X2a/w2），而 T2_D6 的现陈述在 body 落地后会**变成假命题**：Z 里那个"两边都在"的重叠位，采样器只保证 P3a/P3b 为零，不保证 P2a 或 P2b 为零。要真陈述 T2_D6，得先决定"w2 来自采样器"这条假设怎么写（`solve_linear … = Some u2` + `w2 = X2a⁻¹·u2`？还是只约束 Z 上的值）。这是**陈述设计决定**，不是定义工作，故留待拍板；不写占位 body、不把假命题扶正。
+<!-- seg: seg-t2d6-dbaa32f24c78 -->
+## 2026-10-21 18:0x -- T2_D6 重述（方案甲）+ P2a/P2b 落地；T2_D6 的洞从"陈述"移到"solve_linear"
+
+### 做了什么
+
+1. `consts P2a :: nat ⇒ int` / `P2b` 用一个参数占位（本身无法表达 spec）→ **换成有身体的定义**，两者统一以 `(点集, 密钥半矩阵, w2, 下标)` 为参：
+   `P2a la X2a w2 i = dot (vand (la!i) (n_rows X2a)) (matvec X2a w2)`
+   `P2b lb X2b w2 i = dot (vand (lb!i) (n_rows X2b)) (matvec X2b w2)`
+   即 t[i] = P2a(λa[i])·P3a(λc[i]) + P2b(λb[i])·P3b(λc[i]) 里的两个 P2 因子，都是对 `w2` 侧的评价（配合 `w2 = X2a⁻¹·u2` 就退化为"u2 在 λa/λb 上取值"与"M2·u2 在 λb 上取值"，与 §3 步 3 的方程一致）。
+2. **T2_D6 按方案甲重述**：结论从 `P2a i = 0 ∨ P2b i = 0` 改为两个有前提的分支式，并显式写出采样器的输出关系：
+   `i ∈ Z ⟹ i ∈ Za ⟹ i ∉ Zb ⟹ solve_linear (…) (…) = Some u2n ⟹ w2 = X2a⁻¹·(map int u2n) ⟹ P2b (sk_lam_b sk) (X2b_of m s) w2 i = 0`
+   仍 `sorry`，但性质变了：**不再是"未解释的 P2a i 恰好为 0"，而是"求解器返回的向量在 Za 独有位上使 P2b 消去"** —— 这是 `solve_linear` 实现必须建立的性质。
+3. 关键修正（陈述层面的真伪）：原式 `∀i ∈ Z. P2a=0 ∨ P2b=0` **本来就不成立**。§3 步 3 只约束两类独有位（Za∖Zb 要 P2b=0、Zb∖Za 要 P2a=0），**重叠位两者都不约束**（那里两个 P3 都为零，安全性自动成立）。所以必须加 `i ∉ Zb` 的侧条件 —— 这是又一处"人类语言歧义被机器逼出来"的地方。
+4. 接口疣（不藏）：`solve_linear` 在 `VWZ_Fq3329.thy` 是 **nat 值域**（`nat list list ⇒ nat list ⇒ nat list option`），而 `rows3_of`/`M2`/`X2a_of` 都是 `int` 口径，故调用处显式 `map (map nat)` / `map nat` / `map int` 跨界；已在注释里写明是 wart，待统一。
+
+### 账本
+
+**56 lemmas / 9 sorry**，T2 仍是 10/4（T2_D6 的 sorry 保留 —— 它现在是 solver 的洞，不是陈述的洞）。构建 RC=0、14 秒。
+
+### 判断留给下一轮的两件事
+
+- `solve_linear` 补 body：要性质「返回 Some v ⟹ ∀r∈set rows. dot r v = 0」（即返回解），外加矩阵形状。这可以直接用现有 `rref_fuel`/`find_pivot_fuel` 搭（行阶梯 → 读自由变量），是 1–2 轮的量，但会牵动 nat/int 口径统一。
+- `hash_target` + T3_C1：部分 Fisher-Yates + 抽象 XOF，单开一轮。

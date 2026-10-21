@@ -164,11 +164,26 @@ definition Sset :: "int list \<Rightarrow> int list \<Rightarrow> nat set" where
 definition Zset :: "int list \<Rightarrow> int list \<Rightarrow> nat set" where
   "Zset t x1 = {i. i < length (adapted_of t x1) \<and> adapted_of t x1 ! i = 0}"
 
-consts P2a :: "nat \<Rightarrow> int"
-        \<comment> \<open>TODO(define): spec Sec 6.4.1 -- left annihilator\<close>
+text \<open>The two @{text P2} factors of the mixed-tensor equation
+  @{text "t[i] = P2a(lambda_a[i]) * P3a(lambda_c[i]) + P2b(lambda_b[i]) * P3b(lambda_c[i])"}
+  (Sec 2, Sec 6.4.1).  Both are evaluations of the same secret vector: @{text P2a}
+  at the @{text lambda_a} points, @{text P2b} at the @{text lambda_b} points, each
+  after the corresponding half of the key matrix, exactly as the two rank-1
+  factors of @{text psi} pair up with @{text w2}.  They are written with the
+  matrix and @{text w2} as arguments rather than reaching into @{text sk}, so the
+  obligation below can name the sampler's own @{text "(u2, w2)"} pair.
 
-consts P2b :: "nat \<Rightarrow> int"
-        \<comment> \<open>TODO(define): spec Sec 6.4.1 -- right annihilator\<close>
+  This does not make @{text T2_D6} provable on its own: what turns the two
+  factors into zeros is the equation set the sampler solves, and
+  @{text solve_linear} still has no body.  The statement below therefore names
+  that output relation explicitly instead of asking an uninterpreted
+  @{text "P2a :: nat \<Rightarrow> int"} to be zero by magic.\<close>
+
+definition P2a :: "int list \<Rightarrow> mat \<Rightarrow> int list \<Rightarrow> nat \<Rightarrow> int" where
+  "P2a la X2a w2 i = dot (vand (la ! i) (n_rows X2a)) (matvec X2a w2)"
+
+definition P2b :: "int list \<Rightarrow> mat \<Rightarrow> int list \<Rightarrow> nat \<Rightarrow> int" where
+  "P2b lb X2b w2 i = dot (vand (lb ! i) (n_rows X2b)) (matvec X2b w2)"
 
 text \<open>Spec Sec 3.4 defines these, it does not assume them: @{text "M2 = X2b \<cdot> X2a\<inverse>"}
   and @{text "M3 = X3b \<cdot> X3a\<inverse>"}.  The four matrices are no longer opaque
@@ -797,8 +812,35 @@ lemma T2_D5:
 
 subsection \<open>T2 :: D6 -- annihilation of the two P2 factors on Z\<close>
 
+text \<open>Restated on the sampler's own objects.  @{text Za} and @{text Zb} are the
+  two halves of the zero set, the overlapping index is the one the spec allows
+  once (@{text "|Za| + |Zb| = |Z| + 1"}), and the two conclusions are the two
+  entry conditions of Sec 3 step 3: at a position that is only in @{text Za} the
+  @{text P2b} factor must vanish, at a position only in @{text Zb} the @{text P2a}
+  factor must vanish.  At the overlap neither is forced, and both @{text P3}
+  factors vanish there instead -- which is why the old wording, which quantified
+  over all of @{text Z} with no side condition, was not satisfiable.
+
+  The hypothesis @{text "w2 = X2a\<inverse> . u2"} is the sampler's step 4, not a
+  convenience: without it @{text P2b} is an evaluation of an unrelated vector.
+  @{text solve_linear} is @{typ nat}-valued in @{file VWZ_Fq3329.thy} (its rows
+  and its answer are @{typ nat} lists, because that is what the executable
+  reduction works on), so the two calls above cross the @{typ int}/@{typ nat}
+  boundary explicitly with @{text "map nat"} and @{text "map int"}.  The
+  duplication is an interface wart, recorded here rather than hidden.
+
+  What is still missing is the body of @{text solve_linear}: the obligation now
+  says that the vector it returns annihilates the @{text Za}-only rows, which is
+  the property its implementation has to establish.  Hence @{text sorry} is kept
+  -- this is a hole in the solver, no longer a hole in the statement.\<close>
+
 lemma T2_D6:
-  "i \<in> Zset (map int (hash_target k msg)) (x1_of sk) \<Longrightarrow> P2a i = 0 \<or> P2b i = 0"
+  "i \<in> Zset (map int (hash_target k msg)) (x1_of (sk :: skey)) \<Longrightarrow>
+   i \<in> Za \<Longrightarrow> i \<notin> Zb \<Longrightarrow>
+   solve_linear (map (map nat) (rows3_of (sk_lam_c sk) (M3 m s) Za Zb))
+                (map nat (hash_target k msg)) = Some u2n \<Longrightarrow>
+   w2 = matvec (mat_inv (X2a_of m s)) (map int u2n) \<Longrightarrow>
+   P2b (sk_lam_b sk) (X2b_of m s) w2 i = 0"
   sorry
 
 subsection \<open>T2 :: D1 -- verifier correctness\<close>

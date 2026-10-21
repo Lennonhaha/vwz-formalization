@@ -755,13 +755,21 @@ text \<open>Both sides have bodies now: @{text mat_rank} (fuel-counted Gauss-Jor
     parallel" amounts to for a sum of two outer products;
   \<^item> the index is in range.
 
-  TODO(proof): two facts are missing and neither will be faked.  First, that a
-  sum of two outer products has rank at most two.  Second, that a non-zero minor
-  forces rank at least two -- with @{text mat_rank} defined as the number of
-  non-zero rows of the reduced form, that is a rank-nullity argument, not a
-  rewrite.  Both belong to a rank theory this session does not have.  So this
-  stays @{text sorry}, but it is a real obligation now rather than a defect,
-  which is why the tag is TODO(proof) and not TODO(define).\<close>
+  TODO(proof): the gap is two missing rank lemmas, and naming them is the
+  point -- neither is a defect in the statement below.
+  \<^item> @{text "rank_outer_sum_le_two"}: for vectors @{text u}, @{text v},
+    @{text "u'"} and @{text "v'"} of matching lengths, the rank of a sum of the
+    two outer products @{text "outer u v + outer u' v'"} is at most 2.  This is
+    what turns the KeyGen shape into the upper bound: every row of the sum is a
+    linear combination of @{text v} and @{text "v'"}.
+  \<^item> @{text "rank_ge_two_of_nonzero_minor"}: a non-zero @{text "2 x 2"}
+    minor forces rank at least 2.  Contrapositive form: if the rank is at most 1
+    then every @{text "2 x 2"} minor vanishes.  With @{text mat_rank} defined as
+    the number of non-zero rows of the reduced form, that is a rank-nullity
+    argument, not a rewrite.
+  Both belong to a rank theory this session does not have.  So this stays
+  @{text sorry}, but it is a real obligation now rather than a defect, which is
+  why the tag is TODO(proof) and not TODO(define).\<close>
 
 lemma T2_B7:
   "i < length (pk_psi pk) \<Longrightarrow>

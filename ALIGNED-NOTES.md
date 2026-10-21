@@ -1167,3 +1167,59 @@ definition unbiased :: "nat => bool" where
 - `isabelle build -D aligned`：**RC=0，10 秒**
 - 账本：**56 lemmas / 11 sorry**（T0 17/0、T1-A 16/0、T1-D 5/2、T2 10/6、T3 8/3）
 - README 三处同步：表格 12→11、T3 段补 C3、T2_B3 段改为「bridge 为假而非缺失」
+<!-- seg: seg-modalg-6d67cd911155 -->
+## 2026-10-21 12:1x：T2_B3 域重建 —— 地基落地，并发现桥接引理还有第二个前提
+
+### 一、已落地（`VWZ_ModAlgebra.thy`，已入 ROOT）
+
+```
+definition mat_mult_mod :: "mat => mat => mat" where
+  "mat_mult_mod A B = map (map fq) (mat_mult A B)"
+
+definition invertible_mod :: "mat => bool" where
+  "invertible_mod A = (∃B. mat_mult_mod A B = id_mat (n_rows A) ∧
+                            mat_mult_mod B A = id_mat (n_rows A))"
+```
+
+配套已证的算术事实（都不是 simp 规则，理由见三）：
+
+- `fq_zero`、`fq_one`、`fq_idem`、`fq_range`（`0 ≤ fq x < 3329`）
+- `fq_add`：`fq (x + y) = fq (fq x + fq y)`
+- `fq_mult`：`fq (x * y) = fq (fq x * fq y)`
+
+整数侧的 `mat_mult` / `invertible` 一个字都没改；模侧是**新增层**，T2_B3 的重述将来引用它。
+
+### 二、新发现：桥接引理不是「无条件」的，还需要 A 已约化
+
+计划中的 ④ `mat_mult_mod (row_add_matrix m i j f) A = add_row_mult A i j f`，
+逐项看就有第二个前提：
+
+- 被改的行 `i`：左 = `fq (A!i!c + f·A!j!c)`，右 = `fq (A!i!c + f·A!j!c)` ✓ 恒等；
+- 其余行 `r ≠ i`：左 = **`fq (A!r!c)`**，右 = **`A!r!c`** ✗ 一般不相等。
+
+`add_row_mult` 只对第 `i` 行做 `fq`，别的行原样保留；而 `mat_mult_mod` 对整个乘积逐项 `fq`。
+所以桥接成立的前提是 **A 的每个元素已在 `[0, q)` 内**（算法里由构造保证：初值都是 `fq` 出来的）。
+
+结论：④ 要写成
+
+```
+assumes reduced: "∀r∈set A. ∀x∈set r. 0 ≤ x ∧ x < 3329"
+```
+
+否则命题为假。这是「建模层前提」，不是证明技巧——和 T2_B7 需要「两向量不平行」是同一类问题。
+建议在 T2_B3 的重述里把「矩阵已约化」写成显式不变量，而不是偷偷加进证明脚本。
+
+### 三、simp 组合会死循环（已观测两次）
+
+`fq_add`（`fq (x+y) → fq (fq x + fq y)`）与 `fq_idem`（`fq (fq x) → fq x`）方向相反，
+同时进 simp 集合 ⇒ 化简不终止 ⇒ **构建一直跑、无任何输出**（不是报错，是最难诊断的形态）。
+另：`mod_add_eq` / `mod_mult_eq` 作为 simp 规则也会与 `fq_idem` 互相触发。
+
+纪律：这三条（`fq_add`、`fq_mult`、`mod_add_eq`、`mod_mult_eq`）**只作事实引用，不进 simp**；
+需要求和层面的约化时，用 Isar 逐步 `using … by simp only: …` 控制重写方向。
+
+### 四、计数
+
+- `isabelle build -D aligned`：**RC=0，12 秒**
+- 账本不变：**56 lemmas / 11 sorry**（新层不增加义务，也不假装减少义务）
+- 未跟踪文件：`aligned/VWZ_ModProbe.thy`（临时探针，删除被安全策略拦下，待交互确认）、`aligned/Scratch.thy`、`aligned/VWZ_Checks.thy`、`aligned/VWZ_Scratch.thy`

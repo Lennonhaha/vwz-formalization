@@ -189,7 +189,4 @@ consts sample_below :: "nat list \<Rightarrow> nat \<Rightarrow> nat"
 consts nullspace :: "nat list list \<Rightarrow> nat list list"
         \<comment> \<open>TODO(define): spec Sec 6.4.1 -- RREF nullspace basis\<close>
 
-consts solve_linear :: "nat list list \<Rightarrow> nat list \<Rightarrow> nat list option"
-        \<comment> \<open>TODO(define): spec Sec 6.4.3 -- Gauss-Jordan linear solve\<close>
-
 end

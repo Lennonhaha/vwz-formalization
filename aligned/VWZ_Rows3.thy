@@ -23,6 +23,20 @@ theory VWZ_Rows3
   imports VWZ_Protocol VWZ_KeyGen VWZ_ModAlgebra
 begin
 
+text \<open>The two systems of Sec 3 are not the same, and conflating them is easy:
+  @{text rows3_of} above is the <em>u3</em> system (its rows are evaluated in
+  @{text lambda_c} and are used to push @{text u3} into the nullspace), while the
+  <em>u2</em> system has one row per zero position that is only in @{text Za} or
+  only in @{text Zb} -- @{text "u_b<^sup>T> . (M2 . u2) = 0"} and
+  @{text "u_a<^sup>T> . u2 = 0"} respectively -- plus the @{text S} rows that
+  carry the target values.  Only the homogeneous part is built here; the
+  @{text S} rows need @{text P3} and are not part of this definition.\<close>
+
+definition rows_u2_of :: "int list \<Rightarrow> int list \<Rightarrow> mat \<Rightarrow> nat set \<Rightarrow> nat set \<Rightarrow> mat" where
+  "rows_u2_of la lb M2 Za Zb =
+     map (\<lambda>i. matvec (transpose M2) (vand (lb ! i) (n_rows M2))) (sorted_list_of_set (Za - Zb)) @
+     map (\<lambda>i. vand (la ! i) (n_cols M2)) (sorted_list_of_set (Zb - Za))"
+
 section \<open>Spec 6.4.1 -- rows3\<close>
 
 definition rows3_of :: "int list \<Rightarrow> mat \<Rightarrow> nat set \<Rightarrow> nat set \<Rightarrow> mat" where

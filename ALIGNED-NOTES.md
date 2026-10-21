@@ -1478,3 +1478,42 @@ by (simp only: step1 step2 step4 step5 step6[symmetric])
 
 - `solve_linear` 补 body：要性质「返回 Some v ⟹ ∀r∈set rows. dot r v = 0」（即返回解），外加矩阵形状。这可以直接用现有 `rref_fuel`/`find_pivot_fuel` 搭（行阶梯 → 读自由变量），是 1–2 轮的量，但会牵动 nat/int 口径统一。
 - `hash_target` + T3_C1：部分 Fisher-Yates + 抽象 XOF，单开一轮。
+<!-- seg: seg-solver-2a07d5e2ff10 -->
+## 2026-10-21 19:0x -- solve_linear 落地（规格层）、口径统一 int、T2_D6 两处建模纠错
+
+### 做成的（都可构建验证）
+
+1. **口径统一（int）**：`solve_linear` 从 `VWZ_Fq3329` 的 `nat list list ⇒ nat list ⇒ nat list option` 迁到新文件 `aligned/VWZ_Solver.thy`，类型改为 `mat ⇒ int list ⇒ int list option`。调用处的 `map (map nat)` / `map nat` / `map int` **全部删除**。`nullspace` 仍是 nat 口径且无人使用，暂留（已在脑子里记：下次一并处理）。
+2. **`solve_linear` 有了定义（规格层，不是算法）**：
+   `solves A b v ≡ length v = n_cols A ∧ map (λr. fq (dot r v)) A = b`
+   `solve_linear A b = (if ∃v. solves A b v then Some (SOME v. solves A b v) else None)`
+   已证 6 条：`solve_linear_sound`（Some ⟹ solves）、`solve_linear_complete`、`solve_linear_none`、`solves_length`、`solves_entry`、`solves_zero_entry`、`solve_linear_zero_rows`（齐次 ⟹ `∀r∈set A. fq (dot r v) = 0`）。
+   **明确标注：这是规格，不是实现**。Gauss–Jordan 回代（含自由变量赋值）仍是欠账，文件头写清了。
+
+### 语义口径再纠一次（关键，别再踩）
+
+"解 `A x = b`" 在这里**只能是** `fq (dot r v) = b!i`（模 3329），**不能**是 `dot r v = b!i`（ℤ 上）。依据：`VWZ_RREF` 的 `scale_row` 用 `invmod`、`add_row_mult` 都过 `fq`，它产出的是"元素恰好是整数的 F_q 矩阵"。若按 ℤ 陈述，就是 T2_B3 那个错的重演（那边 ℤ 行列式 −998699 / 模 q 才是 1）。
+
+### 两处建模纠错（都是我自己上一轮埋的）
+
+1. **`T2_D6` 用错了方程组**：`rows3_of` 是 **u3** 的系统（行在 λc 上求值，用于把 u3 压进零空间）。**u2** 的系统是另一套：每个 Za∖Zb 位一行 `M2ᵀ·vand(λb[i])`、每个 Zb∖Za 位一行 `vand(λa[i])`，S 位上还有带 target 的右端。上一轮把 `rows3_of` 喂给 `solve_linear` 当 u2 解，是**概念错误**。已在 `VWZ_Rows3.thy` 新增 `rows_u2_of`（只含齐次部分），T2_D6 改到它上面。
+2. **`T2_D6` 缺侧条件**：§3 只约束两个**独有位**；唯一重叠位上 `P3a`、`P3b` 同为零（t[i] 自动为 0），**P2a/P2b 都不被约束**。原式 `∀i∈Z. P2a=0 ∨ P2b=0` 不可满足 → 现加 `i ∈ Za - Zb ∨ i ∈ Zb - Za`。
+3. 顺带把 `P2a`/`P2b` 从"以 w2 为参"改为"以 u2 为参"：`P2a la v i = dot (vand (la!i) (length v)) v`、`P2b lb M2 v i = dot (vand (lb!i) (n_rows M2)) (matvec M2 v)` —— 因为 §3 步 3 的约束**就是关于 u2 的方程**；w2 只出现在 §2 的 t 公式里（用 `u2 = X2a·w2` 换算）。
+
+### 为什么 T2_D6 仍是 sorry（不粉饰）
+
+只剩**一条双线性恒等式**：`dot (matvec (transpose A) u) v = dot u (matvec A v)`。约束行的构造用 `transpose M2`，`P2b` 的定义用 `matvec M2`，两者相等就是这条恒等式（双重求和换序）。
+- 本仓**没有任何 transpose 相关引理**（`transpose` 只在 KeyGen 有定义，零引理），求和代数只有 `sum_list_map_add/mult_left/mult_right/const_zero`，**没有** `sum_list (map (λi. sum_list …))` 的换序引理。
+- 拒绝的捷径：把 `P2b` 直接定义成"行·v"的形式，T2_D6 就一行 `solve_linear_zero_rows` 收工 —— 但那是**把结论写进定义**（空壳），不做。
+- 所以账本仍是 **56/9**（T2 10/4）。**没有达成 56/8**，缺口就这一条恒等式。
+
+### 下一步（若继续）
+
+1. 先补求和基础设施：`sum_list_swap`（`Σ_i Σ_j f i j = Σ_j Σ_i f i j`，在 `length` 对齐前提下），再 `dot_matvec_transpose`；两者合计预计 80–150 行、3–5 轮构建。
+2. 有它之后 T2_D6 应当 3–5 行收尾（`solve_linear_zero_rows` + `rows_u2_of` 的成员性）。
+3. 算法层 `solve_linear`（Gauss–Jordan 回代）另立一轮：需要 `rref` 记录主元列，当前 `rref_fuel` 不记录，得先扩返回值或另写扫描。
+
+### 记录归档
+
+- `dim_nullspace`（行口径 `n_rows - rank`）与 `nullity`（列口径 `n_cols - rank`）的分工与"行口径为何使 T2_D4 不可满足"，已写进 `VWZ_RREF.thy` 文件头（替换掉原本那句错的"T2_D4 用行口径"）。
+- T2_D6 的"重叠位缺前提"与"rows3/u2 系统混用"两条，写进 `VWZ_ObligationsAligned.thy` 的 T2_D6 段说明。

@@ -24,7 +24,7 @@
     wrinkle is recorded in plans/vwz-a3-aligned_20261018.md.
 *)
 theory VWZ_ObligationsAligned
-  imports VWZ_Fq3329 VWZ_KeyGen VWZ_Matrix VWZ_Protocol VWZ_Aux VWZ_RREF
+  imports VWZ_Fq3329 VWZ_KeyGen VWZ_Matrix VWZ_Protocol VWZ_Aux VWZ_RREF VWZ_Solver
     VWZ_ModAlgebra VWZ_Rows3
 begin
 
@@ -179,11 +179,11 @@ text \<open>The two @{text P2} factors of the mixed-tensor equation
   that output relation explicitly instead of asking an uninterpreted
   @{text "P2a :: nat \<Rightarrow> int"} to be zero by magic.\<close>
 
-definition P2a :: "int list \<Rightarrow> mat \<Rightarrow> int list \<Rightarrow> nat \<Rightarrow> int" where
-  "P2a la X2a w2 i = dot (vand (la ! i) (n_rows X2a)) (matvec X2a w2)"
+definition P2a :: "int list \<Rightarrow> int list \<Rightarrow> nat \<Rightarrow> int" where
+  "P2a la v i = dot (vand (la ! i) (length v)) v"
 
 definition P2b :: "int list \<Rightarrow> mat \<Rightarrow> int list \<Rightarrow> nat \<Rightarrow> int" where
-  "P2b lb X2b w2 i = dot (vand (lb ! i) (n_rows X2b)) (matvec X2b w2)"
+  "P2b lb M2 v i = dot (vand (lb ! i) (n_rows M2)) (matvec M2 v)"
 
 text \<open>Spec Sec 3.4 defines these, it does not assume them: @{text "M2 = X2b \<cdot> X2a\<inverse>"}
   and @{text "M3 = X3b \<cdot> X3a\<inverse>"}.  The four matrices are no longer opaque
@@ -812,35 +812,34 @@ lemma T2_D5:
 
 subsection \<open>T2 :: D6 -- annihilation of the two P2 factors on Z\<close>
 
-text \<open>Restated on the sampler's own objects.  @{text Za} and @{text Zb} are the
-  two halves of the zero set, the overlapping index is the one the spec allows
-  once (@{text "|Za| + |Zb| = |Z| + 1"}), and the two conclusions are the two
-  entry conditions of Sec 3 step 3: at a position that is only in @{text Za} the
-  @{text P2b} factor must vanish, at a position only in @{text Zb} the @{text P2a}
-  factor must vanish.  At the overlap neither is forced, and both @{text P3}
-  factors vanish there instead -- which is why the old wording, which quantified
-  over all of @{text Z} with no side condition, was not satisfiable.
+text \<open>Restated on the <em>u2</em> system, which is not the system above.
+  @{text rows3_of} is what pushes @{text u3} into the nullspace, and it was a
+  modelling error to feed it to @{text solve_linear} here: the @{text u2} system
+  has one homogeneous row per zero position that lies only in @{text Za} or only
+  in @{text Zb}, which is @{file VWZ_Rows3.thy}'s @{text rows_u2_of}.
 
-  The hypothesis @{text "w2 = X2a\<inverse> . u2"} is the sampler's step 4, not a
-  convenience: without it @{text P2b} is an evaluation of an unrelated vector.
-  @{text solve_linear} is @{typ nat}-valued in @{file VWZ_Fq3329.thy} (its rows
-  and its answer are @{typ nat} lists, because that is what the executable
-  reduction works on), so the two calls above cross the @{typ int}/@{typ nat}
-  boundary explicitly with @{text "map nat"} and @{text "map int"}.  The
-  duplication is an interface wart, recorded here rather than hidden.
+  The side condition is the second correction.  The earlier wording quantified
+  over all of @{text Z} with no case split, but Sec 3 constrains only the two
+  exclusive halves: at the single overlapping index both @{text P3} factors
+  vanish instead, and neither @{text P2} factor is forced, so the old statement
+  was not satisfiable.
 
-  What is still missing is the body of @{text solve_linear}: the obligation now
-  says that the vector it returns annihilates the @{text Za}-only rows, which is
-  the property its implementation has to establish.  Hence @{text sorry} is kept
-  -- this is a hole in the solver, no longer a hole in the statement.\<close>
+  Conclusion and hypothesis are both modulo 3329 (@{text fq}), not over the
+  integers: @{text solve_linear} is specified in @{file VWZ_Solver.thy} over the
+  reduced field, exactly as the sampler's arithmetic is.
+
+  What is still missing is one bilinear identity -- @{text "dot (matvec
+  (transpose A) u) v = dot u (matvec A v)"} -- which ties the constraint row
+  built with @{text "transpose M2"} to the @{text P2b} evaluation.  Nothing else
+  separates this statement from a proof.\<close>
 
 lemma T2_D6:
   "i \<in> Zset (map int (hash_target k msg)) (x1_of (sk :: skey)) \<Longrightarrow>
-   i \<in> Za \<Longrightarrow> i \<notin> Zb \<Longrightarrow>
-   solve_linear (map (map nat) (rows3_of (sk_lam_c sk) (M3 m s) Za Zb))
-                (map nat (hash_target k msg)) = Some u2n \<Longrightarrow>
-   w2 = matvec (mat_inv (X2a_of m s)) (map int u2n) \<Longrightarrow>
-   P2b (sk_lam_b sk) (X2b_of m s) w2 i = 0"
+   (i \<in> Za - Zb \<or> i \<in> Zb - Za) \<Longrightarrow>
+   solve_linear (rows_u2_of (sk_lam_a sk) (sk_lam_b sk) (M2 m s) Za Zb)
+                (replicate (n_rows (rows_u2_of (sk_lam_a sk) (sk_lam_b sk) (M2 m s) Za Zb)) 0)
+     = Some v \<Longrightarrow>
+   fq (P2b (sk_lam_b sk) (M2 m s) v i) = 0 \<or> fq (P2a (sk_lam_a sk) v i) = 0"
   sorry
 
 subsection \<open>T2 :: D1 -- verifier correctness\<close>

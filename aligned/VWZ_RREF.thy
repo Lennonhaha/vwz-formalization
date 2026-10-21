@@ -23,11 +23,19 @@
     mat_inv and mat_solve remain uninterpreted constants in VWZ_Matrix: both
     need the augmented-matrix solve, which is the next step.
 
-    Convention on dim_nullspace: it is n_rows A - mat_rank A, not
-    n_cols A - mat_rank A.  That is the convention T2_D4 is stated in (it
-    bounds k - 1 for a (k+1)-row matrix), and it matches the spec's use of the
-    row count.  The textbook nullity of the column space is the other one;
-    the difference is recorded here rather than papered over.
+    Two readings of "nullspace dimension" live here, on purpose.
+
+    dim_nullspace A = n_rows A - mat_rank A  is the row-count reading.  It is
+    the right one for a square system and it is what the older lemmas use.
+
+    nullity A = n_cols A - mat_rank A  is the column reading, i.e. the textbook
+    nullity of the column space.  T2_D4 is stated in it, and it has to be: the
+    sampler's rows3 matrix is (k+2) x (2k+1), and the row-count reading gives
+    k+2-rank, which cannot bound k-1 from below for every such system (it would
+    need rank <= 3).  The column reading gives 2k+1-rank >= k-1 from rank <= k+2
+    alone.  An earlier comment in this file asserted the opposite -- that T2_D4
+    used the row count and that this "bounds k - 1 for a (k+1)-row matrix" --
+    and that was wrong; the two counts are kept apart rather than identified.
 *)
 theory VWZ_RREF
   imports VWZ_Aux

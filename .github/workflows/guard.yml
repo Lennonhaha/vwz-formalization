@@ -1,0 +1,42 @@
+name: guard
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with:
+          node-version: 22
+
+      - name: Encoding and BOM
+        run: node .github/scripts/check-encoding.cjs
+
+      - name: Obligation ledger
+        run: |
+          set -euo pipefail
+          out="$(node tools/count-obligations.cjs)"
+          printf '%s\n' "$out"
+          printf '%s\n' "$out" | grep -q 'TOTAL                                                    56 lemmas,  7 sorry' \
+            || { echo 'FAIL: ledger total drifted from 56 lemmas / 7 sorry'; exit 1; }
+          printf '%s\n' "$out" | grep -q 'outside: 0' \
+            || { echo 'FAIL: a sorry proof step sits outside the obligation ledger'; exit 1; }
+          printf '%s\n' "$out" | grep -q 'OK: every sorry proof step is an obligation in the ledger.' \
+            || { echo 'FAIL: ledger checker did not report OK'; exit 1; }
+
+      - name: Paper and release assets present
+        run: |
+          set -euo pipefail
+          test -s paper/main-zh.pdf || { echo 'FAIL: paper/main-zh.pdf missing'; exit 1; }
+          test -s docs/main-zh.pdf || { echo 'FAIL: docs/main-zh.pdf missing'; exit 1; }
+          test -s docs/main-zh.tex || { echo 'FAIL: docs/main-zh.tex missing'; exit 1; }
+          cmp -s paper/main-zh.pdf docs/main-zh.pdf || { echo 'FAIL: the two copies of the paper differ'; exit 1; }

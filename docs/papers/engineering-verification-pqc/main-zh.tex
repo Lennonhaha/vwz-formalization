@@ -34,26 +34,20 @@
 
 \begin{abstract}
 \noindent
-后量子密码（PQC）算法的工程实现涉及模算术、矩阵代数与采样器等多个层次，
-仅依赖测试用例无法保证其数学陈述的正确性。本文使用 Isabelle/HOL 交互式定理证明器，
-对一个后量子构造（VWZ）的代数骨架与协议对象进行了形式化建模。
-在建模过程中，本文坚持一条固定纪律：\emph{先按原文形式化，用机器否证，才允许改述}。
-依此纪律，本文在原规范中发现四处逻辑缺陷：
-两处算术域与维度的错配（\code{T2\_B3} 的 $\mathbb{Z}$ 与 $\Fq$ 错配、
-\code{T2\_D4} 的行零化度与列零化度错配），
-两处前提缺失导致陈述为假（\code{T2\_B7} 缺失秩前提、
-\code{T2\_D5} 迫使目标位与消息无关）。
-对前两处，本文给出机器验证的改述与闭合证明；
-对后两处，本文给出三行以内的机器反证，并明确指出其不可证的两种不同原因：
-一则缺数学（行空间秩理论），一则缺建模决策（签名语义）。
-最终系统包含 20 个理论文件、56 条义务引理（账本内剩余 7 个未闭合证明，
-账本外零个 \code{sorry}），全量构建耗时约 16 秒。
-本文的贡献不在引理数量，而在证明了一件事：
-形式化验证可以在规范进入实现之前，把"看起来对"的句子变成"机器判定为假"的句子。
+后量子密码实现涉及模算术、矩阵代数与采样器，仅靠测试无法保证其数学陈述正确。
+本文用 Isabelle/HOL 对后量子构造（VWZ）的代数骨架与协议对象建模，
+并坚持一条纪律：先按原文形式化，机器否证后才允许改述。
+依此在规范中发现四处缺陷：算术域错配（\code{T2\_B3}）、零化度口径错配（\code{T2\_D4}），
+以及两处前提缺失致陈述为假（\code{T2\_B7} 缺秩前提、\code{T2\_D5} 迫使目标位与消息无关）。
+前两处给出改述与闭合证明；后两处给出三行以内的机器反证，
+并区分两类不可证原因：缺数学、缺建模决策。
+系统含 20 个理论文件、56 条义务引理（余 7 个未闭合，账本外零个 \code{sorry}），构建约 16 秒。
+本文的贡献在于：形式化能在实现之前把"看起来对"的句子变成"机器判定为假"的句子。
 
 \vspace{0.6em}
 \noindent\textbf{关键词：} 后量子密码；形式化验证；Isabelle/HOL；规范缺陷；矩阵代数
 \end{abstract}
+
 
 \section{引言}
 
@@ -162,10 +156,12 @@ $\to$ 反例成立后才改述。改述一律记录原文与理由，不静默�
 且归约后的矩阵在 $\mathbb{Z}$ 上根本不可逆。
 
 \textbf{机器证据。} 在 \code{VWZ\_Probe.thy} 中：
+\begin{small}
 \begin{align*}
   \code{mat\_mult (row\_add\_matrix 2 0 1 1) [[1,3328],[0,1]]} &= \code{[[1,3329],[0,1]]},\\
   \code{add\_row\_mult [[1,3328],[0,1]] 0 1 1} &= \code{[[1,0],[0,1]]}.
 \end{align*}
+\end{small}
 两次行加之后，结果矩阵的整数行列式为 $-998699$：模 $q$ 为 $1$，在 $\mathbb{Z}$ 中则不是单位。
 
 \textbf{处置（已闭合）。} 将义务改述到 $\Fq$：以 \code{mat\_mult\_mod} 定义模乘法，
@@ -207,7 +203,7 @@ $\code{mat\_rank (psi\_slice pk i)} = 2$。
 它不排除切片为零矩阵。形状正确、切片为零的公钥，其秩为 $0$。
 
 \textbf{机器证据。} 在 \code{VWZ\_Refutations.thy} 中给出具体公钥与
-\code{T2\_B7\_counterexample}（秩为 $0$），并以 \code{T2\_B7\_refuted} 证明
+\code{T2\_B7\_}\allowbreak\code{counterexample}（秩为 $0$），并以 \code{T2\_B7\_refuted} 证明
 "对任意公钥与下标，切片秩恒为 2"的否定。
 
 \textbf{改述与状态。} 补三条前提：(1) 公钥属于 \code{KeyGen} 的像；
@@ -236,7 +232,7 @@ $\code{Eval} : \code{nat list} \Rightarrow \code{nat list} \Rightarrow \code{nat
 左端是同一个项，右端是两个不同的目标位。
 
 \textbf{机器证据。} \code{VWZ\_Refutations.thy} 中的
-\code{T2\_D5\_forces\_target\_independence}：
+\code{T2\_D5\_}\allowbreak\code{forces\_}\allowbreak\code{target\_independence}：
 若下标同时落在两条消息的支撑集内，则两位目标位相等。
 证明仅三行：把求值参数实例化为空列表，两次套用该义务即得同一项等于两个不同的位。
 该证明不使用任何关于 \code{digest} 的假设，因此这是措辞缺陷而非密码学困难。
@@ -332,7 +328,7 @@ node tools/count-obligations.cjs
 \bibitem{bl} D. J. Bernstein, T. Lange.
   Post-quantum cryptography. \emph{Nature}, 549:39--41, 2017.
 \bibitem{spec} VWZ 规范文档（内部稿）：
-  \code{security-assessment/\ldots/vwz-fix-mixed-tensor.md}.
+  \code{security-assessment/}\allowbreak\code{\ldots/}\allowbreak\code{vwz-fix-mixed-tensor.md}.
 \bibitem{paulson} L. C. Paulson.
   \emph{Isabelle: A Generic Theorem Prover}. LNCS 828, Springer, 1994.
 \bibitem{sel4} G. Klein, K. Elphinstone, G. Heiser, J. Andronick, D. Cock,

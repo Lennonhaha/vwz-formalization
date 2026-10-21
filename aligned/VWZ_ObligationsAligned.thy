@@ -768,8 +768,9 @@ text \<open>Both sides have bodies now: @{text mat_rank} (fuel-counted Gauss-Jor
     the number of non-zero rows of the reduced form, that is a rank-nullity
     argument, not a rewrite.
   Both belong to a rank theory this session does not have.  So this stays
-  @{text sorry}, but it is a real obligation now rather than a defect, which is
-  why the tag is TODO(proof) and not TODO(define).\<close>
+  @{text sorry}.  The tag is TODO(defect / restatement) and not TODO(proof): the
+  sentence was false as written (see @{text T2_B7_refuted}), and the version
+  below is the repaired one, whose only missing ingredient is the rank theory.\<close>
 
 lemma T2_B7:
   "i < length (pk_psi pk) \<Longrightarrow>

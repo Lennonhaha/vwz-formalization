@@ -87,15 +87,37 @@ message could not express, so the two obligations were restated and that
 restatement is recorded in the file.
 
 `rows3_of` no longer stays uninterpreted either: `VWZ_Rows3.thy` builds it from
-`vand`, `matvec` and `transpose` exactly as Sec 6.4.1 lists it. `hash_target` now
-has a body too: the support is drawn from the pool of all positions by a partial
-Fisher-Yates walk (`pick_remove` / `select_support` in `VWZ_Fq3329.thy`), and the
-target is the indicator of that support. The only uninterpreted object left on
-that path is `digest`, the XOF, and nothing claims it is a hash. What is *not*
-yet proved is that the walk returns `k + 1` positions and that the indicator's
-weight equals the support's length; `T3_C1` is marked TODO(proof), and it keeps
-the hypothesis that the digest supplies `k + 1` words, without which the claim is
-simply false.
+`vand`, `matvec` and `transpose` exactly as Sec 6.4.1 lists it. `hash_target` has
+a body too: the support comes out of a partial Fisher-Yates walk that swaps a
+pair of positions in place at every step (`fy_fuel` / `swap_at` in
+`VWZ_Fq3329.thy`), and the target is the indicator of that support. The only
+uninterpreted object left on that path is `digest`, the XOF, and nothing claims
+it is a hash. `T3_C1` is closed: `VWZ_Target.thy` proves that the walk keeps the
+pool's length, set and distinctness, so the first `k + 1` entries exist and are
+distinct positions in range, and that the indicator of such a support has Hamming
+weight equal to its length. It keeps the hypothesis that the digest supplies
+`k + 1` words, without which the claim is simply false.
+
+### Two obligations are defects in the specification, not proof debt
+
+`T2_B7` and `T2_D5` are marked **TODO(defect / restatement)**, and neither is a
+gap in a proof: both are statements that are false as written, and both were
+refuted by machine before anything was restated.
+
+- `T2_B7` (`VWZ_Refutations.thy`, `T2_B7_counterexample` and `T2_B7_refuted`):
+  `mat_rank (psi_slice pk i) = 2` needs the key to be in the image of `KeyGen` and
+  the slice to have a non-zero `2 x 2` minor. A key of the right shape with a zero
+  slice has rank 0. The repaired statement is in the ledger and is true; it is
+  still open because it needs a rank theory (`VWZ_Rank.thy` holds the first layer
+  and the work list).
+- `T2_D5` (`VWZ_Refutations.thy`, `T2_D5_forces_target_independence`): `Eval` is
+  typed so that it never receives `k` or `msg`, while `pk`, `w2` and `w3` are
+  free. The obligation therefore forces the target bit at a support index to be
+  the same for every message. It stays open until `Sign` has a body and the
+  linkage premises can be written down.
+
+`VWZ_DEFECTS.md` collects all four specification defects found this way
+(`T2_B3`, `T2_D4`, `T2_B7`, `T2_D5`) with their machine evidence and status.
 
 ### Key generation now has a body
 
@@ -223,6 +245,12 @@ rediscovered:
   obligations.
 - Two obligations are explicitly **not** counted as provable: one is empirical
   (`T3_D8`), one is declared unprovable in the specification (`T3_E3b`).
+- `T2_D5` is recorded the same way as `T2_B7`: a defect in the statement.
+  `VWZ_Refutations.thy` proves that the obligation forces the target bit at a
+  support index to be message-independent, because `Eval` receives neither `k`
+  nor `msg` while `pk`, `w2` and `w3` stay free. Restating it needs a body for
+  `Sign` and the linkage premises, so the `sorry` stays and is tagged as a defect.
+- All four defects and their evidence are collected in `VWZ_DEFECTS.md`.
 
 ## License
 

@@ -1317,3 +1317,43 @@ reduced, so the identity needed is a congruence. The plan is to introduce
 rectangular matrices. `fq_sum` comes first
 (`fq (sum_list xs) = fq (sum_list (map fq xs))`), and every use must stay out of `simp`
 (`fq_add`/`fq_idem` rewrite in opposite directions).
+<!-- seg: seg-cong-147245ddf5f2 -->
+## 2026-10-21 (cont.): ring congruence for `fq`, and the entry layer
+
+Landed (build RC=0, ~12 s for `VWZ_A3_Aligned`):
+
+* `cong_q x y ≡ fq x = fq y`, with `cong_q_refl/sym/fq`, `fq_cong_add`, `fq_cong_mult`,
+  `cong_q_add`, `cong_q_mult`.
+* `fq_sum : fq (sum_list xs) = fq (sum_list (map fq xs))`.
+* `fq_sum_cong`: pointwise `cong_q` on `set ks` lifts to the sums.
+* `entry_mat_mult_mod`: `entry (mat_mult_mod A B) i j = fq (entry (mat_mult A B) i j)`.
+* `fq_pull_left` / `fq_pull_right`: an inner `fq` inside a summand can be dropped.
+
+Proof-engineering notes, all measured:
+
+1. `simp only: fq_add` diverges. `fq_add` rewrites `fq (x + y)` to `fq (fq x + fq y)`,
+   which matches again immediately; `simp` keeps going, the build sits at "Running ..." for
+   minutes with no output. Use `by (rule fq_add)` / `by (rule fq_add[symmetric])` instead:
+   a single rule application, no rewriting loop. Same for `fq_mult`.
+2. `fq_sum` must not enter `simp`. It matches every `fq (sum_list _)` and produces a nested
+   `map fq`, forever. It is usable as a fact: `fq_sum[of "map g ks"]` and then rewrite.
+3. `using assms .` fails when `assms` is a meta-implication: the method leaves an unresolved
+   schematic premise. Write `by (rule assms[OF kk])` with the membership named.
+4. `map_cong` on `map fq (map g ks) = map fq (map h ks)` does not apply directly (the two
+   sides share the outer `fq`, not the inner function). Prove the composed form and then
+   rewrite with `map_map`.
+5. `lemma` blocks placed after `lemma entry_mod_left` in the "Deferred subjects" region are
+   counted as obligations by `tools/count-obligations.cjs`. Auxiliary facts belong outside
+   that region or the ledger silently grows.
+
+Deferred and *why*: `entry_mod_left` (which reduces
+`entry (mat_mult_mod (mat_mult_mod A B) C) i j` to `fq (entry (mat_mult (mat_mult A B) C) i j)`)
+currently diverges in the simplifier. Bisected to that one proof: with the proof removed the
+session builds in 12 s; with it present the build is killed at 150-240 s. Suspects, in order:
+the shape block (`simp add: is_rect_def n_cols_def`), and the final
+`by (simp only: step1 step2 step4 step5 step6[symmetric])`. The next step is a one-lemma probe
+theory that derives the three shape facts alone.
+
+Environment: a killed `isabelle build` leaves `poly` children behind. Six of them were running
+after a few timeouts and each still held CPU; a clean build of this session is 12-20 s, so any
+build that suddenly takes minutes should first be checked with `Get-Process poly`.

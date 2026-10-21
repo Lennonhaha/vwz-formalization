@@ -538,4 +538,131 @@ lemma mat_mult_mod_elem_inverse:
   by (simp add: mat_mult_mod_def)
 
 
+
+section \<open>Reduction is a ring congruence\<close>
+
+text \<open>Two integers are \<open>q\<close>-congruent when they reduce to the same residue.  This is the
+  relation that lets a matrix of already-reduced entries stand in for the integer matrix it
+  came from; it is a congruence for \<open>+\<close> and \<open>*\<close>, which is what
+  associativity of the modular product needs.  Every lemma below is applied by explicit
+  @{text "simp only"} --- @{text fq_add} and @{text fq_idem} rewrite in opposite directions
+  and must never meet inside the simplifier.\<close>
+
+definition cong_q :: "int \<Rightarrow> int \<Rightarrow> bool" where
+  "cong_q x y = (fq x = fq y)"
+
+lemma cong_q_refl [simp]: "cong_q x x" by (simp add: cong_q_def)
+lemma cong_q_sym: "cong_q x y \<Longrightarrow> cong_q y x" by (simp add: cong_q_def)
+
+lemma cong_q_fq [simp]: "cong_q (fq x) x"
+  by (simp add: cong_q_def fq_idem)
+
+lemma fq_cong_add:
+  assumes "fq a = fq b" and "fq c = fq d"
+  shows "fq (a + c) = fq (b + d)"
+proof -
+  have "fq (a + c) = fq (fq a + fq c)" by (rule fq_add)
+  also have "\<dots> = fq (fq b + fq d)" using assms by simp
+  also have "\<dots> = fq (b + d)" by (rule fq_add[symmetric])
+  finally show ?thesis .
+qed
+
+lemma fq_cong_mult:
+  assumes "fq a = fq b" and "fq c = fq d"
+  shows "fq (a * c) = fq (b * d)"
+proof -
+  have "fq (a * c) = fq (fq a * fq c)" by (rule fq_mult)
+  also have "\<dots> = fq (fq b * fq d)" using assms by simp
+  also have "\<dots> = fq (b * d)" by (rule fq_mult[symmetric])
+  finally show ?thesis .
+qed
+
+lemma cong_q_add:
+  assumes "cong_q a b" and "cong_q c d"
+  shows "cong_q (a + c) (b + d)"
+proof -
+  have h1: "fq a = fq b" using assms by (simp add: cong_q_def)
+  have h2: "fq c = fq d" using assms by (simp add: cong_q_def)
+  show ?thesis using fq_cong_add[OF h1 h2] by (simp add: cong_q_def)
+qed
+
+lemma cong_q_mult:
+  assumes "cong_q a b" and "cong_q c d"
+  shows "cong_q (a * c) (b * d)"
+proof -
+  have h1: "fq a = fq b" using assms by (simp add: cong_q_def)
+  have h2: "fq c = fq d" using assms by (simp add: cong_q_def)
+  show ?thesis using fq_cong_mult[OF h1 h2] by (simp add: cong_q_def)
+qed
+
+lemma fq_sum:
+  "fq (sum_list xs) = fq (sum_list (map fq xs))"
+proof (induct xs)
+  case Nil
+  show ?case by simp
+next
+  case (Cons a xs)
+  have IH: "fq (sum_list xs) = fq (sum_list (map fq xs))" using Cons.hyps .
+  have step: "fq (a + sum_list xs) = fq (fq a + sum_list (map fq xs))"
+    using fq_cong_add[of a "fq a" "sum_list xs" "sum_list (map fq xs)"] fq_idem IH by simp
+  show ?case using step by simp
+qed
+
+lemma fq_sum_cong:
+  assumes "\<And>k. k \<in> set ks \<Longrightarrow> fq (g k) = fq (h k)"
+  shows "fq (sum_list (map g ks)) = fq (sum_list (map h ks))"
+  using assms
+proof (induct ks)
+  case Nil
+  show ?case by simp
+next
+  case (Cons a ks)
+  have ha: "fq (g a) = fq (h a)" using Cons.prems by simp
+  have hIH: "fq (sum_list (map g ks)) = fq (sum_list (map h ks))"
+    using Cons.prems Cons.hyps by simp
+  have step: "fq (g a + sum_list (map g ks)) = fq (h a + sum_list (map h ks))"
+    using fq_cong_add[OF ha hIH] .
+  show ?case using step by simp
+qed
+
+text \<open>Entry of the reduced product.  The two facts below are what lets the outer
+  @{text fq} be pulled past an inner @{text fq}: a product whose entries are already reduced
+  has the same residue as the integer product, entry by entry.\<close>
+
+lemma entry_mat_mult_mod:
+  assumes rA: "is_rect A" and nA: "n_rows A = m" and cA: "n_cols A = m"
+    and rB: "is_rect B" and nB: "n_rows B = m" and cB: "n_cols B = m"
+    and m0: "0 < m" and i: "i < m" and j: "j < m"
+  shows "entry (mat_mult_mod A B) i j = fq (entry (mat_mult A B) i j)"
+proof -
+  have hAB: "n_rows (mat_mult A B) = m" using nA by (simp add: n_rows_mat_mult)
+  have hi: "i < length (mat_mult A B)" using i hAB by (simp add: n_rows_def)
+  have hrowA: "i < n_rows A" using i nA by simp
+  have hj: "j < length ((mat_mult A B) ! i)"
+    using j cB row_mult_len[of i A B, OF hrowA] by simp
+  have "(mat_mult_mod A B) ! i ! j = fq ((mat_mult A B) ! i ! j)"
+    using nth_map[OF hi, of "\<lambda>row. map fq row"]
+      nth_map[OF hj, of fq]
+    by (simp add: mat_mult_mod_def)
+  thus ?thesis by (simp add: entry_def)
+qed
+
+lemma fq_pull_left:
+  "fq (sum_list (map (\<lambda>k. fq (g k) * c k) [0..<n]))
+     = fq (sum_list (map (\<lambda>k. g k * c k) [0..<n]))"
+proof (rule fq_sum_cong)
+  fix k assume "k \<in> set [0..<n]"
+  show "fq (fq (g k) * c k) = fq (g k * c k)"
+    by (rule fq_cong_mult[OF fq_idem refl])
+qed
+
+lemma fq_pull_right:
+  "fq (sum_list (map (\<lambda>k. a k * fq (h k)) [0..<n]))
+     = fq (sum_list (map (\<lambda>k. a k * h k) [0..<n]))"
+proof (rule fq_sum_cong)
+  fix k assume "k \<in> set [0..<n]"
+  show "fq (a k * fq (h k)) = fq (a k * h k)"
+    by (rule fq_cong_mult[OF refl fq_idem])
+qed
+
 end

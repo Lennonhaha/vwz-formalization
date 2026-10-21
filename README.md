@@ -3,6 +3,11 @@
 Machine-checked proofs for the **VWZ** construction (Kyber-style, over the prime
 field `F_3329`), developed in **Isabelle/HOL**.
 
+> 📄 **Paper:** [VWZ 形式化验证与规范缺陷分析 (v1.0.0-paper)](https://github.com/Lennonhaha/vwz-formalization/releases/tag/v1.0.0-paper)
+> — nine-page Chinese manuscript: four specification defects found by machine, and the
+> obligation ledger (56 lemmas, 7 unresolved proofs, 0 outside the ledger).
+> Source: [`docs/papers/engineering-verification-pqc/`](docs/papers/engineering-verification-pqc/).
+
 This repository is deliberately separate from the FIBEMATE business
 repositories: formal methods artifacts have a different build toolchain
 (Isabelle), a different release cadence, and a much larger footprint than the

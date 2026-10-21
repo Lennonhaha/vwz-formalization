@@ -37,6 +37,6 @@ jobs:
         run: |
           set -euo pipefail
           test -s paper/main-zh.pdf || { echo 'FAIL: paper/main-zh.pdf missing'; exit 1; }
-          test -s docs/main-zh.pdf || { echo 'FAIL: docs/main-zh.pdf missing'; exit 1; }
-          test -s docs/main-zh.tex || { echo 'FAIL: docs/main-zh.tex missing'; exit 1; }
-          cmp -s paper/main-zh.pdf docs/main-zh.pdf || { echo 'FAIL: the two copies of the paper differ'; exit 1; }
+          test -s docs/papers/engineering-verification-pqc/main-zh.pdf || { echo 'FAIL: docs/papers/engineering-verification-pqc/main-zh.pdf missing'; exit 1; }
+          test -s docs/papers/engineering-verification-pqc/main-zh.tex || { echo 'FAIL: docs/papers/engineering-verification-pqc/main-zh.tex missing'; exit 1; }
+          cmp -s paper/main-zh.pdf docs/papers/engineering-verification-pqc/main-zh.pdf || { echo 'FAIL: the two copies of the paper differ'; exit 1; }

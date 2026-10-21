@@ -821,8 +821,21 @@ subsection \<open>T2 :: D5 -- the u2 rows reproduce adapted on S\<close>
 
 text \<open>Restated against the two-argument @{text Sset}, with @{text t} the target
   (coerced to @{typ int}, since @{text adapted_of} works over @{typ int}) and
-  @{text x1} the secret vector of @{text sk}.  Still blocked on @{text Eval},
-  which has no body.\<close>
+  @{text x1} the secret vector of @{text sk}.
+
+  The wording below is not yet well-posed, and that is a finding rather than a
+  gap in the proof.  @{text Eval} is typed so that it never receives @{text k}
+  or @{text msg}, while @{text pk}, @{text w2} and @{text w3} stay free: the
+  statement therefore forces the target bit at a support index to be the same
+  for every message.  @{text T2_D5_forces_target_independence} in
+  @{file VWZ_Refutations.thy} proves exactly that consequence, so the lemma
+  cannot be true as written for any target that depends on the message.
+
+  TODO(define): three things are missing and none can be invented now -- a body
+  for @{text Sign}, the linkage saying @{text pk} is the signer's key and the
+  two witnesses are the ones @{text Sign} produced for this message, and an
+  @{text Eval} that consumes the digest.  Until then this stays @{text sorry},
+  tagged as a defect in the statement rather than as proof debt.\<close>
 
 lemma T2_D5:
   "i \<in> Sset (map int (hash_target k msg)) (x1_of sk) \<Longrightarrow>

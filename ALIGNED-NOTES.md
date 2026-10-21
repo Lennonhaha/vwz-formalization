@@ -1707,3 +1707,37 @@ definition hash_target :: "nat ⇒ nat list ⇒ nat list" where
 
 ### 记账纪律
 这四条都**没有**以 `lemma … sorry` 的形式写入（否则会新增 4 个 ledger 外的 `sorry`，把 `outside: 0` 破坏掉）。它们以**工作清单**的形式写在 `VWZ_Rank.thy` 的收尾 text 块与本段笔记里。账本因此仍是 **56 lemmas / 7 sorry，outside 0**。
+<!-- seg: seg-d5-9ab425c5618a -->
+## 2026-10-21 21:4x：T2_D5 打假 —— 不是「缺证明」，是「陈述说不通」（56/7 不变）
+
+### 结论（机器已证）
+`Eval` 的类型是 `nat list ⇒ nat list ⇒ nat list ⇒ nat list`——**它根本收不到 `k`，也收不到 `msg`**。而 `T2_D5` 让 `pk`、`w2`、`w3`、`k`、`msg` 全部自由：
+
+```
+i ∈ Sset (map int (hash_target k msg)) (x1_of sk) ⟹ Eval pk w2 w3 ! i = hash_target k msg ! i
+```
+
+于是这条义务**强行规定**：只要某个下标同时落在两条消息的支撑集里，两条消息在那一位的目标位就必须相同。也就是说「目标位与消息无关」——这与「目标由 (k,msg) 决定」直接冲突。
+
+### 机器反证（`VWZ_Refutations.thy`，ledger 之外，不计入义务）
+
+```
+lemma T2_D5_forces_target_independence:
+  "i ∈ Sset (map int (hash_target k1 msg1)) (x1_of sk) ⟹
+   i ∈ Sset (map int (hash_target k2 msg2)) (x1_of sk) ⟹
+   hash_target k1 msg1 ! i = hash_target k2 msg2 ! i"
+```
+
+证明只有三行：把 `T2_D5` 的 `pk / w2 / w3` 都实例化成 `[]`，两次实例给出同一个项 `Eval [] [] [] ! i` 等于两个不同的位，传递即得。**不需要任何关于 `digest` 的假设**，所以这是纯粹的措辞缺陷，不是密码学困难。
+
+### 缺失的三样（写进 `T2_D5` 的 TODO(define)，一样都编不出来）
+1. `Sign` 的函数体（`sk, msg ↦ (w2, w3)`）；
+2. 联结前提：`pk` 是签名者的公钥、两个见证是 `Sign` 为这条消息产出的那一对；
+3. 一个能吃到摘要的 `Eval`（否则它永远无法「知道」目标）。
+
+### 同类对照
+这和 `T2_B7` 是同一类问题（陈述缺前提 → 先机器反证 → 再修陈述），区别在于 `T2_B7` 的修补（加「pk 属 KeyGen 像 + 存在非零 2×2 子式」）已经落地、只差秩理论；`T2_D5` 的修补要等 `Sign` 有身体，**修不了陈述就绝不假装能证**。
+
+### 记账
+- 账本仍 **56 lemmas / 7 sorry，outside 0**；新增的反证在 `VWZ_Refutations.thy`，按既有约定不计为义务。
+- `T2_D5` 的注释已从「Still blocked on Eval, which has no body」改为「措辞尚未良构 + 指向反证 + 三条 TODO(define)」，避免把缺陷记成证明欠账。

@@ -50,4 +50,40 @@ proof
   from a b show False by simp
 qed
 
+section \<open>Refutation of T2_D5 as stated\<close>
+
+text \<open>T2_D5 says that for every index in the target support,
+  @{text "Eval pk w2 w3 ! i"} equals the target bit, with @{text pk},
+  @{text w2}, @{text w3}, @{text k} and @{text msg} all free.  But @{text Eval}
+  is typed @{text "nat list \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> nat list"}:
+  it never sees @{text k} or @{text msg}.  So the statement says the target bit
+  at an index depends on nothing but @{text "pk"}, @{text w2} and @{text w3} --
+  that is, on nothing that varies with the message.
+
+  The lemma below makes that consequence explicit and machine-checked: under
+  T2_D5, any index that lies in two supports carries the same bit for both
+  messages.  A target is by construction a function of @{text "k"} and
+  @{text msg}, so T2_D5 cannot hold for a real target scheme.
+
+  What the obligation is missing is the linkage it assumes silently: that
+  @{text pk} is the signer's key, that @{text w2} and @{text w3} are the ones
+  @{text Sign} produced for this message, and that the evaluation receives the
+  digest (or that the key encodes it).  Those cannot be written down until
+  @{text Sign} has a body, which is why this is recorded as a defect in the
+  statement rather than as proof debt.\<close>
+
+lemma T2_D5_forces_target_independence:
+  "i \<in> Sset (map int (hash_target k1 msg1)) (x1_of sk) \<Longrightarrow>
+   i \<in> Sset (map int (hash_target k2 msg2)) (x1_of sk) \<Longrightarrow>
+   hash_target k1 msg1 ! i = hash_target k2 msg2 ! i"
+proof -
+  assume m1: "i \<in> Sset (map int (hash_target k1 msg1)) (x1_of sk)"
+     and m2: "i \<in> Sset (map int (hash_target k2 msg2)) (x1_of sk)"
+  have h1: "Eval ([]::nat list) [] [] ! i = hash_target k1 msg1 ! i"
+    using m1 by (rule T2_D5)
+  have h2: "Eval ([]::nat list) [] [] ! i = hash_target k2 msg2 ! i"
+    using m2 by (rule T2_D5)
+  from h1 h2 show ?thesis by simp
+qed
+
 end

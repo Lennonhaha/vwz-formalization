@@ -382,4 +382,160 @@ proof -
   qed
 qed
 
+
+section \<open>The inverse of an elementary matrix, in the integers and modulo q\<close>
+
+lemma id_mat_nth:
+  assumes r: "r < m" and c: "c < m"
+  shows "(id_mat m) ! r ! c = (if r = c then 1 else 0)"
+proof -
+  have lr: "r < length [0..<m]" using r by simp
+  have lc: "c < length [0..<m]" using c by simp
+  have o: "(id_mat m) ! r = map (\<lambda>j. if r = j then (1::int) else 0) [0..<m]"
+    using nth_map[OF lr, of "\<lambda>i. map (\<lambda>j. if i = j then (1::int) else 0) [0..<m]"] r
+    by (simp add: id_mat_def nth_upt)
+  have i: "(map (\<lambda>j. if r = j then (1::int) else 0) [0..<m]) ! c = (if r = c then 1 else 0)"
+    using nth_map[OF lc, of "\<lambda>j. if r = j then (1::int) else 0"] c by (simp add: nth_upt)
+  show ?thesis using o i by simp
+qed
+
+lemma id_mat_fq: "map (map fq) (id_mat m) = id_mat m"
+  by (simp add: id_mat_def fq_zero fq_one split: if_split)
+
+lemma entry_mat_mult_dot:
+  assumes r: "r < n_rows A" and c: "c < n_cols B"
+  shows "entry (mat_mult A B) r c = dot (row_vec A r) (col_vec B c)"
+proof -
+  have rA: "r < length A" using r by (simp add: n_rows_def)
+  have lr: "r < length [0..<n_rows A]" using r by (simp add: n_rows_def)
+  have outer: "(mat_mult A B) ! r
+      = map (\<lambda>j. dot (row_vec A r) (col_vec B j)) [0..<n_cols B]"
+    using nth_map[OF lr, of "\<lambda>ia. map (\<lambda>ja. dot (row_vec A ia) (col_vec B ja)) [0..<n_cols B]"]
+    by (simp add: mat_mult_def n_rows_def nth_upt rA)
+  have lc: "c < length [0..<n_cols B]" using c by simp
+  have "(mat_mult A B) ! r ! c = dot (row_vec A r) (col_vec B c)"
+    using outer nth_map[OF lc, of "\<lambda>j. dot (row_vec A r) (col_vec B j)"] c
+    by (simp add: nth_upt)
+  thus ?thesis by (simp add: entry_def)
+qed
+
+lemma row_add_matrix_int_inverse:
+  assumes im: "i < m" and jm: "j < m" and ij: "i \<noteq> j"
+  shows "mat_mult (row_add_matrix m i j f) (row_add_matrix m i j (-f)) = id_mat m"
+proof -
+  let ?E = "row_add_matrix m i j f"
+  let ?F = "row_add_matrix m i j (-f)"
+  have Erows: "length ?E = m" by simp
+  have Frows: "length ?F = m" by simp
+  have nE: "n_rows ?E = m" by (simp add: n_rows_def)
+  have nF: "n_rows ?F = m" by (simp add: n_rows_def)
+  have rowlen: "\<And>r. r < m \<Longrightarrow> length (?F ! r) = m" using row_add_matrix_row_len by simp
+  have cF: "n_cols ?F = m"
+  proof -
+    have mne: "m \<noteq> 0" using im by simp
+    have "?F \<noteq> []" using Frows mne by (metis list.size(3))
+    hence "n_cols ?F = length (?F ! 0)" by (simp add: n_cols_def)
+    also have "\<dots> = m" using rowlen[of 0] im by simp
+    finally show ?thesis .
+  qed
+  have colLen: "\<And>c. length (col_vec ?F c) = m" using Frows by (simp add: col_vec_def)
+  have lenL: "length (mat_mult ?E ?F) = m"
+  proof -
+    have "length (mat_mult ?E ?F) = n_rows (mat_mult ?E ?F)" by (simp add: n_rows_def)
+    also have "\<dots> = n_rows ?E" by (simp add: n_rows_mat_mult)
+    also have "\<dots> = m" using nE .
+    finally show ?thesis .
+  qed
+  show ?thesis
+  proof (rule list_eq_iff_nth_eq[THEN iffD2], rule conjI)
+    show "length (mat_mult ?E ?F) = length (id_mat m)"
+      using lenL by (simp add: id_mat_def)
+  next
+    show "\<forall>r < length (mat_mult ?E ?F). (mat_mult ?E ?F) ! r = (id_mat m) ! r"
+    proof (rule allI, rule impI)
+      fix r assume rl: "r < length (mat_mult ?E ?F)"
+      hence rm: "r < m" using lenL by simp
+      have innerL: "length ((mat_mult ?E ?F) ! r) = m"
+        using row_mult_len[of r ?E ?F] rm nE cF by simp
+      have innerR: "length ((id_mat m) ! r) = m"
+        by (simp add: id_mat_def rm)
+      show "(mat_mult ?E ?F) ! r = (id_mat m) ! r"
+      proof (rule list_eq_iff_nth_eq[THEN iffD2], rule conjI)
+        show "length ((mat_mult ?E ?F) ! r) = length ((id_mat m) ! r)"
+          using innerL innerR by simp
+      next
+        show "\<forall>c < length ((mat_mult ?E ?F) ! r).
+                (mat_mult ?E ?F) ! r ! c = (id_mat m) ! r ! c"
+        proof (rule allI, rule impI)
+          fix c assume cl: "c < length ((mat_mult ?E ?F) ! r)"
+          hence cm: "c < m" using innerL by simp
+          have lhs: "(mat_mult ?E ?F) ! r ! c = dot (?E ! r) (col_vec ?F c)"
+            using entry_mat_mult_dot[of r ?E c ?F] rm nE cF cm by (simp add: entry_def row_vec_def)
+          have rhsId: "(id_mat m) ! r ! c = (if r = c then (1::int) else 0)"
+            using id_mat_nth[OF rm cm] .
+          show "(mat_mult ?E ?F) ! r ! c = (id_mat m) ! r ! c"
+          proof (cases "r = i")
+            case True
+            have Er: "?E ! i = map (\<lambda>cc. if cc = j then f else (if cc = i then (1::int) else 0)) [0..<m]"
+              using nth_row_add_matrix[OF im] ij by simp
+            have dotv: "dot (?E ! i) (col_vec ?F c) = col_vec ?F c ! i + f * (col_vec ?F c ! j)"
+              using dot_sparse_two[OF im jm ij colLen[of c], of f] Er by simp
+            have ci: "col_vec ?F c ! i = (if c = j then -f else (if i = c then (1::int) else 0))"
+            proof -
+              have "col_vec ?F c ! i = ?F ! i ! c" using im Frows by (simp add: col_vec_def nth_map)
+              also have "?F ! i = map (\<lambda>cc. if cc = j then -f else (if i = cc then (1::int) else 0)) [0..<m]"
+                using nth_row_add_matrix[OF im] ij by simp
+              hence "?F ! i ! c = (if c = j then -f else (if i = c then (1::int) else 0))"
+                using cm by (simp add: nth_map nth_upt)
+              finally show ?thesis .
+            qed
+            have cj: "col_vec ?F c ! j = (if c = j then (1::int) else 0)"
+            proof -
+              have "col_vec ?F c ! j = ?F ! j ! c" using jm Frows by (simp add: col_vec_def nth_map)
+              also have "?F ! j = map (\<lambda>cc. if cc = j then (1::int) else 0) [0..<m]"
+                using nth_row_add_matrix[OF jm] ij by simp
+              hence "?F ! j ! c = (if c = j then (1::int) else 0)"
+                using cm by (simp add: nth_map nth_upt)
+              finally show ?thesis .
+            qed
+            have sum: "col_vec ?F c ! i + f * (col_vec ?F c ! j) = (if i = c then (1::int) else 0)"
+            proof (cases "c = j")
+              case True
+              hence "i \<noteq> c" using ij by simp
+              thus ?thesis using ci cj True by simp
+            next
+              case False
+              thus ?thesis using ci cj by simp
+            qed
+            show ?thesis using True lhs dotv rhsId sum by simp
+          next
+            case False
+            have Er: "?E ! r = map (\<lambda>cc. if cc = r then (1::int) else 0) [0..<m]"
+              using nth_row_add_matrix[OF rm] False by simp
+            have dotv: "dot (?E ! r) (col_vec ?F c) = col_vec ?F c ! r"
+              using dot_unit_row[OF rm colLen[of c]] Er by simp
+            have cr: "col_vec ?F c ! r = (if r = c then (1::int) else 0)"
+            proof -
+              have "col_vec ?F c ! r = ?F ! r ! c" using rm Frows by (simp add: col_vec_def nth_map)
+              also have "?F ! r = map (\<lambda>cc. if cc = r then (1::int) else 0) [0..<m]"
+                using nth_row_add_matrix[OF rm] False by simp
+              hence "?F ! r ! c = (if r = c then (1::int) else 0)"
+                using cm by (simp add: nth_map nth_upt)
+              finally show ?thesis .
+            qed
+            show ?thesis using lhs dotv rhsId cr by simp
+          qed
+        qed
+      qed
+    qed
+  qed
+qed
+
+lemma mat_mult_mod_elem_inverse:
+  assumes im: "i < m" and jm: "j < m" and ij: "i \<noteq> j"
+  shows "mat_mult_mod (row_add_matrix m i j f) (row_add_matrix m i j (-f)) = id_mat m"
+  using row_add_matrix_int_inverse[OF im jm ij] id_mat_fq
+  by (simp add: mat_mult_mod_def)
+
+
 end

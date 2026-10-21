@@ -1272,3 +1272,48 @@ makes it provable now.
 Ledger after this step: 56 lemmas, 11 sorry (T2 10/6, T3 8/3), every sorry inside the
 ledger.  T2_B3 itself is still a `sorry`: what is now available is the bridge, not yet the
 inverse of an elementary matrix nor the associativity of the modular product.
+<!-- seg: seg-inverse-5392b3e495a4 -->
+## 2026-10-21 (cont. 2): the elementary matrix is invertible, in both rings
+
+**Landed.** `aligned/VWZ_ModAlgebra.thy`:
+
+    row_add_matrix_int_inverse:  mat_mult (row_add_matrix m i j f) (row_add_matrix m i j (-f)) = id_mat m
+    mat_mult_mod_elem_inverse:   mat_mult_mod (row_add_matrix m i j f) (row_add_matrix m i j (-f)) = id_mat m
+
+under `i < m`, `j < m`, `i \<noteq> j`; build RC=0; ledger unchanged at 56 lemmas / 11 sorry
+(the proof does not close any obligation by itself, it supplies the witness T2_B3 needs).
+
+**How it is proved, and why the bridge lemma is *not* used here.** The bridge
+(`mat_mult_mod_row_add`) requires `reduced A`, and `row_add_matrix m i j (-f)` has negative
+entries, so `reduced` fails and the bridge is inapplicable.  Instead the *integer* identity
+is proved entrywise and then reduced:
+
+1. `entry_mat_mult_dot`: `entry (mat_mult A B) r c = dot (row_vec A r) (col_vec B c)`
+   for `r < n_rows A`, `c < n_cols B` --- the `nth_map`/`nth_upt` plumbing, with
+   `r < length A` derived from `n_rows_def` (without it `simp` leaves `[0..<length A] ! r`).
+2. Three cases per entry, using `nth_row_add_matrix` to read rows and `dot_unit_row` /
+   `dot_sparse_two` to evaluate the dot product:
+   - `r = i`: `dot = col!i + f * col!j` with `col!i = (if c = j then -f else (if i = c then 1 else 0))`
+     and `col!j = (if c = j then 1 else 0)`, so `c = j` gives `-f + f = 0` and `c = i` gives `1`;
+   - `r \<noteq> i`: the row is a unit vector, `dot = col!r = (if r = c then 1 else 0)`.
+3. `map (map fq) (id_mat m) = id_mat m` (`id_mat_fq`, by `fq_zero`/`fq_one` and
+   `split: if_split`), then `mat_mult_mod` unfolds.
+
+**Traps worth keeping.**
+- `?F \<noteq> []` cannot be discharged by `simp` from `length ?F = m` and `i < m`; the working
+  form is `have mne: "m \<noteq> 0" ... ; have "?F \<noteq> []" using Frows mne by (metis list.size(3))`.
+  (`by (cases m) simp_all` leaves `?nat. m = Suc nat` behind.)
+- `entry_mat_mult_dot` must be unfolded with `row_vec_def` as well, otherwise the goal keeps
+  `row_vec (row_add_matrix ...) r` and `dot ((row_add_matrix ...) ! r) ...` side by side.
+- `id_mat_nth` is worth having as a lemma: every entrywise proof against `id_mat` needs
+  `(id_mat m) ! r ! c = (if r = c then 1 else 0)` with the two bound hypotheses.
+
+**Next (⑤, ⑥).** `mat_mult_mod_assoc` cannot be obtained by rewriting the integer
+associativity alone: the left-hand side multiplies matrices whose entries are *already*
+reduced, so the identity needed is a congruence. The plan is to introduce
+`cong_q x y \<equiv> fq x = fq y`, prove it is a congruence for `+` and `*` (from `fq_add`,
+`fq_mult`, `fq_idem`), lift it pointwise to rows and matrices, and conclude
+`mat_mult_mod (mat_mult_mod A B) C = mat_mult_mod A (mat_mult_mod B C)` for square `m \<times> m`
+rectangular matrices. `fq_sum` comes first
+(`fq (sum_list xs) = fq (sum_list (map fq xs))`), and every use must stay out of `simp`
+(`fq_add`/`fq_idem` rewrite in opposite directions).

@@ -1677,3 +1677,33 @@ definition hash_target :: "nat ⇒ nat list ⇒ nat list" where
 
 ### 关于前提的诚实说明
 `length (digest k msg) ≥ k+1` **保留为真前提**：走 k+1 步要吃 k+1 个字；短 digest 只损失随机性，不损失长度（长度由 `take (k+1)` 与池容量 `par_n k` 决定）。因此该前提在实现里由 XOF 输出长度保证，不是为凑证明编的。
+<!-- seg: seg-rank-a2fc9a29aa85 -->
+## 2026-10-21 21:0x：`VWZ_Rank.thy` 地基入库 + T2_B7 缺口地图（56/7 不变）
+
+### 本轮新增（全部已证，RC=0，15 秒）
+新理论 `aligned/VWZ_Rank.thy`（imports `VWZ_RREF`，ROOT 排在 `VWZ_RREF` 之后）：
+
+- **外积与其形状**：`outer u v`（`map` 式定义，entry 为 `u!i * v!j`）、`outer_sum2 u v u' v'`（entry 为两项之和，同用 `map` 式而**不用 `map2`**）。
+  - `n_rows_outer [simp]`、`n_cols_outer`、`is_rect_outer`、`entry_outer`；
+  - `n_rows_outer_sum2 [simp]`、`n_cols_outer_sum2 [simp]`、`is_rect_outer_sum2 [simp]`、`entry_outer_sum2`。
+- **零矩阵的秩**：`fq_zero`、`n_rows_zero_mat`、`n_cols_zero_mat`、`entry_zero_mat`、`all_zero_row_replicate`、`find_pivot_zero_mat`（主元搜索在零矩阵上恒 None）、`rref_zero_mat`（化简不动零矩阵）、`rref_zero_mat_all`、`mat_rank_zero_mat = 0`。
+
+### 为什么不用 `map2`（返工两次的教训）
+第一版 `mat_add` 走 `map2 (+)`，结果卡在 `length_map2`：**HOL 的 `List.thy` 里没有 `length_map2` 这个名字**（只有 `zip_map2` / `map_zip_map2` / `map2_map_map`），`map2` 的 `nth` / `length` 都要自己另证。改用 `map (λi. map (λj. …) [0..<length v]) [0..<length u]` 后，四条形状引理全部退化成 `map` 长度 + `nth_map` 的普通重写，一次过。
+
+### `rref_zero_mat` 的两处工程细节（都可复用）
+1. **不要在 `simp` 里展开 `zero_mat_def`**：一展开 `zero_mat m n` 就变 `replicate m (replicate n 0)`，而手里的 `np`（主元搜索为 None）还是 `zero_mat` 形式，两侧不统一 → `case` 永远不归约。正确做法是准备**形状引理**（`n_rows_zero_mat` / `n_cols_zero_mat` / `entry_zero_mat`）喂给 simp，让 `zero_mat` 保持原子。
+2. **`case True` / `case False` 一定不要用来指代假设**（本日第二次踩）。改成 `proof cases; assume rm: "r < m"` 这种显式 `assume`，再在嵌套分支里用 `rm`、`cn`，名字不会与常量 `True`/`False` 撞。
+3. `rref_fuel.simps` 展开后的 `Some` 分支含 `let A1 = swap_rows … in …`，**不要试图把整个 `case` 写进等式**（会与真实展开式不匹配）。直接陈述目标分支 `rref_fuel (Suc f) r c A = rref_fuel f r (c+1) A`，再 `using nr nc np by (simp add: rref_fuel.simps split: option.split)`。
+
+### T2_B7 的确切缺口（三条，缺一不可）
+`mat_rank` 被定义为「`rref` 的非零行数」，因此任何关于秩的**下界**都必须先有「`rref` 不改变矩阵的秩相关不变量」这座桥。具体缺口：
+
+1. **`rref_step`（行操作 = 左乘可逆矩阵）**：`swap_rows` / `scale_row` / `add_row_mult` 各自是左乘一个可逆矩阵。没有它，无法把关于 `A` 的结论搬到 `rref A`，也无法搬回来。
+2. **`minors_invariant_under_row_ops`（行操作保持「所有 2×2 子式为零」）**：交换行 = 子式换号；行乘常数 = 子式乘该常数；把一行的倍数加到另一行 = 子式加一个「两行相同」的子式（= 0）。仓库现成的只有**左上角**那一个子式的 `det2` 多重线性（`T2_B2_det2_rowadd`），任意行列下标对需要一般命题。
+3. **`rank_le_one_imp_minors_vanish`（化简形秩 ≤ 1 ⇒ 子式全零）**：一旦刻画了化简形（非零行只有一行，其余全零），这一步很便宜。
+
+`rank_ge_two_of_nonzero_minor` = 1 + 2 + 3 的合成；`rank_outer_sum_le_two` 另外还需要 **`mat_rank (mat_mult A B) ≤ n_cols A`**（秩 ≤ 主元列数），而这同样是「化简形刻画」的推论。
+
+### 记账纪律
+这四条都**没有**以 `lemma … sorry` 的形式写入（否则会新增 4 个 ledger 外的 `sorry`，把 `outside: 0` 破坏掉）。它们以**工作清单**的形式写在 `VWZ_Rank.thy` 的收尾 text 块与本段笔记里。账本因此仍是 **56 lemmas / 7 sorry，outside 0**。

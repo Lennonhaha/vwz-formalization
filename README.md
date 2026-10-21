@@ -92,9 +92,13 @@ into statements about a made-up matrix.
 
 What is still open is T2_B3: that the four generated matrices are invertible.
 The definitions make the claim well-posed, and the reason it is true (row
-additions only, so determinant 1) is now visible in the code, but the bridge --
-a lemma that a row addition preserves invertibility, or equivalently that `det`
-is invariant under it -- does not exist yet. T2_B3 stays `sorry` and says so.
+additions only, so determinant 1) is visible in the code.  The algebraic
+foundation the bridge needs now exists: `VWZ_MatAlgebra` proves the exchange of
+summation order (`swap_idx`), the index form of a product entry (`entry_mult`),
+and associativity of `mat_mult` in the square case (`mat_mult_assoc_square`).
+What still does not exist is the row-operation bridge itself -- that
+left-multiplying by `row_add_matrix` equals `add_row_mult`, and that an
+elementary matrix has an inverse -- so T2_B3 stays `sorry` and says so.
 
 `VWZ_A3_Aligned` is the only session that carries obligations. The remaining
 sessions are scaffolding:

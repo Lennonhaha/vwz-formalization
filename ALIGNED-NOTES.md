@@ -977,3 +977,46 @@ than it is. If a theory that used to take 8 s suddenly takes minutes, check
 2. **`rows3_of` 不改签名、不写占位**。§6.4.1 的 body 需要四样现有签名装不下的东西：秘密 `lambda_c`、矩阵 `M3`、切分点 `a`、以及由此得到的 `Za`/`Zb`。写一个"忽略参数、返回固定矩阵"的占位，会让 `T2_D4` 变成关于假矩阵的陈述。注释里已写明正确改法（签名带上 λc/M3/两个集合，则 `n_rows = k+2`、`n_cols = m`）。
 
 **记账自律复现**：本轮又差点让两条 `Sset`/`Zset` 辅助引理把计数顶到 58，已删。**规则固化：`Deferred subjects` 段里的 lemma 会被计数器计入义务，辅助引理一律不放该段。**
+<!-- seg: seg-assoc-505e3222b27b -->
+## 2026-10-21 08:44–09:2x：T2_B3 承重墙落成 —— 换序引理 + 结合律
+
+**结论先说**：卡了多轮的 `mat_mult` 结合律已经证出来了，`isabelle build -D aligned` RC=0（约 10 秒）。
+T2_B3 仍是 sorry（总数 12 未变），因为它还差「行操作桥」两件，不是差这块。
+
+### 真正的卡点不是数学，是一个事实名
+
+之前所有换序尝试都死在 `Undefined fact: "Cons.IH"`。Isabelle2025-2 里 `list` 的归纳假设叫
+**`Cons.hyps`**，不叫 `Cons.IH`。改名后同一条证明一次通过——这不是证明思路问题，是命名问题。
+已知误判记录：曾据此认为「Isabelle2025 的 case 绑定坏了」，并试过 `rule list.induct` 绕路，均属过度反应。
+
+### sledgehammer 的实测边界
+
+- `isabelle sledgehammer` 在 2025-2 **没有这个 CLI 子命令**（`*** Unknown Isabelle tool: "sledgehammer"`），
+  批处理构建里调不到。它依赖 PIDE 会话，不能 headless 用。
+- **但 `smt` 方法可用**：`by (smt (z3))` 在批处理里直接通过（contrib 里 z3-4.4.0pre / cvc5 / vampire / e 都在）。
+  想用外部证明器，批处理下走 `smt`，不要指望 sledgehammer。
+- 本次四个引理最终都是结构化 Isar + `simp`/`metis` 收的，没有一个是 `smt` 爆出来的——`smt` 只做了可用性探针。
+
+### 新增（VWZ_MatAlgebra.thy，工具引理，不入义务账本）
+
+- `swap_idx`：二重和换序（对 `xs` 归纳，`ys` 保持不变，故不需要 `arbitrary`）。
+- `map2_conv_idx`：`map2 f us vs = map (λk. f (us!k) (vs!k)) [0..<n]`，靠 `map2_map_map` + `map_nth`。
+- `entry_mult`：乘积元素的指标形式，`entry (A*B) i j = Σ_k A!i!k * B!k!j`（带形状前提）。
+- `n_rows_mat_mult` / `n_cols_mat_mult` / `is_rect_mat_mult` / `row_mult_len`：乘积形状。
+- `entry_assoc`：逐元素结合的完整链条（展开 → 右分配 → 换序 → 左分配 → 回收）。
+- `mat_mult_assoc_square`：方形矩阵结合律，靠两层 `nth_equalityI` + `entry_assoc`。
+
+关键工程细节（值得记住）：
+1. 在 `map` 的 λ 下重写含**带前提**的引理（如 `nth_map` 需 `k < length`）时，`simp` 拿不到 `k` 的界，
+   会留下 `?x∈... ` 那种示意变量目标。正解：写 `map_cong` 的显式子证明，`fix k; assume "k ∈ set [...]"`，
+   把界变成显式假设后 `metis nth_map` 即可。
+2. `by simp` **不会**自动使用局部 `have` 等式；要用就 `from h show ... by (simp only: h)`。
+3. `have "⋀k. k < m ⟹ P k" ... by simp` 容易失败（留下 `?k. k < m ?`），改用 `proof - fix k assume ... show ... qed`。
+4. `⋀` 前提里缺一条形状事实（如 `n_rows B = m`）会让 simp 卡在 `m = n_rows B` 这种反向等式上——把**两端**都传进去。
+
+### 记账与文件
+
+- ROOT 已移除临时 `VWZ_Scratch`（该文件仍在磁盘、未跟踪、不入库）。
+- 账本不变：56 lemmas / 12 sorry（T0 17/0、T1-A 16/0、T1-D 5/2、T2 10/6、T3 8/4）。
+- 仓库 16 theory / 187959 B / 248 lemmas / 12 sorry。
+- README 已同步：删掉「结合律不存在」的旧断言，改为「地基已就绪，缺行操作桥」。

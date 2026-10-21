@@ -639,10 +639,30 @@ text \<open>The subject is now @{text mats_of}: four calls to
   eval"} on @{text "det (X2a_of 2 7)"} alone ran for more than 115 seconds
   without returning, so brute-force evaluation is not an escape either.
 
-  This obligation is therefore TODO(proof), not TODO(define): the bodies exist
-  and are executable, the statement is true, and the missing object is a piece
-  of matrix algebra (associativity plus the row-operation bridge), not a
-  missing subject.  Nothing here is assumed to make the statement pass.\<close>
+  This obligation is NOT TODO(proof) in the sense it was thought to be.  A
+  machine-checked probe (see @{file VWZ_Probe.thy}) shows the statement as
+  written mixes two algebraic settings: the row operation @{text add_row_mult}
+  reduces every entry modulo @{text q} (via @{text fq}), while @{text mat_mult}
+  is an integer dot product with no reduction.  Concretely:
+
+    @{text "mat_mult (row_add_matrix 2 0 1 1) [[1,3328],[0,1]] = [[1,3329],[0,1]]"}
+    @{text "add_row_mult [[1,3328],[0,1]] 0 1 1 = [[1,0],[0,1]]"}
+
+  so the bridge "left multiplication by an elementary matrix equals the row
+  operation" is false as stated.  The consequence is not cosmetic: the matrices
+  @{text rim_iter} builds need not be invertible over the integers at all.  Two
+  row additions with @{text "f = 1000"} give @{text "[[1,1000],[1000,1301]]"},
+  whose integer determinant is @{text "-998699"} while its determinant modulo
+  @{text q} is @{text 1}.  Integer invertibility needs a unit determinant, so
+  this obligation is a modular statement wearing integer clothes.
+
+  Status: restatement in progress (option A, approved 2026-10-21).  The plan is
+  to introduce @{text mat_mult_mod} (dot product followed by @{text fq}) and
+  @{text invertible_mod}, and to state T2_B3 over @{text F_q}.  Until that
+  lands the sorry stays, and nothing is assumed to make the statement pass.
+  The associativity work that was believed to be the blocker is done
+  (@{text mat_mult_assoc_square} in @{file VWZ_MatAlgebra.thy}); it was never
+  the obstacle.\<close>
 
 lemma T2_B3:
   "invertible (X2a_of m s) \<and> invertible (X2b_of m s) \<and>
@@ -673,11 +693,15 @@ text \<open>Both sides have bodies now: @{text mat_rank} (fuel-counted Gauss-Jor
   slice, and @{text T2_B7_counterexample} below proves that a key of the right
   shape whose slice is zero has rank 0, not 2.
 
-  What is missing is not a tactic but a hypothesis: that @{text pk} is in the
-  image of @{text KeyGen}.  Until @{text KeyGen} has a body, this is a defect
-  in the statement, not a proof obligation, so it is NOT labelled TODO(proof).
-  It stays as @{text sorry} only so the ledger count does not move by being
-  edited around.\<close>
+  What is missing is not a tactic but two hypotheses: that @{text pk} is in the
+  image of @{text KeyGen}, and that the two drawn vectors of the slice are not
+  parallel -- @{text "rank (u u\<^sup>T + v v\<^sup>T) = 2"} fails when @{text u} and
+  @{text v} are scalar multiples of one another, so a range premise alone does
+  not make the statement true for every seed.  The planned repair carries both
+  conditions (see ALIGNED-NOTES, 2026-10-21).  Until @{text KeyGen} has a body
+  this is a defect in the statement, not a proof obligation, so it is NOT
+  labelled TODO(proof).  It stays as @{text sorry} only so the ledger count
+  does not move by being edited around.\<close>
 
 lemma T2_B7: "i < length (pk_psi pk) \<Longrightarrow> mat_rank (psi_slice pk i) = 2"
   sorry

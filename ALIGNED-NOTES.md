@@ -1020,3 +1020,65 @@ T2_B3 仍是 sorry（总数 12 未变），因为它还差「行操作桥」两�
 - 账本不变：56 lemmas / 12 sorry（T0 17/0、T1-A 16/0、T1-D 5/2、T2 10/6、T3 8/4）。
 - 仓库 16 theory / 187959 B / 248 lemmas / 12 sorry。
 - README 已同步：删掉「结合律不存在」的旧断言，改为「地基已就绪，缺行操作桥」。
+<!-- seg: seg-domain-b6911b1eb90c -->
+## 2026-10-21 09:1x–09:3x：T2_B3 的域错配（模 q vs 整数）+ T3 逐条定性
+
+### 一、T2_B3：不是缺引理，是陈述混了两个代数域
+
+机器证据（`aligned/VWZ_Probe.thy`，三条 `by eval`，全 session 构建 11 秒 RC=0）：
+
+| 事实 | 值 |
+|---|---|
+| `mat_mult (row_add_matrix 2 0 1 1) [[1,3328],[0,1]]` | `[[1,3329],[0,1]]` |
+| `add_row_mult [[1,3328],[0,1]] 0 1 1` | `[[1,0],[0,1]]` |
+| 两者相等？ | 否（机器验证） |
+
+根因在定义层，不在证明层：
+- `add_row_mult A i j k = A[i := map2 (λx y. fq (x + k*y)) (A!i) (A!j)]`，**每一项都过 `fq`（mod 3329）**；
+- `mat_mult` 是纯整数点积，**全程不取模**。
+
+所以「左乘初等矩阵 = 一次行加法」按字面为假，差的就是那一次 `fq`。
+
+连带后果（算术事实，非猜测）：两次行加法取 `f = 1000` 得 `[[1,1000],[1000,1301]]`，
+整数 `det = 1301 − 1 000 000 = −998 699`，而模 3329 下 `det ≡ 1`。
+整数可逆要求行列式为 ±1，因此**生成的矩阵在 ℤ 上一般不可逆**，T2_B3 是一条模 q 命题穿错了整数的衣服。
+
+**处置（Owner 2026-10-21 拍板，方案 A）**：T2_B3 进入 restatement 流程——
+定义 `mat_mult_mod`（点积后 `fq`）与 `invertible_mod`，在 `F_q` 上陈述。
+在此之前 sorry 保留，绝不偷换概念、绝不用假设把结论垫过去。
+
+**顺带纠正一条旧记录**：README 曾写「缺的是结合律」。结合律已证（`mat_mult_assoc_square`），
+它从来不是障碍；障碍是域错配。已在 README 与本条同时改正。
+
+### 二、T2_B7：range 前提还不够
+
+仅加 `pk ∈ range KeyGen` 不足以救「每片秩为 2」：
+`rank (u·uᵀ + v·vᵀ) = 2` 在 `u` 与 `v` 平行时失败，而 `KeyGen` 抽取的向量没有排除这种退化。
+正确的修复要带两个前提：`pk ∈ range KeyGen` **且** 该片两向量不平行（或直接写 `rank ≤ 2` 加 generic 情形）。
+已写入 T2_B7 注释，待重构时落实。
+
+### 三、T3 的四条 sorry：全部不是 TODO(proof)
+
+逐条核对（`VWZ_ObligationsAligned.thy`）：
+
+| 义务 | 阻塞点 | 性质 |
+|---|---|---|
+| `T3_C1` `weight (hash_target k msg) = k+1` | `hash_target` 是 `consts`，无 body | TODO(define) |
+| `T3_C3` `unbiased N` | `unbiased` 是 `consts`，无 body | TODO(define) |
+| `T3_D8_empirical` | `Sign` 无 body；本文件自己标注 empirical | TODO(define) + 经验性 |
+| `T3_E3b_conjectural` | `Eval`/`Sign` 无 body；自标 conjectural | TODO(define) + 猜想 |
+
+结论：**T3 已无「只差证明」的义务**。B1 / E1 / E2 / E4 四条能证的全部证完了，
+剩下四条都卡在未解释常量上。想把数字降下来，只有三条路，都必须 Owner 拍板：
+1. 真定义（`hash_target` 用具体模型、`unbiased` 用计数性质）——真证明，但工作量大；
+2. 把 stub 改成显式「建模假设」（从义务账本移出并标注 assumption）——数字会降，但必须同时承认它不再是定理；
+3. 保持 sorry，如实记账（当前状态）。
+
+**明确拒绝**：给 `hash_target` / `unbiased` 编一个「刚好让结论成立」的定义。
+那会得到一条关于自造对象的真命题，是最典型的自证陷阱（与 2026-10-03 CBOM 的循环验证同族）。
+
+### 四、本轮构建与计数
+
+- `isabelle build -D aligned`：RC=0，约 11 秒（含探针）。
+- 账本：**56 lemmas / 12 sorry**（T0 17/0、T1-A 16/0、T1-D 5/2、T2 10/6、T3 8/4）。
+- 新增 `VWZ_Probe.thy`（3 条 eval 事实），入 ROOT，作为域错配的机器证据。

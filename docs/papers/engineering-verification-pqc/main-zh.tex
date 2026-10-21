@@ -1,0 +1,393 @@
+% !TEX program = xelatex
+% 中文初稿（骨架 + 第 4/5 节实体内容）
+% 编译：xelatex main-zh.tex （两遍以生成交叉引用）
+\documentclass[UTF8,fontset=windows,zihao=-4,a4paper]{ctexart}
+
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{geometry}
+\geometry{left=2.8cm,right=2.8cm,top=2.5cm,bottom=2.5cm}
+\usepackage{hyperref}
+\hypersetup{colorlinks=true,linkcolor=black,citecolor=black,urlcolor=blue}
+\usepackage{enumitem}
+\setlist{nosep,leftmargin=2em}
+
+\newtheorem{theorem}{定理}
+\newtheorem{lemma}{引理}
+\newtheorem{definition}{定义}
+\newtheorem{remark}{注}
+
+\newcommand{\code}[1]{\texttt{#1}}
+\newcommand{\Fq}{\mathbb{F}_{3329}}
+
+\title{\bfseries 基于 Isabelle/HOL 的 VWZ 后量子密码协议\\形式化验证与规范缺陷分析}
+\author{刘天赫\\
+\small 独立研究者\\
+\small \texttt{research@fibemate.net}}
+\date{2026 年 10 月}
+
+\setlength{\emergencystretch}{2.5em}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+\noindent
+后量子密码（PQC）算法的工程实现涉及模算术、矩阵代数与采样器等多个层次，
+仅依赖测试用例无法保证其数学陈述的正确性。本文使用 Isabelle/HOL 交互式定理证明器，
+对一个后量子构造（VWZ）的代数骨架与协议对象进行了形式化建模。
+在建模过程中，本文坚持一条固定纪律：\emph{先按原文形式化，用机器否证，才允许改述}。
+依此纪律，本文在原规范中发现四处逻辑缺陷：
+两处算术域与维度的错配（\code{T2\_B3} 的 $\mathbb{Z}$ 与 $\Fq$ 错配、
+\code{T2\_D4} 的行零化度与列零化度错配），
+两处前提缺失导致陈述为假（\code{T2\_B7} 缺失秩前提、
+\code{T2\_D5} 迫使目标位与消息无关）。
+对前两处，本文给出机器验证的改述与闭合证明；
+对后两处，本文给出三行以内的机器反证，并明确指出其不可证的两种不同原因：
+一则缺数学（行空间秩理论），一则缺建模决策（签名语义）。
+最终系统包含 20 个理论文件、56 条义务引理（账本内剩余 7 个未闭合证明，
+账本外零个 \code{sorry}），全量构建耗时约 16 秒。
+本文的贡献不在引理数量，而在证明了一件事：
+形式化验证可以在规范进入实现之前，把"看起来对"的句子变成"机器判定为假"的句子。
+
+\vspace{0.6em}
+\noindent\textbf{关键词：} 后量子密码；形式化验证；Isabelle/HOL；规范缺陷；矩阵代数
+\end{abstract}
+
+\section{引言}
+
+\subsection{研究背景}
+后量子密码标准的落地（如美国 NIST 于 2024 年发布的 FIPS 203 与 FIPS 204\cite{fips203,fips204}）
+使大量系统在短时间内需要完成算法替换\cite{bl}。替换过程中的风险并不只在算法本身，也在\emph{围绕算法写下的数学陈述}：
+密钥生成是否真的产生可逆矩阵、采样器输出的支撑集大小是否等于设计参数、
+签名验证所比较的量是否真的依赖于消息。这些问题在散文层面极易被"显然"或"按设计"带过，
+而一旦实现与陈述之间存在错配，测试通常无法发现——测试只能证明某些输入下行为一致，
+不能证明陈述为真。
+
+\subsection{动机：自证陷阱}
+作者在实践中遇到的最主要障碍不是证明难度，而是\emph{自证陷阱}：
+用自己写的解析器验证自己生成的输出，用自己写的测试验证自己写的实现。
+这类验证在逻辑上是同义反复。打破循环的唯一方式是引入外部参照——对代码是独立实现与官方
+schema，对数学陈述则是交互式定理证明器：它不接受"按设计应当如此"，只接受能闭合的证明树。
+这一思路在系统层与实现层已有成熟先例：seL4 内核的完整功能正确性证明\cite{sel4}、
+Jasmin 的经过验证的编译器与常量时间检查\cite{jasmin}、HACL* 的经过验证的密码库\cite{hacl}；
+计算机辅助密码学的整体版图见文献\cite{sok}，而在后量子方向，EasyPQC 已把具体安全性证明
+扩展到量子敌手模型\cite{easypqc}。本文的工作与上述方向互补：不针对实现代码，
+而针对规范中的数学陈述本身。
+
+\subsection{本文贡献}
+\begin{enumerate}
+  \item 在一个真实的后量子构造（VWZ）上建立了可复跑的形式化骨架：
+        20 个理论文件、56 条分层义务引理、账本外零个 \code{sorry}。
+  \item 发现并机器否证了四处规范缺陷，其中两处给出了可证的改述并已闭合。
+  \item 提出并实践了"形式化—否证—改述"四步法（第 \ref{sec:method} 节），
+        把"改述"从一种可以随手进行的便利，变成必须有机器证据才能执行的动作。
+  \item 给出完整的复现路径：一条构建命令、一条账本统计命令，全部缺陷均可被第三方重跑。
+\end{enumerate}
+
+\section{预备知识与形式化基础}
+
+\subsection{Isabelle/HOL}
+Isabelle/HOL 是一个基于高阶逻辑的交互式定理证明器\cite{isabelle,paulson}。本文使用 Isabelle2025-2，
+所有定义与证明均以结构化证明语言 Isar 书写，构建会话为 \code{VWZ\_A3\_Aligned}。
+选择 Isabelle/HOL 的两个实际理由：其一，它的列表与矩阵库足以承载本文所需的有限维线性代数；
+其二，它的 \code{quick\_and\_dirty} 模式允许在开发期保留未闭合证明并显式计数，
+这使"还剩几个 \code{sorry}"成为一个可查询的指标，而不是口头承诺。
+
+\subsection{域 $\Fq$ 与矩阵代数}
+素数 $q = 3329$ 由 \code{by eval} 机器验证。域元素取 $\{0,\dots,3328\}$，
+归约函数定义为 \code{fq x = x mod 3329}。矩阵类型为 \code{int list list}，
+向量类型为 \code{int list}；这一选择使"模 $q$"与"整数"两种口径可以共存，
+也正是第 \ref{sec:defects} 节第一处缺陷得以暴露的原因。
+
+本文刻意区分两个矩阵乘法：
+\code{mat\_mult}（整数点积，不归约）与 \code{mat\_mult\_mod}（点积后过 \code{fq}）。
+二者在 $\mathbb{Z}$ 上不同，在 $\Fq$ 上一致；混淆二者是一条真实的规范缺陷。
+
+\subsection{行化简与燃料参数化}
+行化简 \code{rref} 采用燃料（fuel）参数化，从而避免终止性证明：
+\code{rref\_fuel f r c A} 在燃料耗尽或扫描越界时返回当前矩阵。
+秩定义为化简后非零行的个数：
+\[
+  \code{mat\_rank A} = \code{length (filter}\ \lambda r.\ \neg\,\code{all\_zero\_row}\ r\ \code{(rref A))}.
+\]
+零化度给出两种口径：行口径 \code{dim\_nullspace A = n\_rows A - mat\_rank A}
+与列口径 \code{nullity A = n\_cols A - mat\_rank A}。
+对方阵二者一致，对非方阵则相差一个维数——这是第 \ref{sec:defects} 节第二处缺陷的来源。
+
+\section{VWZ 协议的形式化建模}
+
+\subsection{数据模型与序列化}
+公钥与私钥以记录形式建模（\code{pkey}、\code{skey}、\code{sigrec}），
+序列化与反序列化沿用规范第 8.3 节的字段顺序；长度字段按小端 16 位处理。
+建模原则是"规范写了什么就写什么"：若规范未固定某一顺序，则在注释中标注为自由，
+不在证明中悄悄利用该自由度。
+
+\subsection{关键子模块}
+\begin{itemize}
+  \item \textbf{密钥生成。} \code{KeyGen} 按规范第 3.3 节的抽签顺序实现：
+        先取两个 $\lambda$ 向量，再取四个矩阵 $X_{2a},X_{2b},X_{3a},X_{3b}$，最后取 $x_1$。
+        可逆矩阵由 \code{rim\_iter} 从单位阵出发执行 $m^2$ 次"把一行的倍数加到另一行"得到，
+        轮数由结构决定，不额外引入燃料。
+  \item \textbf{目标向量。} \code{hash\_target} 先由摘要载体给出随机字序列，
+        再用原地交换式的部分 Fisher--Yates 走步（\code{fy\_fuel} 与 \code{swap\_at}）
+        从全体位置中抽出 $k+1$ 个互异位置，最后取这些位置的指示向量。
+        唯一未解释的原语是 \code{digest}（XOF），本文不对它作任何密码学假设，
+        并且明确保留前提"摘要至少提供 $k+1$ 个字"，否则该命题为假。
+  \item \textbf{求线性方程组。} \code{solve\_linear} 以 Hilbert 选择算子给出规格化定义：
+        若存在满足模 $q$ 方程组的解则返回其一，否则返回 \code{None}。
+        它明确是 specification 而非可执行算法，Gauss--Jordan 回代作为欠账记录在案。
+\end{itemize}
+
+\subsection{义务账本}
+义务按四层组织：\code{T0}（纯形式重写，17 条）、\code{T1-A}（代数公理层，16 条）、
+\code{T1-D}（依赖定义层，5 条）、\code{T2}（线性代数与矩阵，10 条）、
+\code{T3}（安全性与解析器，8 条），合计 56 条。
+账本由脚本统计而非人工申报；同时统计"账本之外的 \code{sorry}"，当前为 0。
+这一约束的实际意义是：任何为了凑数而新增的未闭合引理都会立刻被统计暴露。
+
+\section{规范缺陷的发现与修正}
+\label{sec:defects}
+
+本节四条缺陷均按同一流程处理：按原文形式化 $\to$ 尝试证明 $\to$ 若失败则构造机器反例
+$\to$ 反例成立后才改述。改述一律记录原文与理由，不静默弱化。
+
+\subsection{域错配：整数环与模 $q$ 环（\code{T2\_B3}）}
+\textbf{原文陈述。} 密钥生成中的行操作与矩阵代数之间的桥接，写作
+"存在整数意义下的双边逆"，即 \code{invertible (X2a\_of m s)}。
+
+\textbf{为何为假。} \code{add\_row\_mult} 对每个元素做模 3329 归约，
+而 \code{mat\_mult} 计算未归约的整数点积。二者相差一次归约，
+且归约后的矩阵在 $\mathbb{Z}$ 上根本不可逆。
+
+\textbf{机器证据。} 在 \code{VWZ\_Probe.thy} 中：
+\begin{align*}
+  \code{mat\_mult (row\_add\_matrix 2 0 1 1) [[1,3328],[0,1]]} &= \code{[[1,3329],[0,1]]},\\
+  \code{add\_row\_mult [[1,3328],[0,1]] 0 1 1} &= \code{[[1,0],[0,1]]}.
+\end{align*}
+两次行加之后，结果矩阵的整数行列式为 $-998699$：模 $q$ 为 $1$，在 $\mathbb{Z}$ 中则不是单位。
+
+\textbf{处置（已闭合）。} 将义务改述到 $\Fq$：以 \code{mat\_mult\_mod} 定义模乘法，
+以"存在形状合格的见证 $B$，使两个乘积与单位阵\emph{同余}"定义可逆性
+（\code{cong\_q\_mat}）。此处必须用同余而非等号：
+$\code{mat\_mult\_mod}\ X\ (\code{id\_mat}\ m) = \code{map (map fq)}\ X$，
+仅当 $X$ 已归约时才等于自身，而见证是任意的。改述后该义务获得机器证明。
+
+\begin{remark}
+这条缺陷在散文中极难发现：规范把"模 $q$"写在算法描述里，把"可逆"写在数学论证里，
+两者从未在同一句话中相遇。形式化强迫它们相遇。
+\end{remark}
+
+\subsection{维数错配：行零化度与列零化度（\code{T2\_D4}）}
+\textbf{原文陈述。} 对 $k \ge 2$，$\code{dim (nullspace (rows3))} \ge k-1$，
+其中零化度按行口径 $\code{dim\_nullspace A} = \code{n\_rows A} - \code{mat\_rank A}$ 计算。
+
+\textbf{为何为假。} \code{rows3} 是 $(k+2)\times(2k+1)$ 的系统。
+行口径给出 $k+2-\code{rank}$，要求它 $\ge k-1$ 等价于要求\emph{每个}此类系统满足
+$\code{rank} \le 3$，这显然不成立，也不是采样器真正需要的性质。
+
+\textbf{正确定式。} 论证真正需要的是\emph{列}映射的零化度：
+\begin{equation*}
+  \code{nullity A} \;=\; \code{n\_cols A} - \code{mat\_rank A} \;=\; 2k+1-\code{rank},
+\end{equation*}
+只要 $\code{rank} \le k+2$（即化简保持行数）即得 $\ge k-1$。
+
+\textbf{处置（已闭合）。} 新增 \code{nullity} 而不改动 \code{dim\_nullspace}
+（后者在方阵上是正确口径，已有小例引理不受影响）；
+同时为 \code{rows3\_of} 补上规范第 6.4.1 节给出的函数体
+（$Z_a$ 部分取 $\lambda_c$ 的 Vandermonde 行，$Z_b$ 部分取 $M_3^{\mathsf T}$ 行），
+使义务具备其陈述真正依赖的四个参数。改述后该义务获得机器证明。
+
+\subsection{秩前提缺失（\code{T2\_B7}）}
+\textbf{原文陈述。} 对任意公钥 \code{pk} 与范围内下标 $i$，
+$\code{mat\_rank (psi\_slice pk i)} = 2$。
+
+\textbf{为何为假。} \code{i < length (pk\_psi pk)} 只是记录形状约束，
+它不排除切片为零矩阵。形状正确、切片为零的公钥，其秩为 $0$。
+
+\textbf{机器证据。} 在 \code{VWZ\_Refutations.thy} 中给出具体公钥与
+\code{T2\_B7\_counterexample}（秩为 $0$），并以 \code{T2\_B7\_refuted} 证明
+"对任意公钥与下标，切片秩恒为 2"的否定。
+
+\textbf{改述与状态。} 补三条前提：(1) 公钥属于 \code{KeyGen} 的像；
+(2) 切片存在非零 $2\times 2$ 子式（对两个外积之和而言，即两个抽取向量不平行）；
+(3) 下标在范围内。改述后的陈述为真且已入账，但\textbf{尚未证明}：
+它需要一套本系统尚无的行空间秩理论。已完成的首层（\code{VWZ\_Rank.thy}）给出
+外积与其和的形状、入口公式，以及"零矩阵的秩为零"——后者是经由 \code{rref} 证明的真命题，
+而非定义展开。尚缺四块：
+\begin{enumerate}
+  \item \code{rref\_step}：交换行、行乘单位、行加倍数各自是左乘一个可逆矩阵；
+  \item \code{minors\_invariant\_under\_row\_ops}：行操作保持"所有 $2\times2$ 子式为零"；
+  \item \code{rank\_le\_one\_imp\_minors\_vanish}：至多一个非零行的化简形不含非零子式；
+  \item $\code{mat\_rank (mat\_mult A B)} \le \code{n\_cols A}$，即秩不超过主元列数。
+\end{enumerate}
+
+\subsection{目标独立性冲突（\code{T2\_D5}）}
+\textbf{原文陈述。} 若 $i$ 落在目标支撑集内，则
+\begin{equation*}
+  \code{Eval pk w2 w3 ! i} \;=\; \code{hash\_target k msg ! i},
+\end{equation*}
+其中 \code{pk}、\code{w2}、\code{w3}、$k$、\code{msg} 全部自由。
+
+\textbf{为何为假。} 求值函数的类型是
+$\code{Eval} : \code{nat list} \Rightarrow \code{nat list} \Rightarrow \code{nat list} \Rightarrow \code{nat list}$——
+它既不接收 $k$，也不接收 \code{msg}。于是同一组求值参数配合两条不同消息时，
+左端是同一个项，右端是两个不同的目标位。
+
+\textbf{机器证据。} \code{VWZ\_Refutations.thy} 中的
+\code{T2\_D5\_forces\_target\_independence}：
+若下标同时落在两条消息的支撑集内，则两位目标位相等。
+证明仅三行：把求值参数实例化为空列表，两次套用该义务即得同一项等于两个不同的位。
+该证明不使用任何关于 \code{digest} 的假设，因此这是措辞缺陷而非密码学困难。
+
+\textbf{缺失的三项（当前不可补）。} (1) 签名函数 \code{Sign} 的函数体；
+(2) 联结前提：公钥是签名者的公钥、两个见证是 \code{Sign} 为该消息产出的一对；
+(3) 一个能够消费摘要的求值函数。
+在签名语义未定之前补这三项，等价于用定义掩盖结论，本文明确拒绝。
+
+\subsection{缺陷发现的四步法}
+\label{sec:method}
+\begin{enumerate}
+  \item \textbf{照抄形式化}：义务的每个前提与结论逐字转写，不补"显然"的前提，
+        不弱化量词范围。
+  \item \textbf{先证后猜}：只有当证明确实无法闭合时，才开始寻找反例；
+        反之亦然，禁止"因为证不出来所以改陈述"。
+  \item \textbf{反例入账}：反例必须是机器可检的具体对象（具体矩阵、具体下标），
+        并放在义务账本之外，避免"关掉缺陷"提高引理数。
+  \item \textbf{改述留痕}：改述必须记录原文、理由、以及"为什么在这个更强的前提下命题为真"。
+\end{enumerate}
+这四步的成本很低，但它把"改述"变成了一个有门槛的动作：
+没有机器证据，就不许改。
+
+\section{实验与可复现性}
+
+\subsection{工具链}
+Isabelle2025-2；构建会话 \code{VWZ\_A3\_Aligned}（父会话 \code{HOL-Number-Theory}，
+选项 \code{quick\_and\_dirty}）；在 64 位 Windows 上通过 Cygwin 驱动；
+全量构建 \code{isabelle build -D aligned -o document=false}。
+
+\subsection{量化数据}
+\begin{table}[htbp]
+\centering
+\caption{系统规模与验证指标}
+\begin{tabular}{lr}
+\toprule
+指标 & 数值 \\
+\midrule
+理论文件数 & 20 \\
+仓库内引理总数 & 373 \\
+账本内义务引理 & 56 \\
+账本内未闭合证明（\code{sorry}） & 7 \\
+账本外未闭合证明 & 0 \\
+全量构建耗时 & 约 16 秒 \\
+已闭合缺陷 & 2（\code{T2\_B3}、\code{T2\_D4}）\\
+已机器否证、待改述闭合的缺陷 & 2（\code{T2\_B7}、\code{T2\_D5}）\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{复现指南}
+\begin{verbatim}
+isabelle build -D aligned -o document=false   # 期望 RC=0，约 16 秒
+node tools/count-obligations.cjs
+# 期望输出：56 lemmas, 7 sorry, outside 0
+\end{verbatim}
+反例文件 \code{VWZ\_Refutations.thy} 参与同一会话构建，
+因此本文引用的每一条否证都在每次构建时被重新检查，不存在"当年跑过一次"的证据。
+
+\section{局限性与展望}
+
+\subsection{未完成的建模}
+签名与求值仍是未解释原语。这不是疏忽，而是刻意的边界：
+一旦给出函数体，就必须同时固定协议语义与安全性假设，而这会改变本文的论断范围。
+本文选择先把可判定的部分判定完，再把不可判定的部分明确标注出来。
+
+\subsection{缺失的秩理论层}
+\code{T2\_B7} 的改述已为真，但其证明依赖行空间理论（第 \ref{sec:defects} 节 4.4）。
+预计需要两到三个工作周期完成。在此之前，本文不声称该条已证。
+
+\subsection{下一步工作}
+其一，补全秩理论并闭合 \code{T2\_B7}；
+其二，建立签名语义后改述并检查 \code{T2\_D5}；
+其三，把"形式化—否证—改述"流程沉淀为可复用的检查清单，
+使其可迁移到其他后量子构造的规范评审中。
+
+\section{结论}
+本文在一个真实的后量子构造上证明了形式化验证的一种具体价值：
+它不仅能证明对的陈述，还能在实现之前把错的陈述判为假。
+四处规范缺陷中，两处经改述后可证并已闭合，两处被三行以内的机器反证击穿。
+系统规模不大（56 条义务引理），但每一条都可复跑、可审查、可追溯。
+比起引理数量，本文更看重的是那条纪律：
+\emph{没有机器证据，就不许改述。}
+
+\begin{thebibliography}{9}
+\bibitem{fips203} National Institute of Standards and Technology.
+  \emph{FIPS 203: Module-Lattice-Based Key-Encapsulation Mechanism Standard}. 2024.
+\bibitem{fips204} National Institute of Standards and Technology.
+  \emph{FIPS 204: Module-Lattice-Based Digital Signature Standard}. 2024.
+\bibitem{isabelle} T. Nipkow, L. C. Paulson, M. Wenzel.
+  \emph{Isabelle/HOL: A Proof Assistant for Higher-Order Logic}.
+  LNCS 2283, Springer, 2002.
+\bibitem{bl} D. J. Bernstein, T. Lange.
+  Post-quantum cryptography. \emph{Nature}, 549:39--41, 2017.
+\bibitem{spec} VWZ 规范文档（内部稿）：
+  \code{security-assessment/\ldots/vwz-fix-mixed-tensor.md}.
+\bibitem{paulson} L. C. Paulson.
+  \emph{Isabelle: A Generic Theorem Prover}. LNCS 828, Springer, 1994.
+\bibitem{sel4} G. Klein, K. Elphinstone, G. Heiser, J. Andronick, D. Cock,
+  P. Derrin, D. Elkaduwe, K. Engelhardt, R. Kolanski, M. Norrish, T. Sewell,
+  H. Tuch, S. Winwood.
+  seL4: Formal Verification of an OS Kernel.
+  \emph{Proc. 22nd ACM Symposium on Operating Systems Principles (SOSP)}, 2009: 207--220.
+\bibitem{jasmin} J. B. Almeida, M. Barbosa, G. Barthe, A. Blot, B. Gr\'egoire,
+  V. Laporte, T. Oliveira, H. Pacheco, B. Schmidt, P.-Y. Strub.
+  Jasmin: High-Assurance and High-Speed Cryptography.
+  \emph{Proc. ACM SIGSAC Conference on Computer and Communications Security (CCS)}, 2017: 1807--1823.
+\bibitem{hacl} J.-K. Zinzindohou\'e, K. Bhargavan, J. Protzenko, B. Beurdouche.
+  HACL*: A Verified Modern Cryptographic Library.
+  \emph{Proc. ACM SIGSAC Conference on Computer and Communications Security (CCS)}, 2017: 1789--1806.
+\bibitem{sok} M. Barbosa, G. Barthe, K. Bhargavan, B. Blanchet, C. Cremers,
+  K. Liao, B. Parno.
+  SoK: Computer-Aided Cryptography.
+  \emph{Proc. IEEE Symposium on Security and Privacy (S\&P)}, 2021: 777--795.
+\bibitem{easypqc} M. Barbosa, G. Barthe, X. Fan, B. Gr\'egoire, S.-H. Hung.
+  EasyPQC: Verifying Post-Quantum Cryptography.
+  \emph{Proc. ACM SIGSAC Conference on Computer and Communications Security (CCS)}, 2021.
+% ==== 待补：国内期刊文献（请勿凭记忆填写；检索确认后取消注释）====
+% \bibitem{cn-survey} TODO(检索): 中文综述，主题"密码协议形式化验证"，
+%   拟投/已发《密码学报》或《软件学报》；需核对作者、年份、卷期、页码。
+% \bibitem{cn-isabelle} TODO(检索): 中文论文，主题"基于 Isabelle/HOL 的密码算法形式化验证"；
+%   需核对刊名、年、卷(期)、页码。
+% \bibitem{cn-protocol} TODO(检索): 中文论文，主题"安全协议形式化分析与验证"，
+%   拟引《计算机学报》；需核对作者与完整出版信息。
+\end{thebibliography}
+
+\appendix
+\section{缺陷索引与机器证据}
+\begin{table}[htbp]
+\centering
+\small
+\caption{四处缺陷的定位与证据}
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{>{\raggedright\arraybackslash}p{2.0cm}>{\raggedright\arraybackslash}p{4.1cm}>{\raggedright\arraybackslash}p{4.9cm}>{\raggedright\arraybackslash}p{2.9cm}}
+\toprule
+义务 & 缺陷类型 & 机器证据 & 状态 \\
+\midrule
+\code{T2\_B3} & 按 $\mathbb{Z}$ 陈述，实现按 $\Fq$ 归约 &
+\code{probe\_mult}、\code{probe\_rowop}（\code{VWZ\_Probe.thy}） &
+改述后已闭合 \\
+\code{T2\_D4} & 非方阵系统误用行零化度 &
+算术：$k+2-\code{rank}\ge k-1$ 需 $\code{rank}\le 3$ &
+改述后已闭合 \\
+\code{T2\_B7} & 秩为 2 的断言缺良构前提 &
+\code{T2\_B7\_counterexample}、\code{T2\_B7\_refuted} &
+已改述，待秩理论 \\
+\code{T2\_D5} & 目标位被强制与消息无关 &
+\code{T2\_D5\_forces\_}\newline\code{target\_independence} &
+待签名语义 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\end{document}

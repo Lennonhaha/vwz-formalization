@@ -8,7 +8,7 @@
       T0   ( 8)  purely formal rewriting            -- 17 lemmas, 0 sorry
       T1-A       algebraic axioms + closed ser. id. -- 16 lemmas, 0 sorry
       T1-D       definition-dependent (TODO bodies) --  5 lemmas, 2 sorry
-      T2   ( 8)  linear algebra / matrices          -- 10 lemmas, 6 sorry
+      T2   ( 8)  linear algebra / matrices          -- 10 lemmas, 5 sorry
       T3   ( 8)  security / probabilistic / parser  --  8 lemmas, 3 sorry
     (T1-A / T1-D split the former single T1 bucket at the lemma level; the 37
      is an obligation count, the figures above are Isabelle-lemma counts.  See
@@ -25,6 +25,7 @@
 *)
 theory VWZ_ObligationsAligned
   imports VWZ_Fq3329 VWZ_KeyGen VWZ_Matrix VWZ_Protocol VWZ_Aux VWZ_RREF
+    VWZ_ModAlgebra
 begin
 
 section \<open>T0 -- purely formal rewriting (target: 0 sorry)\<close>
@@ -626,62 +627,92 @@ lemma T2_B2_det2_rowadd:
 
 subsection \<open>T2 :: B3 -- X2a, X2b, X3a, X3b are invertible\<close>
 
-text \<open>The subject is now @{text mats_of}: four calls to
+text \<open>The subject is @{text mats_of}: four calls to
   @{text random_invertible_matrix}, which starts from the identity and applies
-  only row additions.  The spec is right that the determinant is 1 by
-  construction.  What is missing is the bridge from "the body is a list of row
-  additions" to @{term invertible}, and that bridge is three lemmas, none of
-  which exists in this development yet:
+  only row additions.
 
-  (1) @{text "mat_mult (row_add_matrix m i j f) A = add_row_mult A i j f"} --
-      one elementary matrix on the left is exactly one row addition;
-  (2) @{text "mat_mult (row_add_matrix m i j f) (row_add_matrix m i j (-f)) =
-      id_mat m"} -- the elementary matrix is invertible, with the obvious
-      inverse;
-  (3) associativity of @{text mat_mult} on rectangular matrices, which is what
-      transports a witness along the iteration: with @{text A} invertible via
-      @{text B}, the matrix @{text "mat_mult E A"} is invertible via
-      @{text "mat_mult B (row_add_matrix m i j (-f))"}, and closing that
-      calculation needs @{text "(E * A) * (B * E_inv) = E * (A * B) * E_inv"}.
-
-  Lemma (3) is the load-bearing one and it is not cheap: @{text mat_mult} is
-  defined through @{text dot} and @{text sum_list}, so associativity is an
-  exchange of summation order over two index ranges.  That exchange was
-  attempted (the helper sum lemmas survive in @{file VWZ_MatAlgebra.thy}), but
-  the exchange itself did not close inside the current budget, and a related
-  experiment showed why this is not a matter of patience alone: @{text "by
-  eval"} on @{text "det (X2a_of 2 7)"} alone ran for more than 115 seconds
-  without returning, so brute-force evaluation is not an escape either.
-
-  This obligation is NOT TODO(proof) in the sense it was thought to be.  A
-  machine-checked probe (see @{file VWZ_Probe.thy}) shows the statement as
-  written mixes two algebraic settings: the row operation @{text add_row_mult}
-  reduces every entry modulo @{text q} (via @{text fq}), while @{text mat_mult}
-  is an integer dot product with no reduction.  Concretely:
+  The statement has to be read modulo @{text q}, and that is a correction, not a
+  convenience.  A machine-checked probe (see @{file VWZ_Probe.thy}) shows the
+  integer reading is false: @{text add_row_mult} reduces every entry modulo
+  @{text q} through @{text fq}, while @{text mat_mult} is an unreduced integer
+  dot product, so
 
     @{text "mat_mult (row_add_matrix 2 0 1 1) [[1,3328],[0,1]] = [[1,3329],[0,1]]"}
     @{text "add_row_mult [[1,3328],[0,1]] 0 1 1 = [[1,0],[0,1]]"}
 
-  so the bridge "left multiplication by an elementary matrix equals the row
-  operation" is false as stated.  The consequence is not cosmetic: the matrices
-  @{text rim_iter} builds need not be invertible over the integers at all.  Two
-  row additions with @{text "f = 1000"} give @{text "[[1,1000],[1000,1301]]"},
-  whose integer determinant is @{text "-998699"} while its determinant modulo
-  @{text q} is @{text 1}.  Integer invertibility needs a unit determinant, so
-  this obligation is a modular statement wearing integer clothes.
+  differ.  The consequence is not cosmetic: two row additions with
+  @{text "f = 1000"} give @{text "[[1,1000],[1000,1301]]"}, whose integer
+  determinant is @{text "-998699"} although its determinant modulo @{text q} is
+  @{text 1}.  Those matrices are not invertible over the integers at all.
 
-  Status: restatement in progress (option A, approved 2026-10-21).  The plan is
-  to introduce @{text mat_mult_mod} (dot product followed by @{text fq}) and
-  @{text invertible_mod}, and to state T2_B3 over @{text F_q}.  Until that
-  lands the sorry stays, and nothing is assumed to make the statement pass.
-  The associativity work that was believed to be the blocker is done
-  (@{text mat_mult_assoc_square} in @{file VWZ_MatAlgebra.thy}); it was never
-  the obstacle.\<close>
+  The obligation is therefore restated over @{text F_q}: @{text mat_mult_mod} is
+  the dot product followed by @{text fq}, and @{text invertible_mod} asks for a
+  witness whose two products are congruent to the identity under
+  @{text cong_q_mat}.  Congruence rather than equality is required because
+  @{text "B * I"} is @{text "map (map fq) B"}, which equals @{text B} only for
+  reduced matrices, and a witness is arbitrary.
+
+  The proof closes: @{text inv_step} shows that one row addition preserves
+  @{text invertible_mod} (elementary inverse, associativity of
+  @{text mat_mult_mod}, ring congruence), @{text rim_iter_inv} inducts over the
+  fuel, and the four matrices are the four calls from the identity.  The
+  machinery lives in @{file VWZ_ModAlgebra.thy}.\<close>
 
 lemma T2_B3:
-  "invertible (X2a_of m s) \<and> invertible (X2b_of m s) \<and>
-   invertible (X3a_of m s) \<and> invertible (X3b_of m s)"
-  sorry
+  "invertible_mod (X2a_of m s) \<and> invertible_mod (X2b_of m s) \<and>
+   invertible_mod (X3a_of m s) \<and> invertible_mod (X3b_of m s)"
+proof (cases "m = 0")
+  case True
+  have h0: "X2a_of 0 s = []"
+    by (simp add: X2a_of_def mats_of_def random_invertible_matrix_def id_mat_def
+        split: prod.split)
+  have h1: "X2b_of 0 s = []"
+    by (simp add: X2b_of_def mats_of_def random_invertible_matrix_def id_mat_def
+        split: prod.split)
+  have h2: "X3a_of 0 s = []"
+    by (simp add: X3a_of_def mats_of_def random_invertible_matrix_def id_mat_def
+        split: prod.split)
+  have h3: "X3b_of 0 s = []"
+    by (simp add: X3b_of_def mats_of_def random_invertible_matrix_def id_mat_def
+        split: prod.split)
+  have z1: "X2a_of m s = []" using True h0 by simp
+  have z2: "X2b_of m s = []" using True h1 by simp
+  have z3: "X3a_of m s = []" using True h2 by simp
+  have z4: "X3b_of m s = []" using True h3 by simp
+  show ?thesis using z1 z2 z3 z4 by simp
+next
+  case False
+  have m0: "0 < m" using False by simp
+  have sI: "sq m (id_mat m)" using m0 by (rule sq_id)
+  have rI: "reduced (id_mat m)" by (rule reduced_id_mat)
+  have iI: "invertible_mod (id_mat m)" using m0 by (rule inv_id)
+  let ?s1 = "snd (rim_iter (m * m) m (id_mat m) s)"
+  let ?s2 = "snd (rim_iter (m * m) m (id_mat m) ?s1)"
+  let ?s3 = "snd (rim_iter (m * m) m (id_mat m) ?s2)"
+  have e1: "invertible_mod (fst (rim_iter (m * m) m (id_mat m) s))"
+    using sI rI iI by (rule rim_iter_inv)
+  have e2: "invertible_mod (fst (rim_iter (m * m) m (id_mat m) ?s1))"
+    using sI rI iI by (rule rim_iter_inv)
+  have e3: "invertible_mod (fst (rim_iter (m * m) m (id_mat m) ?s2))"
+    using sI rI iI by (rule rim_iter_inv)
+  have e4: "invertible_mod (fst (rim_iter (m * m) m (id_mat m) ?s3))"
+    using sI rI iI by (rule rim_iter_inv)
+  have x1: "X2a_of m s = fst (rim_iter (m * m) m (id_mat m) s)"
+    by (simp add: X2a_of_def mats_of_def random_invertible_matrix_def split: prod.split)
+  have x2: "X2b_of m s = fst (rim_iter (m * m) m (id_mat m) ?s1)"
+    by (simp add: X2b_of_def mats_of_def random_invertible_matrix_def split: prod.split)
+  have x3: "X3a_of m s = fst (rim_iter (m * m) m (id_mat m) ?s2)"
+    by (simp add: X3a_of_def mats_of_def random_invertible_matrix_def split: prod.split)
+  have x4: "X3b_of m s = fst (rim_iter (m * m) m (id_mat m) ?s3)"
+    by (simp add: X3b_of_def mats_of_def random_invertible_matrix_def split: prod.split)
+  show ?thesis
+  proof (intro conjI)
+    show "invertible_mod (X2a_of m s)" using x1 e1 by (metis)
+    show "invertible_mod (X2b_of m s)" using x2 e2 by (metis)
+    show "invertible_mod (X3a_of m s)" using x3 e3 by (metis)
+    show "invertible_mod (X3b_of m s)" using x4 e4 by (metis)
+  qed
+qed
 
 subsection \<open>T2 :: B5 -- M2, M3 are well-defined\<close>
 

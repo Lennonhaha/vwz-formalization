@@ -9,6 +9,6 @@ session VWZ_A3_Aligned = "HOL-Number_Theory" +
     VWZ_MatAlgebra
     VWZ_Probe
     VWZ_RREF
-    VWZ_ObligationsAligned
     VWZ_ModAlgebra
+    VWZ_ObligationsAligned
     VWZ_Refutations

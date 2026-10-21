@@ -1394,3 +1394,26 @@ by (simp only: step1 step2 step4 step5 step6[symmetric])
 探针文件 `aligned/Probe_Entry.thy` 已从 `aligned/ROOT` 移除（它和主文件的 `n_cols_map_map` 同名会重复声明），留在磁盘作未跟踪草稿，不参与构建、不入库。
 
 <!-- seg: seg-20261021-assoc-c4d1b0e7f2a9 -->
+<!-- seg: seg-t2b3-done-10fd56a0cb2c -->
+## 2026-10-21 晚：T2_B3 闭合 —— 模 q 可逆性（sorry 11 → 10）
+
+**核心裁定落地：`invertible_mod` 必须用同余（`cong_q_mat`），不能用等式。**
+理由已在证明中兑现：`mat_mult_mod X (id_mat m)` 对任意 `X` 得到 `map (map fq) X`，只有 reduced 矩阵才等于自身；而见证 `B` 是任意的，所以搬运 `(E ⊛ A) ⊛ (B ⊛ Ei)` 时必须有同余传递性，严格等式在归纳步必然断链。
+
+在 `aligned/VWZ_ModAlgebra.thy` 新增（全部构建通过）：
+- 形状层：`sq`（`is_rect ∧ n_rows = m ∧ n_cols = m`）、`sq_id`、`sq_row_add`、`sq_mod`、`sq_add_row`、`n_rows_id_mat`、`n_cols_id_mat`、`is_rect_id_mat`；
+- 同余层：`cong_q_trans`、`cong_q_matI/D`、`cong_q_mat_refl/sym/trans/eq`、`cong_q_mat_mult`、`cong_mat_mult_id_left/right`；
+- 归纳层：`inv_nil`、`add_row_mult_nil`、`rim_iter_nil`、`inv_step`（一次行加法保持 `invertible_mod`）、`rim_iter_inv`（对 fuel 归纳）；
+- 定义补齐：`reduced`（各元素 `0 ≤ x < 3329`）、`reduced_id_mat`、`reduced_add_row_mult`、`map2_fq_range`、`invertible_mod`（带见证形状约束 + 双边 `cong_q_mat`）、`inv_id`、`inv_sq_shape`、`assoc_sq`。
+
+`aligned/VWZ_ObligationsAligned.thy`：新增 `imports ... VWZ_ModAlgebra`；`T2_B3` 重述为
+`invertible_mod (X2a_of m s) ∧ invertible_mod (X2b_of m s) ∧ invertible_mod (X3a_of m s) ∧ invertible_mod (X3b_of m s)`
+并**已证明**（`m = 0` 时四个矩阵都归约为 `[]`，用 `inv_nil`；`m > 0` 时四次套 `rim_iter_inv`，基例 `id_mat m` 用 `sq_id` / `reduced_id_mat` / `inv_id`）。`aligned/ROOT` 顺序调整为 `VWZ_ModAlgebra` 在 `VWZ_ObligationsAligned` 之前。
+
+账本（`node tools/count-obligations.cjs` 实跑）：**56 lemmas / 10 sorry**（T0 17/0、T1-A 16/0、T1-D 5/2、T2 10/5、T3 8/3），`ledger 10, outside 0`；仓库 22 理论文件 / 295,592 B / 361 lemmas。
+
+**本轮四个新坑（Isabelle 2025-2 实测）**
+1. `fun` 的定义方程默认就在 simp 集里，`rim_iter` 会被自动展开成 `case`/`let` 形式；因此"把 `A` 换成 `[]` 再 `simp`"会把目标炸成 `case next_u16_mod ... of ...` 且卡住。正解：`simp only: Az` 只替换，再用 `simp only: rim_iter_nil` 收尾。
+2. 在 `⋀` 形式的归纳目标里，`case (Cons ...)` / `case (Suc ...)` 已经把变量 fix 住，再写 `fix m s` 会报 *Failed to refine any pending goal*；直接 `obtain`/`assume` 即可。
+3. `by simp` 不会因为某个局部事实恰好是原子命题就结束目标；用 `proof (subst eq) show ... qed` 显式替换，或 `by (metis eq fact)`。
+4. `cong_mult_sq` 这类 7 前提引理用 `OF` 逐个喂参数极易 *no unifiers*，改成 `proof (rule cong_mult_sq)` 再逐条 `show`（前提顺序：P、Q、R、S 的 `sq`，`0 < m`，`P ≡ Q`，`R ≡ S`）最稳。

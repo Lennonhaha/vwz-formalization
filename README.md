@@ -17,7 +17,7 @@ tiers; the counts below are generated, not asserted.
 
 | Session | Content | Lemmas | `sorry` |
 |---|---|---|---|
-| `VWZ_A3_Aligned` | Definition layers + obligation inventory | 56 | 11 |
+| `VWZ_A3_Aligned` | Definition layers + obligation inventory | 56 | 10 |
 
 Rank, nullity and inversion are no longer uninterpreted. `VWZ_RREF.thy` defines
 a fuel-parameterised Gauss-Jordan reduction and derives
@@ -92,33 +92,27 @@ into statements about a made-up matrix.
   outer-product factors, and fills the secret record with the Sec 3.6 fields,
   using `mat_inv` / `mat_mult` from `VWZ_RREF`.
 
-What is still open is T2_B3: that the four generated matrices are invertible.
-The definitions make the claim well-posed, and the reason it is true (row
-additions only, so determinant 1) is visible in the code.  The foundation the
-restatement needs is now in place.  `VWZ_MatAlgebra` proves the exchange of
-summation order (`swap_idx`), the index form of a product entry (`entry_mult`),
-and associativity of the integer product in the square case
-(`mat_mult_assoc_square`).  `VWZ_ModAlgebra` adds the modular product
-`mat_mult_mod`, the notion `invertible_mod`, the reduction congruence
-(`cong_q`, `fq_sum`), the entry-level reduction lemmas (`entry_mod_left`,
-`entry_mod_right`), and finally associativity of the modular product
-(`mat_mult_mod_assoc`).
+What was open, T2_B3, is now closed over `F_q`, and the restatement was forced by
+two facts that the first plan got wrong.  First, the bridge as stated is false:
+`add_row_mult` reduces entries modulo `q` while `mat_mult` does not, so
+left-multiplying by an elementary matrix differs from the row operation by a
+reduction.  `VWZ_Probe.thy` exhibits the mismatch, and two row additions already
+yield an integer determinant far from a unit -- these matrices are not invertible
+over the integers at all.  The obligation therefore lives over `F_q`:
+`mat_mult_mod` is the dot product followed by `fq`, and `invertible_mod` asks for
+a witness whose two products are congruent (`cong_q_mat`) to the identity.
+Congruence rather than equality is required because `B * I` is `map (map fq) B`,
+which equals `B` only for reduced matrices, and a witness is arbitrary.
 
-Two facts about the bridge are worth recording, because both were wrong in the
-first plan.  First, the bridge as stated is false: `add_row_mult` reduces
-entries modulo `q` while `mat_mult` does not, so left-multiplying by an
-elementary matrix differs from the row operation by a reduction.  It holds only
-under the invariant that the matrix entries are already in `[0, q)`, which is
-proved as `mat_mult_mod_row_add` and is preserved by the generator, since it
-starts from `id_mat` and only applies `add_row_mult` with positive
-coefficients.  Second, an elementary matrix is invertible modulo `q` with the
-explicit witness `row_add_matrix m i j (-f)` (`mat_mult_mod_elem_inverse`), so
-the modular statement does not need determinants at all.
-
-What remains for T2_B3 is therefore not algebra but plumbing: identity laws for
-`mat_mult_mod`, preservation of invertibility along `rim_iter`, and the
-induction on its fuel.  Until those land, T2_B3 stays `sorry`.
-
+The proof runs in layers.  `mat_mult_mod_assoc` supplies associativity of the
+modular product; `mat_mult_mod_row_add` transfers one row addition, under the
+invariant that entries stay in `[0, q)`, which the generator preserves because it
+starts from `id_mat` and only adds positive multiples; `mat_mult_mod_elem_inverse`
+gives the explicit elementary inverse `row_add_matrix m i j (-f)`; `inv_step`
+therefore shows that a row addition preserves `invertible_mod`; and `rim_iter_inv`
+inducts over the fuel, so the four matrices that `mats_of` produces are invertible
+modulo `q`.  No determinant is needed anywhere, and the statement is not assumed:
+the old `sorry` is gone.
 `VWZ_A3_Aligned` is the only session that carries obligations. The remaining
 sessions are scaffolding:
 - `smoke` — field and invariant smoke tests

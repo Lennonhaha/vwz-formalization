@@ -25,7 +25,7 @@
 *)
 
 theory VWZ_ModAlgebra
-  imports VWZ_MatAlgebra VWZ_RREF
+  imports VWZ_MatAlgebra VWZ_RREF VWZ_KeyGen
 begin
 
 section \<open>Reduction arithmetic\<close>
@@ -58,15 +58,12 @@ section \<open>The modular product\<close>
 definition mat_mult_mod :: "mat \<Rightarrow> mat \<Rightarrow> mat" where
   "mat_mult_mod A B = map (map fq) (mat_mult A B)"
 
-text \<open>Two-sided invertibility over @{text F_q}: the witness must reproduce the
-  identity under the modular product, whose entries are already reduced.  This is
-  the notion T2_B3 is restated against (approved 2026-10-21); the integer
-  @{text invertible} in VWZ_Matrix stays as it was.\<close>
-
-definition invertible_mod :: "mat \<Rightarrow> bool" where
-  "invertible_mod A =
-     (\<exists>B. mat_mult_mod A B = id_mat (n_rows A) \<and>
-          mat_mult_mod B A = id_mat (n_rows A))"
+text \<open>Two-sided invertibility over @{text F_q}.  The definition lives in the
+  congruence section near the end of this theory, because the honest version of the
+  notion is a congruence rather than an equality: the modular product reduces its
+  result, so a witness that is not itself reduced can only be expected to reproduce
+  the identity up to @{text cong_q}.  The integer @{text invertible} in VWZ_Matrix
+  stays as it was.\<close>
 
 text \<open>A first, unconditional fact: the modular product is entrywise reduction
   of the integer product, so it is a total function on any pair of matrices.  This
@@ -1011,6 +1008,762 @@ proof (rule nth_equalityI)
     show "((mat_mult_mod (mat_mult_mod A B) C) ! i) ! j
         = ((mat_mult_mod A (mat_mult_mod B C)) ! i) ! j"
       using E by (simp add: entry_def)
+  qed
+qed
+
+section \<open>Pointwise congruence of matrices\<close>
+
+definition cong_q_mat :: "mat \<Rightarrow> mat \<Rightarrow> bool" where
+  "cong_q_mat A B = (\<forall>i j. i < n_rows A \<longrightarrow> j < n_cols A
+                              \<longrightarrow> cong_q (entry A i j) (entry B i j))"
+
+lemma cong_q_trans: "cong_q x y \<Longrightarrow> cong_q y z \<Longrightarrow> cong_q x z"
+  by (simp add: cong_q_def)
+
+lemma cong_q_matI:
+  assumes "\<And>i j. i < n_rows A \<Longrightarrow> j < n_cols A \<Longrightarrow> cong_q (entry A i j) (entry B i j)"
+  shows "cong_q_mat A B"
+  using assms by (simp add: cong_q_mat_def)
+
+lemma cong_q_matD:
+  assumes "cong_q_mat A B" and "i < n_rows A" and "j < n_cols A"
+  shows "cong_q (entry A i j) (entry B i j)"
+  using assms by (simp add: cong_q_mat_def)
+
+lemma cong_q_mat_refl [simp]: "cong_q_mat A A"
+  by (simp add: cong_q_mat_def)
+
+lemma cong_q_mat_sym:
+  assumes "cong_q_mat A B" and "n_rows A = n_rows B" and "n_cols A = n_cols B"
+  shows "cong_q_mat B A"
+proof (rule cong_q_matI)
+  fix i j assume i: "i < n_rows B" and j: "j < n_cols B"
+  have iA: "i < n_rows A" using i assms(2) by simp
+  have jA: "j < n_cols A" using j assms(3) by simp
+  have h: "cong_q (entry A i j) (entry B i j)" using assms(1) iA jA by (rule cong_q_matD)
+  show "cong_q (entry B i j) (entry A i j)" using h by (rule cong_q_sym)
+qed
+
+lemma cong_q_mat_trans:
+  assumes "cong_q_mat A B" and "cong_q_mat B C"
+    and "n_rows A = n_rows B" and "n_cols A = n_cols B" and "n_cols B = n_cols C"
+  shows "cong_q_mat A C"
+proof (rule cong_q_matI)
+  fix i j assume i: "i < n_rows A" and j: "j < n_cols A"
+  have iB: "i < n_rows B" using i assms(3) by simp
+  have jB: "j < n_cols B" using j assms(4) by simp
+  have jC: "j < n_cols C" using jB assms(5) by simp
+  have h1: "cong_q (entry A i j) (entry B i j)" using assms(1) i j by (rule cong_q_matD)
+  have h2: "cong_q (entry B i j) (entry C i j)" using assms(2) iB jB by (rule cong_q_matD)
+  show "cong_q (entry A i j) (entry C i j)" using h1 h2 by (rule cong_q_trans)
+qed
+
+lemma cong_q_mat_eq: "A = B \<Longrightarrow> cong_q_mat A B"
+  by simp
+
+lemma sum_sel_one_right:
+  fixes y :: "int list"
+  assumes "i < n"
+  shows "sum_list (map (\<lambda>k. y ! k * (if k = i then (1::int) else 0)) [0..<n]) = y ! i"
+proof -
+  have "sum_list (map (\<lambda>k. y ! k * (if k = i then (1::int) else 0)) [0..<n])
+      = sum_list (map (\<lambda>k. (if k = i then (1::int) else 0) * y ! k) [0..<n])"
+    by (rule arg_cong[where f=sum_list], rule map_cong[OF refl], simp add: mult.commute)
+  also have "\<dots> = y ! i" using sum_sel_one[OF assms] .
+  finally show ?thesis .
+qed
+
+lemma n_rows_id_mat [simp]: "n_rows (id_mat m) = m"
+  by (simp add: id_mat_def n_rows_def)
+
+lemma n_cols_id_mat: "0 < m \<Longrightarrow> n_cols (id_mat m) = m"
+  by (simp add: id_mat_def n_cols_def)
+
+lemma is_rect_id_mat: "0 < m \<Longrightarrow> is_rect (id_mat m)"
+  by (simp add: id_mat_def is_rect_def n_cols_def)
+
+lemma entry_double:
+  assumes rA: "is_rect A" and nA: "n_rows A = m" and cA: "n_cols A = m"
+    and rC: "is_rect C" and nC: "n_rows C = m" and cC: "n_cols C = m"
+    and m0: "0 < m" and i: "i < m" and j: "j < m"
+  shows "entry (mat_mult A C) i j
+       = sum_list (map (\<lambda>k. entry A i k * entry C k j) [0..<m])"
+proof -
+  have iA: "i < n_rows A" using i nA by simp
+  have jC: "j < n_cols C" using j cC by simp
+  have eq: "n_cols A = n_rows C" using cA nC by simp
+  have h: "entry (mat_mult A C) i j
+      = sum_list (map (\<lambda>k. entry A i k * entry C k j) [0..<n_cols A])"
+    using iA jC eq rA by (rule entry_mult)
+  show ?thesis using h cA by simp
+qed
+
+lemma entry_id_right:
+  assumes rA: "is_rect A" and nA: "n_rows A = m" and cA: "n_cols A = m" and m0: "0 < m"
+    and i: "i < m" and j: "j < m"
+  shows "entry (mat_mult A (id_mat m)) i j = entry A i j"
+proof -
+  have cI: "n_cols (id_mat m) = m" using m0 by (rule n_cols_id_mat)
+  have h1: "entry (mat_mult A (id_mat m)) i j
+      = sum_list (map (\<lambda>k. entry A i k * entry (id_mat m) k j) [0..<m])"
+    using entry_double[OF rA nA cA is_rect_id_mat[OF m0] n_rows_id_mat cI m0 i j] .
+  have hsum: "sum_list (map (\<lambda>k. entry A i k * entry (id_mat m) k j) [0..<m])
+      = sum_list (map (\<lambda>k. (A ! i) ! k * (if k = j then (1::int) else 0)) [0..<m])"
+  proof (rule arg_cong[where f=sum_list])
+    show "map (\<lambda>k. entry A i k * entry (id_mat m) k j) [0..<m]
+        = map (\<lambda>k. (A ! i) ! k * (if k = j then (1::int) else 0)) [0..<m]"
+    proof (rule map_cong[OF refl])
+      fix k assume "k \<in> set [0..<m]"
+      hence km: "k < m" by (simp add: set_upt)
+      have e1: "entry A i k = (A ! i) ! k" by (simp add: entry_def)
+      have e2: "entry (id_mat m) k j = (if k = j then 1 else 0)"
+        using id_mat_nth[OF km j] by (simp add: entry_def)
+      show "entry A i k * entry (id_mat m) k j
+          = (A ! i) ! k * (if k = j then (1::int) else 0)"
+        using e1 e2 by simp
+    qed
+  qed
+  have hsel: "sum_list (map (\<lambda>k. (A ! i) ! k * (if k = j then (1::int) else 0)) [0..<m])
+      = (A ! i) ! j"
+    by (rule sum_sel_one_right, rule j)
+  show ?thesis using h1 hsum hsel by (simp add: entry_def)
+qed
+
+lemma entry_id_left:
+  assumes rA: "is_rect A" and nA: "n_rows A = m" and cA: "n_cols A = m" and m0: "0 < m"
+    and i: "i < m" and j: "j < m"
+  shows "entry (mat_mult (id_mat m) A) i j = entry A i j"
+proof -
+  have cI: "n_cols (id_mat m) = m" using m0 by (rule n_cols_id_mat)
+  have h1: "entry (mat_mult (id_mat m) A) i j
+      = sum_list (map (\<lambda>k. entry (id_mat m) i k * entry A k j) [0..<m])"
+    using entry_double[OF is_rect_id_mat[OF m0] n_rows_id_mat cI rA nA cA m0 i j] .
+  have hsum: "sum_list (map (\<lambda>k. entry (id_mat m) i k * entry A k j) [0..<m])
+      = sum_list (map (\<lambda>k. (if k = i then (1::int) else 0) * entry A k j) [0..<m])"
+  proof (rule arg_cong[where f=sum_list])
+    show "map (\<lambda>k. entry (id_mat m) i k * entry A k j) [0..<m]
+        = map (\<lambda>k. (if k = i then (1::int) else 0) * entry A k j) [0..<m]"
+    proof (rule map_cong[OF refl])
+      fix k assume "k \<in> set [0..<m]"
+      hence km: "k < m" by (simp add: set_upt)
+      have e1: "entry (id_mat m) i k = (if k = i then 1 else 0)"
+        using id_mat_nth[OF i km] by (simp add: entry_def)
+      show "entry (id_mat m) i k * entry A k j
+          = (if k = i then (1::int) else 0) * entry A k j"
+        using e1 by simp
+    qed
+  qed
+  have ydef: "(map (\<lambda>k. entry A k j) [0..<m]) = (map (\<lambda>k. entry A k j) [0..<m])" by simp
+  have hmap: "sum_list (map (\<lambda>k. (if k = i then (1::int) else 0) * entry A k j) [0..<m])
+      = sum_list (map (\<lambda>k. (if k = i then (1::int) else 0)
+                        * (map (\<lambda>k. entry A k j) [0..<m]) ! k) [0..<m])"
+  proof (rule arg_cong[where f=sum_list], rule map_cong[OF refl])
+    fix k assume "k \<in> set [0..<m]"
+    hence km: "k < m" by (simp add: set_upt)
+    show "(if k = i then (1::int) else 0) * entry A k j
+        = (if k = i then (1::int) else 0) * (map (\<lambda>k. entry A k j) [0..<m]) ! k"
+      using km by (simp add: nth_map nth_upt)
+  qed
+  have hsel: "sum_list (map (\<lambda>k. (if k = i then (1::int) else 0)
+                  * (map (\<lambda>k. entry A k j) [0..<m]) ! k) [0..<m])
+      = (map (\<lambda>k. entry A k j) [0..<m]) ! i"
+    by (rule sum_sel_one, simp add: i)
+  have hnth: "(map (\<lambda>k. entry A k j) [0..<m]) ! i = entry A i j"
+    using i by (simp add: nth_map nth_upt)
+  show ?thesis using h1 hsum hmap hsel hnth by (simp add: entry_def)
+qed
+
+lemma cong_mat_mult_id_right:
+  assumes rA: "is_rect A" and nA: "n_rows A = m" and cA: "n_cols A = m" and m0: "0 < m"
+  shows "cong_q_mat (mat_mult_mod A (id_mat m)) A"
+proof (rule cong_q_matI)
+  fix i j
+  assume hi: "i < n_rows (mat_mult_mod A (id_mat m))"
+    and hj: "j < n_cols (mat_mult_mod A (id_mat m))"
+  have im: "i < m" using hi nA by (simp add: n_rows_mod)
+  have rI: "is_rect (id_mat m)" using m0 by (rule is_rect_id_mat)
+  have cI: "n_cols (id_mat m) = m" using m0 by (rule n_cols_id_mat)
+  have jm: "j < m" using hj nA cI m0 by (simp add: n_cols_mod)
+  have e1: "entry (mat_mult_mod A (id_mat m)) i j
+      = fq (entry (mat_mult A (id_mat m)) i j)"
+    using entry_mat_mult_mod[OF rA nA cA rI n_rows_id_mat cI m0 im jm] .
+  have e2: "entry (mat_mult A (id_mat m)) i j = entry A i j"
+    using entry_id_right[OF rA nA cA m0 im jm] .
+  have e3: "entry (mat_mult_mod A (id_mat m)) i j = fq (entry A i j)"
+    using e1 e2 by simp
+  show "cong_q (entry (mat_mult_mod A (id_mat m)) i j) (entry A i j)"
+    using e3 by (simp add: cong_q_def)
+qed
+
+lemma cong_mat_mult_id_left:
+  assumes rA: "is_rect A" and nA: "n_rows A = m" and cA: "n_cols A = m" and m0: "0 < m"
+  shows "cong_q_mat (mat_mult_mod (id_mat m) A) A"
+proof (rule cong_q_matI)
+  fix i j
+  assume hi: "i < n_rows (mat_mult_mod (id_mat m) A)"
+    and hj: "j < n_cols (mat_mult_mod (id_mat m) A)"
+  have rI: "is_rect (id_mat m)" using m0 by (rule is_rect_id_mat)
+  have cI: "n_cols (id_mat m) = m" using m0 by (rule n_cols_id_mat)
+  have im: "i < m" using hi m0 by (simp add: n_rows_mod)
+  have jm: "j < m" using hj nA cA m0 by (simp add: n_cols_mod)
+  have e1: "entry (mat_mult_mod (id_mat m) A) i j
+      = fq (entry (mat_mult (id_mat m) A) i j)"
+    using entry_mat_mult_mod[OF rI n_rows_id_mat cI rA nA cA m0 im jm] .
+  have e2: "entry (mat_mult (id_mat m) A) i j = entry A i j"
+    using entry_id_left[OF rA nA cA m0 im jm] .
+  have e3: "entry (mat_mult_mod (id_mat m) A) i j = fq (entry A i j)"
+    using e1 e2 by simp
+  show "cong_q (entry (mat_mult_mod (id_mat m) A) i j) (entry A i j)"
+    using e3 by (simp add: cong_q_def)
+qed
+
+lemma cong_q_mat_mult:
+  assumes rA: "is_rect A" and nA: "n_rows A = m" and cA: "n_cols A = m"
+    and rB: "is_rect B" and nB: "n_rows B = m" and cB: "n_cols B = m"
+    and rC: "is_rect C" and nC: "n_rows C = m" and cC: "n_cols C = m"
+    and rD: "is_rect D" and nD: "n_rows D = m" and cD: "n_cols D = m"
+    and m0: "0 < m" and AB: "cong_q_mat A B" and CD: "cong_q_mat C D"
+  shows "cong_q_mat (mat_mult_mod A C) (mat_mult_mod B D)"
+proof (rule cong_q_matI)
+  fix i j
+  assume hi: "i < n_rows (mat_mult_mod A C)"
+    and hj: "j < n_cols (mat_mult_mod A C)"
+  have im: "i < m" using hi nA by (simp add: n_rows_mod)
+  have jm: "j < m" using hj nA cC m0 by (simp add: n_cols_mod)
+  have eL: "entry (mat_mult_mod A C) i j
+      = fq (sum_list (map (\<lambda>k. entry A i k * entry C k j) [0..<m]))"
+  proof -
+    have a: "entry (mat_mult_mod A C) i j = fq (entry (mat_mult A C) i j)"
+      using entry_mat_mult_mod[OF rA nA cA rC nC cC m0 im jm] .
+    have b: "entry (mat_mult A C) i j
+        = sum_list (map (\<lambda>k. entry A i k * entry C k j) [0..<m])"
+      using entry_double[OF rA nA cA rC nC cC m0 im jm] .
+    show ?thesis using a b by simp
+  qed
+  have eR: "entry (mat_mult_mod B D) i j
+      = fq (sum_list (map (\<lambda>k. entry B i k * entry D k j) [0..<m]))"
+  proof -
+    have a: "entry (mat_mult_mod B D) i j = fq (entry (mat_mult B D) i j)"
+      using entry_mat_mult_mod[OF rB nB cB rD nD cD m0 im jm] .
+    have b: "entry (mat_mult B D) i j
+        = sum_list (map (\<lambda>k. entry B i k * entry D k j) [0..<m])"
+      using entry_double[OF rB nB cB rD nD cD m0 im jm] .
+    show ?thesis using a b by simp
+  qed
+  have mid: "fq (sum_list (map (\<lambda>k. entry A i k * entry C k j) [0..<m]))
+      = fq (sum_list (map (\<lambda>k. entry B i k * entry D k j) [0..<m]))"
+  proof (rule fq_sum_cong)
+    fix k assume "k \<in> set [0..<m]"
+    hence km: "k < m" by (simp add: set_upt)
+    have kA: "k < n_cols A" using km cA by simp
+    have kC: "k < n_cols C" using km cC by simp
+    have iA: "i < n_rows A" using im nA by simp
+    have h1: "cong_q (entry A i k) (entry B i k)" using AB iA kA by (rule cong_q_matD)
+    have jC: "j < n_cols C" using jm cC by simp
+    have kCr: "k < n_rows C" using km nC by simp
+    have h2: "cong_q (entry C k j) (entry D k j)" using CD kCr jC by (rule cong_q_matD)
+    have h1f: "fq (entry A i k) = fq (entry B i k)" using h1 by (simp add: cong_q_def)
+    have h2f: "fq (entry C k j) = fq (entry D k j)" using h2 by (simp add: cong_q_def)
+    show "fq (entry A i k * entry C k j) = fq (entry B i k * entry D k j)"
+      using fq_cong_mult[OF h1f h2f] .
+  qed
+  show "cong_q (entry (mat_mult_mod A C) i j) (entry (mat_mult_mod B D) i j)"
+    using eL eR mid by (simp add: cong_q_def)
+qed
+
+section \<open>Reduced matrices and the congruence-based notion of invertibility\<close>
+
+definition reduced :: "mat \<Rightarrow> bool" where
+  "reduced A = (\<forall>r \<in> set A. \<forall>x \<in> set r. 0 \<le> x \<and> x < 3329)"
+
+lemma reducedD:
+  assumes "reduced A" and "r \<in> set A" and "x \<in> set r"
+  shows "0 \<le> x \<and> x < 3329"
+  using assms by (simp add: reduced_def)
+
+lemma reduced_id_mat: "reduced (id_mat m)"
+  by (simp add: reduced_def id_mat_def)
+
+lemma map2_fq_range:
+  fixes k :: int
+  shows "\<forall>x \<in> set (map2 (\<lambda>x y. fq (x + k * y)) us vs). 0 \<le> x \<and> x < 3329"
+proof (induct us arbitrary: vs)
+  case Nil
+  show ?case by simp
+next
+  case (Cons a us)
+  show ?case
+  proof (cases vs)
+    case Nil
+    thus ?thesis by simp
+  next
+    case (Cons b vs)
+    have h1: "0 \<le> fq (a + k * b) \<and> fq (a + k * b) < 3329" using fq_range by simp
+    have h2: "\<forall>x \<in> set (map2 (\<lambda>x y. fq (x + k * y)) us vs). 0 \<le> x \<and> x < 3329"
+      using Cons.hyps by simp
+    show ?thesis using h1 h2 Cons by simp
+  qed
+qed
+
+lemma reduced_add_row_mult:
+  assumes red: "reduced A"
+  shows "reduced (add_row_mult A i j k)"
+proof (unfold reduced_def, intro ballI)
+  let ?nr = "map2 (\<lambda>x y. fq (x + k * y)) (A ! i) (A ! j)"
+  have upd: "add_row_mult A i j k = A[i := ?nr]" by (simp add: add_row_mult_def)
+  have nrred: "\<forall>x \<in> set ?nr. 0 \<le> x \<and> x < 3329"
+    using fq_range by auto
+  fix r x
+  assume rA: "r \<in> set (add_row_mult A i j k)" and xr: "x \<in> set r"
+  have sub: "set (A[i := ?nr]) \<subseteq> insert ?nr (set A)"
+    by (rule set_update_subset_insert)
+  have rA2: "r \<in> set (A[i := ?nr])" using rA upd by simp
+  have rin: "r \<in> insert ?nr (set A)" using sub rA2 by (meson in_mono)
+  show "0 \<le> x \<and> x < 3329"
+  proof (cases "r = ?nr")
+    case True
+    have xn: "x \<in> set ?nr" using xr True by simp
+    with nrred show ?thesis by blast
+  next
+    case False
+    have "r \<in> set A" using rin False by simp
+    thus ?thesis using red xr by (simp add: reduced_def)
+  qed
+qed
+
+text \<open>The restated notion of invertibility, as approved on 2026-10-21: a matrix is
+  invertible over @{text F_q} when some square witness reproduces the identity up to
+  the reduction congruence, on both sides.  Equality would be too strong, because the
+  modular product always reduces its result and a witness need not be reduced.\<close>
+
+definition invertible_mod :: "mat \<Rightarrow> bool" where
+  "invertible_mod A =
+     (\<exists>B. n_rows B = n_rows A \<and> n_cols B = n_rows A \<and> is_rect B \<and>
+          cong_q_mat (mat_mult_mod A B) (id_mat (n_rows A)) \<and>
+          cong_q_mat (mat_mult_mod B A) (id_mat (n_rows A)))"
+
+lemma inv_id:
+  assumes m0: "0 < m"
+  shows "invertible_mod (id_mat m)"
+proof -
+  have rI: "is_rect (id_mat m)" using m0 by (rule is_rect_id_mat)
+  have c1: "cong_q_mat (mat_mult_mod (id_mat m) (id_mat m)) (id_mat m)"
+    using cong_mat_mult_id_left[OF rI n_rows_id_mat n_cols_id_mat[OF m0] m0] .
+  have c2: "cong_q_mat (mat_mult_mod (id_mat m) (id_mat m)) (id_mat m)"
+    using cong_mat_mult_id_right[OF rI n_rows_id_mat n_cols_id_mat[OF m0] m0] .
+  show ?thesis
+    by (unfold invertible_mod_def, intro exI[of _ "id_mat m"] conjI)
+       (simp_all add: n_cols_id_mat[OF m0] rI c1 c2)
+qed
+
+lemma inv_sq_shape:
+  assumes "invertible_mod A" and "n_rows A = m"
+  shows "\<exists>B. n_rows B = m \<and> n_cols B = m \<and> is_rect B
+            \<and> cong_q_mat (mat_mult_mod A B) (id_mat m)
+            \<and> cong_q_mat (mat_mult_mod B A) (id_mat m)"
+  using assms by (auto simp add: invertible_mod_def)
+
+lemma sq_mult_left:
+  assumes rX: "is_rect X" and nX: "n_rows X = m" and m0: "0 < m"
+    and rY: "is_rect Y" and nY: "n_rows Y = m" and cY: "n_cols Y = m"
+  shows "is_rect (mat_mult_mod X Y) \<and> n_rows (mat_mult_mod X Y) = m
+       \<and> n_cols (mat_mult_mod X Y) = m"
+proof -
+  have ir: "is_rect (mat_mult_mod X Y)" using rX nX cY m0 by (rule is_rect_mod)
+  have nr: "n_rows (mat_mult_mod X Y) = m" using nX by (simp add: n_rows_mod)
+  have nc: "n_cols (mat_mult_mod X Y) = m" using nX cY m0 by (rule n_cols_mod)
+  show ?thesis using ir nr nc by simp
+qed
+
+section \<open>Invertibility is preserved by a row addition\<close>
+
+abbreviation sq :: "nat \<Rightarrow> mat \<Rightarrow> bool" where
+  "sq m X \<equiv> (is_rect X \<and> n_rows X = m \<and> n_cols X = m)"
+
+lemma sq_id [simp]:
+  assumes m0: "0 < m"
+  shows "sq m (id_mat m)"
+proof -
+  have r: "is_rect (id_mat m)" using m0 by (rule is_rect_id_mat)
+  have c: "n_cols (id_mat m) = m" using m0 by (rule n_cols_id_mat)
+  have n: "n_rows (id_mat m) = m" by (rule n_rows_id_mat)
+  show ?thesis using r c n by simp
+qed
+
+lemma sq_row_add [simp]:
+  assumes m0: "0 < m"
+  shows "sq m (row_add_matrix m i j f)"
+proof -
+  have rows: "\<forall>r \<in> set (row_add_matrix m i j f). length r = m"
+    by (auto simp add: row_add_matrix_def)
+  have n: "n_rows (row_add_matrix m i j f) = m"
+    by (simp add: n_rows_def row_add_matrix_def)
+  have ne: "row_add_matrix m i j f \<noteq> []" using m0 by (simp add: row_add_matrix_def)
+  have c: "n_cols (row_add_matrix m i j f) = m"
+    using rows n ne m0 by (auto simp add: n_cols_def)
+  have r: "is_rect (row_add_matrix m i j f)"
+    using rows c by (simp add: is_rect_def)
+  show ?thesis using r n c by simp
+qed
+
+lemma sq_mod [simp]:
+  assumes sX: "sq m X" and sY: "sq m Y" and m0: "0 < m"
+  shows "sq m (mat_mult_mod X Y)"
+proof -
+  have rX: "is_rect X" and nX: "n_rows X = m" and cX: "n_cols X = m" using sX by simp_all
+  have rY: "is_rect Y" and nY: "n_rows Y = m" and cY: "n_cols Y = m" using sY by simp_all
+  have r: "is_rect (mat_mult_mod X Y)" using rX nX cY m0 by (rule is_rect_mod)
+  have n: "n_rows (mat_mult_mod X Y) = m" using nX by (simp add: n_rows_mod)
+  have c: "n_cols (mat_mult_mod X Y) = m" using nX cY m0 by (rule n_cols_mod)
+  show ?thesis using r n c by simp
+qed
+
+lemma sq_add_row:
+  assumes sA: "sq m A" and im: "i < m" and jm: "j < m"
+  shows "sq m (add_row_mult A i j k)"
+proof -
+  have rA: "is_rect A" and nA: "n_rows A = m" and cA: "n_cols A = m" using sA by simp_all
+  have n: "n_rows (add_row_mult A i j k) = m"
+    using nA by (simp add: n_rows_def add_row_mult_def)
+  have leni: "length (A ! i) = m" using rA nA cA im is_rect_rows by simp
+  have lenj: "length (A ! j) = m" using rA nA cA jm is_rect_rows by simp
+  let ?nr = "map2 (\<lambda>x y. fq (x + k * y)) (A ! i) (A ! j)"
+  have lennr: "length ?nr = m" using leni lenj by simp
+  have upd: "add_row_mult A i j k = A[i := ?nr]" by (simp add: add_row_mult_def)
+  have rows: "\<forall>r \<in> set (add_row_mult A i j k). length r = m"
+  proof (intro ballI)
+    fix r assume rA': "r \<in> set (add_row_mult A i j k)"
+    have sub: "set (A[i := ?nr]) \<subseteq> insert ?nr (set A)"
+      by (rule set_update_subset_insert)
+    have rA2: "r \<in> set (A[i := ?nr])" using rA' upd by simp
+    have rin: "r \<in> insert ?nr (set A)" using sub rA2 by (meson in_mono)
+    show "length r = m"
+    proof (cases "r = ?nr")
+      case True
+      thus ?thesis using lennr by simp
+    next
+      case False
+      have "r \<in> set A" using rin False by simp
+      thus ?thesis using rA cA by (simp add: is_rect_def)
+    qed
+  qed
+  have c: "n_cols (add_row_mult A i j k) = m"
+  proof -
+    have len: "length (add_row_mult A i j k) = m" using n by (simp add: n_rows_def)
+    have ne: "add_row_mult A i j k \<noteq> []"
+    proof (cases "add_row_mult A i j k")
+      case Nil
+      thus ?thesis using len im by simp
+    next
+      case Cons
+      thus ?thesis by simp
+    qed
+    have r0: "add_row_mult A i j k ! 0 \<in> set (add_row_mult A i j k)"
+      using ne by simp
+    have "length (add_row_mult A i j k ! 0) = m" using rows r0 by simp
+    thus ?thesis using ne by (simp add: n_cols_def)
+  qed
+  have r: "is_rect (add_row_mult A i j k)" using rows c by (simp add: is_rect_def)
+  show ?thesis using r n c by simp
+qed
+
+lemma cong_trans_sq:
+  assumes sP: "sq m P" and sQ: "sq m Q" and sR: "sq m R"
+    and PQ: "cong_q_mat P Q" and QR: "cong_q_mat Q R"
+  shows "cong_q_mat P R"
+  using cong_q_mat_trans[OF PQ QR] sP sQ sR by simp
+
+lemma cong_mult_sq:
+  assumes sP: "sq m P" and sQ: "sq m Q" and sR: "sq m R" and sS: "sq m S"
+    and m0: "0 < m" and PQ: "cong_q_mat P Q" and RS: "cong_q_mat R S"
+  shows "cong_q_mat (mat_mult_mod P R) (mat_mult_mod Q S)"
+  using cong_q_mat_mult[OF _ _ _ _ _ _ _ _ _ _ _ _ m0 PQ RS] sP sQ sR sS by simp
+
+lemma cong_id_left_sq:
+  assumes sP: "sq m P" and m0: "0 < m"
+  shows "cong_q_mat (mat_mult_mod (id_mat m) P) P"
+  using cong_mat_mult_id_left[of P m] sP m0 by simp
+
+lemma cong_id_right_sq:
+  assumes sP: "sq m P" and m0: "0 < m"
+  shows "cong_q_mat (mat_mult_mod P (id_mat m)) P"
+  using cong_mat_mult_id_right[of P m] sP m0 by simp
+
+lemma assoc_sq:
+  assumes sP: "sq m P" and sQ: "sq m Q" and sR: "sq m R" and m0: "0 < m"
+  shows "mat_mult_mod (mat_mult_mod P Q) R = mat_mult_mod P (mat_mult_mod Q R)"
+  using mat_mult_mod_assoc[of P m Q R] sP sQ sR m0 by simp
+
+
+lemma inv_nil [simp]:
+  shows "invertible_mod []"
+proof (unfold invertible_mod_def, intro exI[of _ "[]"] conjI)
+  show "n_rows [] = n_rows []" by simp
+  show "n_cols [] = n_rows []" by (simp add: n_cols_def n_rows_def)
+  show "is_rect []" by (simp add: is_rect_def)
+  show "cong_q_mat (mat_mult_mod [] []) (id_mat (n_rows []))"
+    by (unfold cong_q_mat_def, simp add: n_rows_def mat_mult_mod_def mat_mult_def)
+  show "cong_q_mat (mat_mult_mod [] []) (id_mat (n_rows []))"
+    by (unfold cong_q_mat_def, simp add: n_rows_def mat_mult_mod_def mat_mult_def)
+qed
+
+lemma add_row_mult_nil [simp]:
+  "add_row_mult [] i j k = []"
+  by (simp add: add_row_mult_def)
+
+lemma rim_iter_nil [simp]:
+  "\<And>m s. fst (rim_iter f m [] s) = []"
+proof (induct f)
+  case 0
+  show ?case by (simp add: rim_iter.simps)
+next
+  case (Suc f)
+  obtain a s1 where d1: "next_u16_mod m s = (a, s1)"
+    by (cases "next_u16_mod m s") auto
+  obtain b s2 where d2: "next_u16_mod m s1 = (b, s2)"
+    by (cases "next_u16_mod m s1") auto
+  show ?case using Suc.hyps
+    by (simp add: rim_iter.simps d1 d2 split: prod.split if_split)
+qed
+
+lemma inv_step:
+  assumes im: "i < m" and jm: "j < m" and ij: "i \<noteq> j"
+    and sA: "sq m A" and redA: "reduced A" and invA: "invertible_mod A"
+  shows "invertible_mod (add_row_mult A i j (int c))"
+proof -
+  have m0: "0 < m" using im by simp
+  have rA: "is_rect A" and nA: "n_rows A = m" and cA: "n_cols A = m"
+    using sA by simp_all
+  have redA': "\<forall>r \<in> set A. \<forall>x \<in> set r. 0 \<le> x \<and> x < 3329"
+    using redA by (simp add: reduced_def)
+  obtain B where hBn: "n_rows B = m" and hBc: "n_cols B = m" and rB: "is_rect B"
+    and hAB: "cong_q_mat (mat_mult_mod A B) (id_mat m)"
+    and hBA: "cong_q_mat (mat_mult_mod B A) (id_mat m)"
+    using inv_sq_shape[OF invA nA] by blast
+  have sB: "sq m B" using hBn hBc rB by simp
+  let ?E = "row_add_matrix m i j (int c)"
+  let ?Ei = "row_add_matrix m i j (- int c)"
+  let ?A' = "add_row_mult A i j (int c)"
+  let ?W = "mat_mult_mod B ?Ei"
+  have sE: "sq m ?E" using m0 by (rule sq_row_add)
+  have sEi: "sq m ?Ei" using m0 by (rule sq_row_add)
+  have cEi: "n_cols ?Ei = m" using sEi by simp
+  have nEi: "n_rows ?Ei = m" using sEi by simp
+  have sI: "sq m (id_mat m)" using m0 by (rule sq_id)
+  have sA': "sq m ?A'" using sq_add_row[OF sA im jm] .
+  have sW: "sq m ?W" using sB sEi m0 by (rule sq_mod)
+  have sAB: "sq m (mat_mult_mod A B)" using sA sB m0 by (rule sq_mod)
+  have sIE: "sq m (mat_mult_mod ?Ei ?E)" using sEi sE m0 by (rule sq_mod)
+  have sABEi: "sq m (mat_mult_mod (mat_mult_mod A B) ?Ei)"
+    using sAB sEi m0 by (rule sq_mod)
+  have rEE: "cong_q_mat ?Ei ?Ei" by (rule cong_q_mat_refl)
+  have rEE' : "cong_q_mat (row_add_matrix m i j (- int c))
+      (row_add_matrix m i j (- int c))" by (rule cong_q_mat_refl)
+  have rAA: "cong_q_mat A A" by (rule cong_q_mat_refl)
+  have rBB: "cong_q_mat B B" by (rule cong_q_mat_refl)
+  have rEE2: "cong_q_mat (row_add_matrix m i j (int c))
+      (row_add_matrix m i j (int c))" by (rule cong_q_mat_refl)
+  have hbr: "mat_mult_mod ?E A = ?A'"
+    using mat_mult_mod_row_add[OF im jm ij nA rA redA', of "int c"] .
+  have hEI: "mat_mult_mod ?E ?Ei = id_mat m"
+    using mat_mult_mod_elem_inverse[OF im jm ij, of "int c"] .
+  have hIE: "mat_mult_mod ?Ei ?E = id_mat m"
+    using mat_mult_mod_elem_inverse[OF im jm ij, of "- int c"] by simp
+  have cIE: "cong_q_mat (mat_mult_mod ?Ei ?E) (id_mat m)"
+    using hIE by (simp add: cong_q_mat_refl)
+  have cEI: "cong_q_mat (mat_mult_mod ?E ?Ei) (id_mat m)"
+    using hEI by (simp add: cong_q_mat_refl)
+  have nA': "n_rows ?A' = m" using nA by (simp add: n_rows_def add_row_mult_def)
+
+  have h1: "cong_q_mat (mat_mult_mod ?A' ?W) (id_mat m)"
+  proof -
+    have a1: "mat_mult_mod ?A' ?W = mat_mult_mod (mat_mult_mod ?E A) ?W"
+      using hbr by simp
+    have a2: "mat_mult_mod (mat_mult_mod ?E A) ?W
+        = mat_mult_mod ?E (mat_mult_mod A ?W)"
+      using assoc_sq[OF sE sA sW m0] .
+    have a3: "mat_mult_mod A ?W = mat_mult_mod (mat_mult_mod A B) ?Ei"
+      using assoc_sq[OF sA sB sEi m0] by simp
+    have sIA: "sq m (mat_mult_mod (id_mat m) ?Ei)" using sI sEi m0 by (rule sq_mod)
+    have p1: "cong_q_mat (mat_mult_mod (mat_mult_mod A B) ?Ei)
+        (mat_mult_mod (id_mat m) ?Ei)"
+    proof (rule cong_mult_sq)
+      show "sq m (mat_mult_mod A B)" using sAB .
+      show "sq m (id_mat m)" using sI .
+      show "sq m ?Ei" using sEi .
+      show "sq m ?Ei" using sEi .
+      show "0 < m" using m0 .
+      show "cong_q_mat (mat_mult_mod A B) (id_mat m)" using hAB .
+      show "cong_q_mat ?Ei ?Ei" using rEE .
+    qed
+    have p2: "cong_q_mat (mat_mult_mod (id_mat m) ?Ei) ?Ei"
+      using cong_id_left_sq[OF sEi m0] .
+    have p3: "cong_q_mat (mat_mult_mod (mat_mult_mod A B) ?Ei) ?Ei"
+      using cong_trans_sq[OF sABEi sIA sEi p1 p2] .
+    have sEp: "sq m (mat_mult_mod ?E (mat_mult_mod (mat_mult_mod A B) ?Ei))"
+      using sE sABEi m0 by (rule sq_mod)
+    have sEE: "sq m (mat_mult_mod ?E ?Ei)" using sE sEi m0 by (rule sq_mod)
+    have p4: "cong_q_mat (mat_mult_mod ?E (mat_mult_mod (mat_mult_mod A B) ?Ei))
+        (mat_mult_mod ?E ?Ei)"
+    proof (rule cong_mult_sq)
+      show "sq m ?E" using sE .
+      show "sq m ?E" using sE .
+      show "sq m (mat_mult_mod (mat_mult_mod A B) ?Ei)" using sABEi .
+      show "sq m ?Ei" using sEi .
+      show "0 < m" using m0 .
+      show "cong_q_mat ?E ?E" using rEE2 .
+      show "cong_q_mat (mat_mult_mod (mat_mult_mod A B) ?Ei) ?Ei" using p3 .
+    qed
+    have p5: "cong_q_mat (mat_mult_mod ?E (mat_mult_mod (mat_mult_mod A B) ?Ei))
+        (id_mat m)"
+      using cong_trans_sq[OF sEp sEE sI p4 cEI] .
+    show ?thesis
+    proof (subst a1, subst a2, subst a3)
+      show "cong_q_mat (mat_mult_mod ?E (mat_mult_mod (mat_mult_mod A B) ?Ei))
+          (id_mat m)" using p5 .
+    qed
+  qed
+
+  have h2: "cong_q_mat (mat_mult_mod ?W ?A') (id_mat m)"
+  proof -
+    have b1: "mat_mult_mod ?W ?A' = mat_mult_mod (mat_mult_mod B ?Ei) ?A'" by simp
+    have b2: "mat_mult_mod (mat_mult_mod B ?Ei) ?A'
+        = mat_mult_mod B (mat_mult_mod ?Ei ?A')"
+      using assoc_sq[OF sB sEi sA' m0] .
+    have b3: "mat_mult_mod ?Ei ?A' = mat_mult_mod ?Ei (mat_mult_mod ?E A)"
+      using hbr by (simp only: hbr[symmetric])
+    have b4: "mat_mult_mod ?Ei (mat_mult_mod ?E A) = mat_mult_mod (mat_mult_mod ?Ei ?E) A"
+      using assoc_sq[OF sEi sE sA m0] by simp
+    have sIA2: "sq m (mat_mult_mod (id_mat m) A)" using sI sA m0 by (rule sq_mod)
+    have q1: "cong_q_mat (mat_mult_mod (mat_mult_mod ?Ei ?E) A)
+        (mat_mult_mod (id_mat m) A)"
+    proof (rule cong_mult_sq)
+      show "sq m (mat_mult_mod ?Ei ?E)" using sIE .
+      show "sq m (id_mat m)" using sI .
+      show "sq m A" using sA .
+      show "sq m A" using sA .
+      show "0 < m" using m0 .
+      show "cong_q_mat (mat_mult_mod ?Ei ?E) (id_mat m)" using cIE .
+      show "cong_q_mat A A" using rAA .
+    qed
+    have q2: "cong_q_mat (mat_mult_mod (id_mat m) A) A"
+      using cong_id_left_sq[OF sA m0] .
+    have sIEA: "sq m (mat_mult_mod (mat_mult_mod ?Ei ?E) A)" using sIE sA m0 by (rule sq_mod)
+    have q3: "cong_q_mat (mat_mult_mod (mat_mult_mod ?Ei ?E) A) A"
+      using cong_trans_sq[OF sIEA sIA2 sA q1 q2] .
+    have sBq: "sq m (mat_mult_mod B (mat_mult_mod (mat_mult_mod ?Ei ?E) A))"
+      using sB sIEA m0 by (rule sq_mod)
+    have sBA: "sq m (mat_mult_mod B A)" using sB sA m0 by (rule sq_mod)
+    have q4: "cong_q_mat (mat_mult_mod B (mat_mult_mod (mat_mult_mod ?Ei ?E) A))
+        (mat_mult_mod B A)"
+    proof (rule cong_mult_sq)
+      show "sq m B" using sB .
+      show "sq m B" using sB .
+      show "sq m (mat_mult_mod (mat_mult_mod ?Ei ?E) A)" using sIEA .
+      show "sq m A" using sA .
+      show "0 < m" using m0 .
+      show "cong_q_mat B B" using rBB .
+      show "cong_q_mat (mat_mult_mod (mat_mult_mod ?Ei ?E) A) A" using q3 .
+    qed
+    have cBA: "cong_q_mat (mat_mult_mod B A) (id_mat m)" using hBA .
+    have q5: "cong_q_mat (mat_mult_mod B (mat_mult_mod (mat_mult_mod ?Ei ?E) A))
+        (id_mat m)"
+      using cong_trans_sq[OF sBq sBA sI q4 cBA] .
+    show ?thesis
+    proof (subst b1, subst b2, subst b3, subst b4)
+      show "cong_q_mat (mat_mult_mod B (mat_mult_mod (mat_mult_mod ?Ei ?E) A))
+          (id_mat m)" using q5 .
+    qed
+  qed
+
+  show ?thesis
+  proof (unfold invertible_mod_def, intro exI[of _ ?W] conjI)
+    show "n_rows ?W = n_rows ?A'" using hBn nA' by (simp add: n_rows_mod)
+    have ncW: "n_cols ?W = m" using n_cols_mod[OF hBn cEi m0] .
+    show "n_cols ?W = n_rows ?A'" using ncW nA' by simp
+    show "is_rect ?W" using sW by simp
+    show "cong_q_mat (mat_mult_mod ?A' ?W) (id_mat (n_rows ?A'))"
+      using h1 nA' by (simp only: nA')
+    show "cong_q_mat (mat_mult_mod ?W ?A') (id_mat (n_rows ?A'))"
+      using h2 nA' by (simp only: nA')
+  qed
+qed
+
+lemma rim_iter_inv:
+  "\<And>A s. sq m A \<Longrightarrow> reduced A \<Longrightarrow> invertible_mod A
+     \<Longrightarrow> invertible_mod (fst (rim_iter f m A s))"
+proof (induct f)
+  case 0
+  have f0: "fst (rim_iter 0 m A s) = A" by (simp add: rim_iter.simps)
+  thus ?case
+  proof (subst f0)
+    show "invertible_mod A" using "0.prems" by blast
+  qed
+next
+  case (Suc f)
+  show ?case
+  proof (cases "m = 0")
+    case True
+    have sz: "n_rows A = 0" using Suc.prems(1) True by simp
+    have Az: "A = []"
+    proof (cases A)
+      case Nil
+      thus ?thesis .
+    next
+      case (Cons x xs)
+      thus ?thesis using sz by (simp add: n_rows_def)
+    qed
+    have hz: "fst (rim_iter (Suc f) m A s) = []"
+    proof -
+      have one: "fst (rim_iter (Suc f) m A s) = fst (rim_iter (Suc f) m [] s)"
+        using Az by (simp only: Az)
+      have two: "fst (rim_iter (Suc f) m [] s) = []" by (simp only: rim_iter_nil)
+      show ?thesis using one two by simp
+    qed
+    show ?thesis using hz by simp
+  next
+    case False
+    have m0: "0 < m" using False by simp
+    obtain i s1 where d1: "next_u16_mod m s = (i, s1)"
+      by (cases "next_u16_mod m s") auto
+    obtain j s2 where d2: "next_u16_mod m s1 = (j, s2)"
+      by (cases "next_u16_mod m s1") auto
+    have im: "i < m" using d1 m0 next_u16_mod_lt[of m s] by simp
+    have jm: "j < m" using d2 m0 next_u16_mod_lt[of m s1] by simp
+    have u: "rim_iter (Suc f) m A s =
+        (if i = j then rim_iter f m A s2
+         else (let (c, s3) = randrange 1 3329 s2
+               in rim_iter f m (add_row_mult A i j (int c)) s3))"
+      by (simp add: rim_iter.simps d1 d2)
+    show ?thesis
+    proof (cases "i = j")
+      case True
+      have eq: "fst (rim_iter (Suc f) m A s) = fst (rim_iter f m A s2)"
+        using u True by simp
+      show ?thesis
+      proof (subst eq)
+        show "invertible_mod (fst (rim_iter f m A s2))"
+          using Suc.hyps[OF Suc.prems(1) Suc.prems(2) Suc.prems(3)] .
+      qed
+    next
+      case False
+      obtain c s3 where d3: "randrange 1 3329 s2 = (c, s3)"
+        by (cases "randrange 1 3329 s2") auto
+      have eq: "fst (rim_iter (Suc f) m A s)
+          = fst (rim_iter f m (add_row_mult A i j (int c)) s3)"
+        using u False d3 by simp
+      have sA': "sq m (add_row_mult A i j (int c))"
+        using sq_add_row[OF Suc.prems(1) im jm] .
+      have redA': "reduced (add_row_mult A i j (int c))"
+        using reduced_add_row_mult[OF Suc.prems(2)] .
+      have invA': "invertible_mod (add_row_mult A i j (int c))"
+        using inv_step[OF im jm False Suc.prems(1) Suc.prems(2) Suc.prems(3)] .
+      show ?thesis
+      proof (subst eq)
+        show "invertible_mod (fst (rim_iter f m (add_row_mult A i j (int c)) s3))"
+          using Suc.hyps[OF sA' redA' invA'] .
+      qed
+    qed
   qed
 qed
 

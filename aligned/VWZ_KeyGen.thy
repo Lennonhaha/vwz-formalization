@@ -155,6 +155,46 @@ lemma distinct_lam_partial_correct:
   unfolding distinct_lam_def
   by (rule distinct_lam_fuel_correct)
 
+text \<open>State accounting for the sampler.  This is the auditability property the
+  probabilistic layer will need: each drawn value consumes exactly one LCG
+  step, so a round of @{text n} draws advances the stream by exactly @{text n}.
+  Retries advance it further rather than rewinding it, so no word of the stream
+  is served twice -- which is what makes "retry on collision" a fresh sample
+  instead of a re-run of the same points.\<close>
+
+lemma snd_randrange [simp]: "snd (randrange lo hi s) = lcg_step s"
+  by (simp add: randrange_def next_u16_mod_def next_u64_def Let_def)
+
+text \<open>One LCG step per drawn value, and a helper that lets the recursion in
+  @{text draw_list} be read as "advance the stream by one".\<close>
+
+lemma funpow_snoc: "(f ^^ n) (f x) = (f ^^ Suc n) x"
+proof (induction n arbitrary: x)
+  case 0
+  then show ?case by simp
+next
+  case (Suc n)
+  have "(f ^^ Suc n) (f x) = f ((f ^^ n) (f x))" by simp
+  also have "... = f ((f ^^ Suc n) x)" using Suc.IH by simp
+  also have "... = (f ^^ Suc (Suc n)) x" by simp
+  finally show ?case .
+qed
+
+lemma draw_list_state: "snd (draw_list n s) = (lcg_step ^^ n) s"
+proof (induction n arbitrary: s)
+  case 0
+  then show ?case by simp
+next
+  case (Suc n)
+  have "snd (draw_list (Suc n) s)
+      = snd (draw_list n (snd (randrange (Suc 0) 3329 s)))"
+    by (simp add: draw_list.simps)
+  also have "... = (lcg_step ^^ n) (snd (randrange (Suc 0) 3329 s))"
+    using Suc.IH by simp
+  also have "... = (lcg_step ^^ n) (lcg_step s)" by simp
+  also have "... = (lcg_step ^^ Suc n) s" by (rule funpow_snoc)
+  finally show ?case .
+qed
 
 section \<open>Spec 3.3 -- random invertible matrices by row additions\<close>
 

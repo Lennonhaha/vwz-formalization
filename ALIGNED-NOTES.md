@@ -1082,3 +1082,37 @@ T2_B3 仍是 sorry（总数 12 未变），因为它还差「行操作桥」两�
 - `isabelle build -D aligned`：RC=0，约 11 秒（含探针）。
 - 账本：**56 lemmas / 12 sorry**（T0 17/0、T1-A 16/0、T1-D 5/2、T2 10/6、T3 8/4）。
 - 新增 `VWZ_Probe.thy`（3 条 eval 事实），入 ROOT，作为域错配的机器证据。
+<!-- seg: seg-sampler-7107766c2b15 -->
+## 2026-10-21 09:4x：T3 层的第一个真东西 —— 采样器状态记账
+
+### 已证（`VWZ_KeyGen.thy`，全部 RC=0，构建 13 秒）
+
+| 引理 | 内容 | 意义 |
+|---|---|---|
+| `snd_randrange` | `snd (randrange lo hi s) = lcg_step s` | 每次取数推进一格 LCG，不跳、不重 |
+| `funpow_snoc` | `(f ^^ n) (f x) = (f ^^ Suc n) x` | 把递归读成「流前进一格」的桥 |
+| `draw_list_state` | `snd (draw_list n s) = (lcg_step ^^ n) s` | 取 n 个点恰好消耗 n 个状态：**无状态复用、无重复随机字** |
+
+这条链是 T3 概率层的前置：拒绝采样「撞了就重抽」之所以是**新样本**而不是同一批点重跑，
+靠的就是状态只前进不回退。之前这一层只有 partial correctness（长度/互异/范围），
+没有任何关于**状态流**的陈述。
+
+### 一个失败的更强陈述（记下来，别重犯）
+
+最初写的是 `snd (distinct_lam_fuel f n s) = (lcg_step ^^ (f * n)) s` —— **假的**：
+接受轮次会提前返回，实际只消耗 `k * n`（k = 实际用掉的轮数 ≤ f）。
+发现方式是写证明时 True 分支对不上，不是靠跑测试。正确的弱化形式应是
+`∃k ≤ f. snd = (lcg_step ^^ (k * n)) s`，本轮未落地（simp 在 funpow 上发散，见下）。
+
+### 环境坑（这次很贵，务必记住）
+
+1. **`simp add: funpow_add` 会发散**：与算术规范化（`Suc k * n` ↔ `k * n + n`）互相触发，
+   构建 150–240 秒不返回。改用显式 `funpow_snoc` 归纳引理后 13 秒过。判据：**构建突然从
+   十几秒变几分钟，先怀疑 simp 发散，不要怀疑机器**。
+2. **发散会留下 poly 僵尸**：本轮遗留 3 个 poly 进程吃满 CPU（CPU 时间 1000–1357 秒）。
+   处置：`Get-Process poly | Stop-Process -Force`，再重建。
+3. **僵尸持锁会写坏 Isabelle 的 sources DB**：表现为
+   `SQLITE_CONSTRAINT_PRIMARYKEY ... isabelle_sources`，`isabelle build -c` 也清不掉。
+   正解：先杀 poly/java，再把 `~/.isabelle/Isabelle2025-2/heaps/<platform>/log/<Session>.db`
+   **移走**（`mv` 成 `.stale.<date>`，不要 rm），重建会自动生成。
+   `mv` 报 `Device or resource busy` 就是「还有进程持锁」的信号，不是权限问题。

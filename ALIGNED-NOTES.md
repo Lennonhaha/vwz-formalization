@@ -1517,3 +1517,58 @@ by (simp only: step1 step2 step4 step5 step6[symmetric])
 
 - `dim_nullspace`（行口径 `n_rows - rank`）与 `nullity`（列口径 `n_cols - rank`）的分工与"行口径为何使 T2_D4 不可满足"，已写进 `VWZ_RREF.thy` 文件头（替换掉原本那句错的"T2_D4 用行口径"）。
 - T2_D6 的"重叠位缺前提"与"rows3/u2 系统混用"两条，写进 `VWZ_ObligationsAligned.thy` 的 T2_D6 段说明。
+<!-- seg: seg-t2d6-done-424ff9328d71 -->
+## 2026-10-21 20:0x -- T2_D6 闭合：换序引理 + 双线性恒等式（56/9 -> 56/8）
+
+### 战果
+
+`aligned/VWZ_Transpose.thy`（新）+ `solve_linear_zero_rows` + `rows_u2_of` 三者拼上，**T2_D6 的 sorry 拿掉了**，且**不是**靠把结论写进定义。
+
+账本实跑：`T0 17/0，T1-A 16/0，T1-D 5/2，T2 10/3，T3 8/3`，**TOTAL 56 lemmas / 8 sorry**（ledger 8、outside 0）；theory files 18、仓库 345 lemmas；构建 RC=0、14 秒。
+
+### 换序其实早就有了
+
+`VWZ_MatAlgebra.thy:47` 已经有 **`swap_idx`**：
+`sum_list (map (λi. sum_list (map (λj. f i j) ys)) xs) = sum_list (map (λj. sum_list (map (λi. f i j) xs)) ys)`
+—— 上一轮我判断"没有换序引理"是**看漏**（只 grep 了 `sum_list_swap` 这个名字）。教训：**找基础设施要按"形状"grep（`swap`/`map (λ`/`sum_list (map`），别按自己臆想的名字 grep**。
+
+### `VWZ_Transpose.thy` 里证的（全部 RC=0）
+
+- `dot_conv_idx`：`dot u v = Σ_{k<n} u!k * v!k`（`map2_conv_idx` 的推论）
+- `n_rows_transpose`、`transpose_nth`（`transpose A ! j = col_vec A j`）、`matvec_nth`、`matvec_transpose_nth`、`col_vec_nth`
+- `sum_upt_cong`：`(⋀k. k<n ⟹ f k = g k) ⟹ Σ_{k<n} f k = Σ_{k<n} g k`
+- **`dot_matvec_transpose`**：`is_rect A ⟹ length u = n_rows A ⟹ length v = n_cols A ⟹ dot (matvec (transpose A) u) v = dot u (matvec A v)`
+  证明结构：左边写成列主序 `Σ_j (Σ_i A!i!j * u!i) * v!j`，右边写成行主序 `Σ_i u!i * (Σ_j A!i!j * v!j)`，各自用 `sum_list_map_mult_right/left[symmetric]` 把外层因子推进内层，再用 `swap_idx` 换序，中间靠 `mult.assoc/left_commute` 对齐。
+
+### 一处必须记录的建模纠正（第三次，也是最后一次）
+
+上一轮我把 `P2a/P2b` 改成"以 u2 为参、用 M2"，并让 `rows_u2_of` 用 `M2ᵀ`。**这与 `VWZ_KeyGen.thy` 的 `psi_of` 不一致**：`psi_of` 实际用 `matvec (transpose X2a) (vand (la!i) m)` 和 `matvec (transpose X2b) (vand (lb!i) m)` 构造张量切片 —— 即**采样器实现的是 w2 形式**（`w2 = X2a⁻¹·u2`，与 M2 形式在数值上相等，但行不同）。
+
+故本轮把 `P2a/P2b` **改回 w2/X2a/X2b 形式**、`rows_u2_of` 改为 `(X2a, X2b, la, lb, Za, Zb)` 六参。原则：**定义要跟"实现里真的那一行"对齐**，不是跟"数学上等价的那种写法"对齐 —— 否则证的对象和跑的对象不是同一个。
+
+### T2_D6 的最终形态（已证，无 sorry）
+
+```
+finite Za ⟹ finite Zb ⟹
+is_rect (X2a_of m s) ⟹ is_rect (X2b_of m s) ⟹
+length v = n_cols (X2a_of m s) ⟹ length v = n_cols (X2b_of m s) ⟹
+i ∈ Zset (map int (hash_target k msg)) (x1_of sk) ⟹
+(i ∈ Za - Zb ∨ i ∈ Zb - Za) ⟹
+solve_linear (rows_u2_of (X2a_of m s) (X2b_of m s) la lb Za Zb)
+             (replicate (n_rows (rows_u2_of …)) 0) = Some v ⟹
+fq (P2b lb (X2b_of m s) v i) = 0 ∨ fq (P2a la (X2a_of m s) v i) = 0
+```
+
+证明只有三步：① `solve_linear_zero_rows` 给出"v 把每一行都归零"；② `rows_u2_of` 的成员性给出"那一行就在矩阵里"；③ `dot_matvec_transpose` 把"行·v"换成"λ 点上的取值"（即 P2b/P2a 的定义）。**没有假设哈希、陷门或安全性。**
+
+### 还剩的 8 个 sorry（现状盘点）
+
+- T1-D 2 个：定义依赖类（`mat_solve`/`mat_inv` 两侧逆等）
+- T2 3 个：T2_B7（**已被机器否证**，属陈述缺陷，需重述）、T2_D5（Eval/Sign 未定义）、以及一条待重述项
+- T3 3 个：`hash_target` / `Eval/Sign/Verify` / 概率界
+
+### 下一步候选（按"能不能真证"排序）
+
+1. **T2_B7 重述**：加 `pk ∈ range KeyGen` 与"两向量不平行"，把反例排除 —— 这条不减少 sorry 但把"假命题"从账本里去掉（此前 `VWZ_Refutations.thy` 已机器否证）。
+2. **`hash_target` + T3_C1**：部分 Fisher–Yates + 抽象 XOF，长度/重量从选择算法证出。
+3. **`solve_linear` 的算法层**：需 `rref` 记录主元列；当前 `rref_fuel` 不记录，属扩返回值的改动。

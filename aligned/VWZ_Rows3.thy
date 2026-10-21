@@ -32,10 +32,10 @@ text \<open>The two systems of Sec 3 are not the same, and conflating them is ea
   carry the target values.  Only the homogeneous part is built here; the
   @{text S} rows need @{text P3} and are not part of this definition.\<close>
 
-definition rows_u2_of :: "int list \<Rightarrow> int list \<Rightarrow> mat \<Rightarrow> nat set \<Rightarrow> nat set \<Rightarrow> mat" where
-  "rows_u2_of la lb M2 Za Zb =
-     map (\<lambda>i. matvec (transpose M2) (vand (lb ! i) (n_rows M2))) (sorted_list_of_set (Za - Zb)) @
-     map (\<lambda>i. vand (la ! i) (n_cols M2)) (sorted_list_of_set (Zb - Za))"
+definition rows_u2_of :: "mat \<Rightarrow> mat \<Rightarrow> int list \<Rightarrow> int list \<Rightarrow> nat set \<Rightarrow> nat set \<Rightarrow> mat" where
+  "rows_u2_of X2a X2b la lb Za Zb =
+     map (\<lambda>i. matvec (transpose X2b) (vand (lb ! i) (n_rows X2b))) (sorted_list_of_set (Za - Zb)) @
+     map (\<lambda>i. matvec (transpose X2a) (vand (la ! i) (n_rows X2a))) (sorted_list_of_set (Zb - Za))"
 
 section \<open>Spec 6.4.1 -- rows3\<close>
 

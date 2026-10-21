@@ -8,7 +8,7 @@
       T0   ( 8)  purely formal rewriting            -- 17 lemmas, 0 sorry
       T1-A       algebraic axioms + closed ser. id. -- 16 lemmas, 0 sorry
       T1-D       definition-dependent (TODO bodies) --  5 lemmas, 2 sorry
-      T2   ( 8)  linear algebra / matrices          -- 10 lemmas, 4 sorry
+      T2   ( 8)  linear algebra / matrices          -- 10 lemmas, 3 sorry
       T3   ( 8)  security / probabilistic / parser  --  8 lemmas, 3 sorry
     (T1-A / T1-D split the former single T1 bucket at the lemma level; the 37
      is an obligation count, the figures above are Isabelle-lemma counts.  See
@@ -24,7 +24,7 @@
     wrinkle is recorded in plans/vwz-a3-aligned_20261018.md.
 *)
 theory VWZ_ObligationsAligned
-  imports VWZ_Fq3329 VWZ_KeyGen VWZ_Matrix VWZ_Protocol VWZ_Aux VWZ_RREF VWZ_Solver
+  imports VWZ_Fq3329 VWZ_KeyGen VWZ_Matrix VWZ_Protocol VWZ_Aux VWZ_RREF VWZ_Solver VWZ_Transpose
     VWZ_ModAlgebra VWZ_Rows3
 begin
 
@@ -179,11 +179,11 @@ text \<open>The two @{text P2} factors of the mixed-tensor equation
   that output relation explicitly instead of asking an uninterpreted
   @{text "P2a :: nat \<Rightarrow> int"} to be zero by magic.\<close>
 
-definition P2a :: "int list \<Rightarrow> int list \<Rightarrow> nat \<Rightarrow> int" where
-  "P2a la v i = dot (vand (la ! i) (length v)) v"
+definition P2a :: "int list \<Rightarrow> mat \<Rightarrow> int list \<Rightarrow> nat \<Rightarrow> int" where
+  "P2a la X2a w2 i = dot (vand (la ! i) (n_rows X2a)) (matvec X2a w2)"
 
 definition P2b :: "int list \<Rightarrow> mat \<Rightarrow> int list \<Rightarrow> nat \<Rightarrow> int" where
-  "P2b lb M2 v i = dot (vand (lb ! i) (n_rows M2)) (matvec M2 v)"
+  "P2b lb X2b w2 i = dot (vand (lb ! i) (n_rows X2b)) (matvec X2b w2)"
 
 text \<open>Spec Sec 3.4 defines these, it does not assume them: @{text "M2 = X2b \<cdot> X2a\<inverse>"}
   and @{text "M3 = X3b \<cdot> X3a\<inverse>"}.  The four matrices are no longer opaque
@@ -828,19 +828,78 @@ text \<open>Restated on the <em>u2</em> system, which is not the system above.
   integers: @{text solve_linear} is specified in @{file VWZ_Solver.thy} over the
   reduced field, exactly as the sampler's arithmetic is.
 
-  What is still missing is one bilinear identity -- @{text "dot (matvec
-  (transpose A) u) v = dot u (matvec A v)"} -- which ties the constraint row
-  built with @{text "transpose M2"} to the @{text P2b} evaluation.  Nothing else
-  separates this statement from a proof.\<close>
+  The rows are built with @{text "X2b<^sup>T>"} and @{text "X2a<^sup>T>"}, which is
+the form @{file VWZ_KeyGen.thy}'s @{text psi_of} evaluates and therefore the
+form the sampler actually implements; @{text M2} would be the same numbers via
+@{text "u2 = X2a . w2"} but not the same rows.
+
+  The proof is the bilinear identity of @{file VWZ_Transpose.thy},
+  @{text "dot (matvec (transpose A) u) v = dot u (matvec A v)"}, applied to the
+  row that the membership gives, plus the homogeneous corollary of
+  @{text solve_linear}.  Nothing about the hash, the trapdoor or the security
+  argument is assumed.\<close>
 
 lemma T2_D6:
-  "i \<in> Zset (map int (hash_target k msg)) (x1_of (sk :: skey)) \<Longrightarrow>
+  "finite Za \<Longrightarrow> finite Zb \<Longrightarrow>
+   is_rect (X2a_of m s) \<Longrightarrow> is_rect (X2b_of m s) \<Longrightarrow>
+   length v = n_cols (X2a_of m s) \<Longrightarrow> length v = n_cols (X2b_of m s) \<Longrightarrow>
+   i \<in> Zset (map int (hash_target k msg)) (x1_of (sk :: skey)) \<Longrightarrow>
    (i \<in> Za - Zb \<or> i \<in> Zb - Za) \<Longrightarrow>
-   solve_linear (rows_u2_of (sk_lam_a sk) (sk_lam_b sk) (M2 m s) Za Zb)
-                (replicate (n_rows (rows_u2_of (sk_lam_a sk) (sk_lam_b sk) (M2 m s) Za Zb)) 0)
+   solve_linear (rows_u2_of (X2a_of m s) (X2b_of m s) (sk_lam_a sk) (sk_lam_b sk) Za Zb)
+                (replicate (n_rows (rows_u2_of (X2a_of m s) (X2b_of m s) (sk_lam_a sk) (sk_lam_b sk) Za Zb)) 0)
      = Some v \<Longrightarrow>
-   fq (P2b (sk_lam_b sk) (M2 m s) v i) = 0 \<or> fq (P2a (sk_lam_a sk) v i) = 0"
-  sorry
+   fq (P2b (sk_lam_b sk) (X2b_of m s) v i) = 0 \<or>
+   fq (P2a (sk_lam_a sk) (X2a_of m s) v i) = 0"
+proof -
+  assume fina: "finite Za" and finb: "finite Zb"
+     and rectA: "is_rect (X2a_of m s)" and rectB: "is_rect (X2b_of m s)"
+     and lenvA: "length v = n_cols (X2a_of m s)"
+     and lenvB: "length v = n_cols (X2b_of m s)"
+     and zi: "i \<in> Zset (map int (hash_target k msg)) (x1_of (sk :: skey))"
+     and side: "i \<in> Za - Zb \<or> i \<in> Zb - Za"
+     and sol: "solve_linear (rows_u2_of (X2a_of m s) (X2b_of m s) (sk_lam_a sk) (sk_lam_b sk) Za Zb)
+                (replicate (n_rows (rows_u2_of (X2a_of m s) (X2b_of m s) (sk_lam_a sk) (sk_lam_b sk) Za Zb)) 0)
+                  = Some v"
+  have ball: "\<forall>r \<in> set (rows_u2_of (X2a_of m s) (X2b_of m s) (sk_lam_a sk) (sk_lam_b sk) Za Zb).
+              fq (dot r v) = 0"
+    using sol by (rule solve_linear_zero_rows)
+  show "fq (P2b (sk_lam_b sk) (X2b_of m s) v i) = 0 \<or>
+        fq (P2a (sk_lam_a sk) (X2a_of m s) v i) = 0"
+  proof (cases "i \<in> Za - Zb")
+    case True
+    have mset: "i \<in> set (sorted_list_of_set (Za - Zb))"
+      using True fina by (simp add: set_sorted_list_of_set)
+    define u where uu: "u = vand (sk_lam_b sk ! i) (n_rows (X2b_of m s))"
+    have rowmem: "matvec (transpose (X2b_of m s)) u
+        \<in> set (rows_u2_of (X2a_of m s) (X2b_of m s) (sk_lam_a sk) (sk_lam_b sk) Za Zb)"
+      unfolding rows_u2_of_def using mset uu by simp
+    have h0: "fq (dot (matvec (transpose (X2b_of m s)) u) v) = 0"
+      using rowmem ball by blast
+    have idt: "dot (matvec (transpose (X2b_of m s)) u) v
+        = dot u (matvec (X2b_of m s) v)"
+      by (rule dot_matvec_transpose[OF rectB]) (simp_all add: uu vand_def lenvB)
+    have "fq (P2b (sk_lam_b sk) (X2b_of m s) v i) = 0"
+      using h0 idt unfolding P2b_def using uu by simp
+    then show ?thesis by simp
+  next
+    case False
+    with side have zb: "i \<in> Zb - Za" by blast
+    have mset: "i \<in> set (sorted_list_of_set (Zb - Za))"
+      using zb finb by (simp add: set_sorted_list_of_set)
+    define w where ww: "w = vand (sk_lam_a sk ! i) (n_rows (X2a_of m s))"
+    have rowmem: "matvec (transpose (X2a_of m s)) w
+        \<in> set (rows_u2_of (X2a_of m s) (X2b_of m s) (sk_lam_a sk) (sk_lam_b sk) Za Zb)"
+      unfolding rows_u2_of_def using mset ww by simp
+    have h0: "fq (dot (matvec (transpose (X2a_of m s)) w) v) = 0"
+      using rowmem ball by blast
+    have idt: "dot (matvec (transpose (X2a_of m s)) w) v
+        = dot w (matvec (X2a_of m s) v)"
+      by (rule dot_matvec_transpose[OF rectA]) (simp_all add: ww vand_def lenvA)
+    have "fq (P2a (sk_lam_a sk) (X2a_of m s) v i) = 0"
+      using h0 idt unfolding P2a_def using ww by simp
+    then show ?thesis by simp
+  qed
+qed
 
 subsection \<open>T2 :: D1 -- verifier correctness\<close>
 

@@ -10,6 +10,7 @@ session VWZ_A3_Aligned = "HOL-Number_Theory" +
     VWZ_Probe
     VWZ_RREF
     VWZ_Solver
+    VWZ_Transpose
     VWZ_ModAlgebra
     VWZ_Rows3
     VWZ_ObligationsAligned

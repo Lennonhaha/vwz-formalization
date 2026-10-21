@@ -17,7 +17,7 @@ tiers; the counts below are generated, not asserted.
 
 | Session | Content | Lemmas | `sorry` |
 |---|---|---|---|
-| `VWZ_A3_Aligned` | Definition layers + obligation inventory | 56 | 9 |
+| `VWZ_A3_Aligned` | Definition layers + obligation inventory | 56 | 8 |
 
 Rank, nullity and inversion are no longer uninterpreted. `VWZ_RREF.thy` defines
 a fuel-parameterised Gauss-Jordan reduction and derives
@@ -31,6 +31,19 @@ the field rank, that `mat_inv` is a two-sided inverse) is **not** claimed; seven
 `M2` and `M3` are now spelled as spec Sec 3.4 spells them (`X2b * X2a^-1`), so
 `T2_B5` closes by unfolding. That is transcription, not proof, and it is
 recorded as such.
+
+`solve_linear` is a defined object now, not an uninterpreted constant, but it is
+a **specification**: it returns some solution of `A x = b` over F_3329 when one
+exists (Hilbert choice) and `None` otherwise, so it is not executable and the
+Gauss-Jordan back substitution the spec describes is still open. What is
+proved about it is the semantics (`solve_linear_sound`, the `None` case, the row
+projections, and the homogeneous corollary that a solution of `A x = 0` reduces
+every row to zero). The two systems that T2_D6 needs are kept apart in
+`VWZ_Rows3.thy`: `rows3_of` is the *u3* system, `rows_u2_of` the *u2* system.
+`VWZ_Transpose.thy` supplies the bilinear identity
+`dot (matvec (transpose A) u) v = dot u (matvec A v)` by exchanging the two sums
+(`swap_idx`), and that identity is what lets `T2_D6` close against the rows the
+sampler really builds.
 
 The generator is no longer a single opaque constant, though it is not a
 replacement yet. `VWZ_Fq3329` now carries the Sec 3.1 LCG as a state machine on

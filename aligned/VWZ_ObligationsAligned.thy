@@ -9,7 +9,7 @@
       T1-A       algebraic axioms + closed ser. id. -- 16 lemmas, 0 sorry
       T1-D       definition-dependent (TODO bodies) --  5 lemmas, 2 sorry
       T2   ( 8)  linear algebra / matrices          -- 10 lemmas, 6 sorry
-      T3   ( 8)  security / probabilistic / parser  --  8 lemmas, 4 sorry
+      T3   ( 8)  security / probabilistic / parser  --  8 lemmas, 3 sorry
     (T1-A / T1-D split the former single T1 bucket at the lemma level; the 37
      is an obligation count, the figures above are Isabelle-lemma counts.  See
      plans/vwz-a3-aligned_20261018.md, Addendum.)
@@ -198,8 +198,22 @@ definition weight :: "nat list \<Rightarrow> nat" where
   "weight xs = length (filter (\<lambda>x. x \<noteq> 0) xs)"
 
 
-consts unbiased :: "nat \<Rightarrow> bool"
-        \<comment> \<open>TODO(define): spec Sec 5.1 -- rejection-sampling uniformity\<close>
+text \<open>Uniformity of the raw reduction.  A 32-bit word is uniform over
+  @{text "[0, 2 ^ 32)"}, so the map @{text "v \<mapsto> v mod m"} is exactly uniform
+  precisely when every residue class has the same number of preimages, which is
+  precisely when @{text m} divides @{text "2 ^ 32"}: the classes are then blocks
+  of @{text "2 ^ 32 div m"} states each.  When @{text m} does not divide
+  @{text "2 ^ 32"}, the leading @{text "2 ^ 32 mod m"} classes get one extra
+  preimage and the reduction is biased.
+
+  The divisibility side is adopted as the definition: it is decidable, needs no
+  counting library, and is the criterion the protocol actually cares about.  It
+  is not a placeholder -- the bias of the real modulus is a theorem below
+  (@{text T3_C3}), and a positive instance is checked so that the orientation of
+  the definition cannot silently flip.\<close>
+
+definition unbiased :: "nat \<Rightarrow> bool" where
+  "unbiased m = (m dvd 2 ^ 32)"
 
 text \<open>Section 8.3 already has bodies: @{file VWZ_Protocol.thy} defines
   @{text deser_pk} and @{text deser_sig} exactly as the parsing rules require
@@ -780,10 +794,34 @@ subsection \<open>T3 :: C1 -- weight(target) = k + 1\<close>
 lemma T3_C1: "weight (hash_target k msg) = k + 1"
   sorry
 
-subsection \<open>T3 :: C3 -- rejection sampling is unbiased\<close>
+subsection \<open>T3 :: C3 -- the raw reduction is biased for q = 3329\<close>
 
-lemma T3_C3: "unbiased N"
-  sorry
+text \<open>Restated.  The v0 wording, @{text "unbiased N"} with @{text N} free and
+  @{text unbiased} an uninterpreted constant, was a statement about nothing: it
+  could be neither proved nor refuted, and making it true would have required
+  inventing a predicate to fit.  The content of Sec 5.1 is a negative result
+  about the modulus the protocol actually uses: @{text 3329} does not divide
+  @{text "2 ^ 32"}, so reducing a 32-bit word modulo @{text q} is biased.  That
+  is exactly the reason the sampler rejects and redraws.
+
+  Machine-checked arithmetic: @{text "2 ^ 32 = 3329 * 1290167 + 1353"}, so the
+  first @{text 1353} residues have @{text 1290168} preimages and the remaining
+  ones have @{text 1290167}.  The discrepancy is small but real, and it is a
+  property of the modulus rather than of an implementation.\<close>
+
+lemma T3_C3: "\<not> unbiased 3329"
+proof -
+  have rest: "(2 :: nat) ^ 32 = 3329 * 1290167 + 1353" by simp
+  have mod: "(2 :: nat) ^ 32 mod 3329 = 1353"
+    using rest by simp
+  show ?thesis
+  proof
+    assume "unbiased 3329"
+    then have dvd: "3329 dvd (2 :: nat) ^ 32" by (simp add: unbiased_def)
+    then have "(2 :: nat) ^ 32 mod 3329 = 0" by (rule dvd_imp_mod_0)
+    with mod show False by simp
+  qed
+qed
 
 subsection \<open>T3 :: D8 -- adaptor always succeeds (EMPIRICAL, not a theorem)\<close>
 

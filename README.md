@@ -17,7 +17,7 @@ tiers; the counts below are generated, not asserted.
 
 | Session | Content | Lemmas | `sorry` |
 |---|---|---|---|
-| `VWZ_A3_Aligned` | Definition layers + obligation inventory | 56 | 12 |
+| `VWZ_A3_Aligned` | Definition layers + obligation inventory | 56 | 11 |
 
 Rank, nullity and inversion are no longer uninterpreted. `VWZ_RREF.thy` defines
 a fuel-parameterised Gauss-Jordan reduction and derives
@@ -58,11 +58,13 @@ property the algorithm cannot have.
 
 ### T3: two parsers, a weight, and the index split
 
-`T3_E1`, `T3_E2` and `T3_E4` are closed, taking the ledger from 15 to 12. The
+`T3_E1`, `T3_E2` and `T3_E4` are closed, taking the ledger from 15 to 12; `T3_C3` then took it to 11. The
 split is recorded honestly: E1 and E4 are option-case splits with almost no
 information content (a total function into an option returns `None` or `Some`),
 while E2 has substance -- an accepted length forces `hd bs = k`, which contradicts
-the stated premise.
+the stated premise. `T3_C3` is now closed as a negative result: `unbiased m` is
+defined as `m dvd 2 ^ 32` (exact uniformity of a 32-bit reduction), and `3329`
+does not divide `2 ^ 32` -- which is precisely why the sampler rejects.
 
 Three names on that path are no longer uninterpreted: `parse_pk` / `parse_sig` are
 the existing `deser_pk` / `deser_sig` (spec Sec 8.3), and `weight` is a real
@@ -96,9 +98,11 @@ additions only, so determinant 1) is visible in the code.  The algebraic
 foundation the bridge needs now exists: `VWZ_MatAlgebra` proves the exchange of
 summation order (`swap_idx`), the index form of a product entry (`entry_mult`),
 and associativity of `mat_mult` in the square case (`mat_mult_assoc_square`).
-What still does not exist is the row-operation bridge itself -- that
-left-multiplying by `row_add_matrix` equals `add_row_mult`, and that an
-elementary matrix has an inverse -- so T2_B3 stays `sorry` and says so.
+The row-operation bridge turned out not to be missing but false as stated:
+`add_row_mult` reduces entries modulo `q`, while `mat_mult` does not, so
+left-multiplying by an elementary matrix differs from the row operation by one
+reduction (machine-checked in `VWZ_Probe`). T2_B3 is therefore in restatement
+over `F_q`, and it stays `sorry` until that lands.
 
 `VWZ_A3_Aligned` is the only session that carries obligations. The remaining
 sessions are scaffolding:

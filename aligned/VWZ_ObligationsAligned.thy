@@ -745,22 +745,37 @@ subsection \<open>T2 :: B7 -- each rank-2 slice is the transpose of its predeces
 
 text \<open>Both sides have bodies now: @{text mat_rank} (fuel-counted Gauss-Jordan,
   see @{file VWZ_RREF.thy}) and @{text psi_slice} (projection of @{text pk_psi}).
-  The obligation is therefore a statement about actual matrices, and it is
-  FALSE.  The premise @{text "i < length (pk_psi pk)"} does not exclude a zero
-  slice, and @{text T2_B7_counterexample} below proves that a key of the right
-  shape whose slice is zero has rank 0, not 2.
+  The obligation is therefore a statement about actual matrices, and as written it
+  is FALSE: the premise @{text "i < length (pk_psi pk)"} does not exclude a zero
+  slice, and @{text T2_B7_counterexample} in @{file VWZ_Refutations.thy} proves
+  that a key of the right shape whose slice is zero has rank 0, not 2.
 
-  What is missing is not a tactic but two hypotheses: that @{text pk} is in the
-  image of @{text KeyGen}, and that the two drawn vectors of the slice are not
-  parallel -- @{text "rank (u u\<^sup>T + v v\<^sup>T) = 2"} fails when @{text u} and
-  @{text v} are scalar multiples of one another, so a range premise alone does
-  not make the statement true for every seed.  The planned repair carries both
-  conditions (see ALIGNED-NOTES, 2026-10-21).  Until @{text KeyGen} has a body
-  this is a defect in the statement, not a proof obligation, so it is NOT
-  labelled TODO(proof).  It stays as @{text sorry} only so the ledger count
-  does not move by being edited around.\<close>
+  The statement below is the repaired one.  Its three premises are exactly the
+  three things the original was missing:
+  \<^item> @{text pk} really is a key @{text KeyGen} can emit, so the slice has the
+    sum-of-two-outer-products shape instead of being an arbitrary matrix;
+  \<^item> the slice is non-degenerate, stated as the existence of a non-zero
+    @{text "2 x 2"} minor -- which is what "the two drawn vectors are not
+    parallel" amounts to for a sum of two outer products;
+  \<^item> the index is in range.
 
-lemma T2_B7: "i < length (pk_psi pk) \<Longrightarrow> mat_rank (psi_slice pk i) = 2"
+  TODO(proof): two facts are missing and neither will be faked.  First, that a
+  sum of two outer products has rank at most two.  Second, that a non-zero minor
+  forces rank at least two -- with @{text mat_rank} defined as the number of
+  non-zero rows of the reduced form, that is a rank-nullity argument, not a
+  rewrite.  Both belong to a rank theory this session does not have.  So this
+  stays @{text sorry}, but it is a real obligation now rather than a defect,
+  which is why the tag is TODO(proof) and not TODO(define).\<close>
+
+lemma T2_B7:
+  "i < length (pk_psi pk) \<Longrightarrow>
+   (\<exists>kk sd. pk = fst (KeyGen kk sd)) \<Longrightarrow>
+   (\<exists>a b c d. a < n_rows (psi_slice pk i) \<and> b < n_rows (psi_slice pk i) \<and>
+              c < n_cols (psi_slice pk i) \<and> d < n_cols (psi_slice pk i) \<and>
+              a \<noteq> b \<and> c \<noteq> d \<and>
+              entry (psi_slice pk i) a c * entry (psi_slice pk i) b d -
+              entry (psi_slice pk i) a d * entry (psi_slice pk i) b c \<noteq> 0) \<Longrightarrow>
+   mat_rank (psi_slice pk i) = 2"
   sorry
 
 text \<open>Machine-checked refutation of the statement as it stands lives in
@@ -929,7 +944,29 @@ lemma T3_B1:
 
 subsection \<open>T3 :: C1 -- weight(target) = k + 1\<close>
 
-lemma T3_C1: "weight (hash_target k msg) = k + 1"
+text \<open>@{text "hash_target"} has a body now (see @{file VWZ_Fq3329.thy}): the
+  support is drawn from the pool of all positions by a partial Fisher-Yates
+  walk, one removal per step, and the target is the indicator of that support.
+  What the body buys is that the sparsity is a consequence of the selection
+  rather than an assumption, and that the only uninterpreted object left is
+  @{text digest} -- the XOF.  Nothing here claims it is a hash.
+
+  TODO(proof): the lemma below needs two bookkeeping facts.  First, that the
+  walk returns exactly @{text "k + 1"} positions; the proof is an induction
+  carrying the invariant that the accumulator and the remaining pool are
+  disjoint, which is also what makes the result duplicate-free.  Second, that
+  the indicator vector of a duplicate-free support inside the range has
+  Hamming weight equal to the support's length.  Neither is mathematically
+  hard, and neither is asserted: the first draft of both was blocked on list
+  bookkeeping and reverted rather than left half-proved.
+
+  One premise is genuine and is kept.  The walk consumes one digest word per
+  step, so @{text "k + 1"} words must be available.  Without that hypothesis
+  the claim is false -- a short digest yields a shorter support -- and no
+  definition can repair it, because the words come from the XOF.\<close>
+
+lemma T3_C1:
+  "length (digest k msg) \<ge> k + 1 \<Longrightarrow> weight (hash_target k msg) = k + 1"
   sorry
 
 subsection \<open>T3 :: C3 -- the raw reduction is biased for q = 3329\<close>

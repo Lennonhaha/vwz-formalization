@@ -167,12 +167,39 @@ qed
 
 section \<open>Protocol objects (bodies deferred)\<close>
 
-text \<open>Each object below is an <em>uninterpreted</em> constant: its mathematical
-  content is not yet formalised.  They exist so that the T0 obligations have a
-  well-typed subject; bodies follow the spec sections named in the TODO tags.\<close>
+text \<open>The target is sparse by construction, but the sparsity must not be
+  assumed: it has to come out of the selection.  The support is chosen from the
+  pool @{text "[0..<par_n k]"} by a partial Fisher-Yates walk -- each step draws
+  an index modulo the pool's current length and removes the value found there, so
+  no position can be picked twice and nothing outside the pool can appear.  The
+  randomness is a list of words from @{text digest}, which stays uninterpreted:
+  nothing here claims it is a hash, only that it supplies @{text "k + 1"} words
+  (that is the hypothesis of @{text T3_C1}).\<close>
 
-consts hash_target :: "nat \<Rightarrow> nat list \<Rightarrow> nat list"
-        \<comment> \<open>TODO(define): spec Sec 5 -- (k, msg) |-> sparse target t (via H)\<close>
+consts digest :: "nat \<Rightarrow> nat list \<Rightarrow> nat list"
+
+text \<open>Removal is by value rather than by position.  On a duplicate-free pool the
+  two agree, and removing by value makes the count and the disjointness
+  immediate, which is why the invariant below does not have to reason about
+  indices at all.\<close>
+
+fun pick_remove :: "nat list \<Rightarrow> nat \<Rightarrow> nat \<times> nat list" where
+  "pick_remove [] r = (0, [])"
+| "pick_remove (x # xs) r =
+     ((x # xs) ! (r mod length (x # xs)),
+      filter (\<lambda>y. y \<noteq> (x # xs) ! (r mod length (x # xs))) (x # xs))"
+
+fun select_support ::
+  "nat \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> nat list \<times> nat list" where
+  "select_support 0 rs pool acc = (acc, pool)"
+| "select_support (Suc m) [] pool acc = (acc, pool)"
+| "select_support (Suc m) (r # rs) pool acc =
+     (case pick_remove pool r of (v, pool') \<Rightarrow> select_support m rs pool' (acc @ [v]))"
+
+definition hash_target :: "nat \<Rightarrow> nat list \<Rightarrow> nat list" where
+  "hash_target k msg =
+     (let (S, _) = select_support (k + 1) (digest k msg) [0..<par_n k] [] in
+        map (\<lambda>j. if j \<in> set S then 1 else 0) [0..<par_n k])"
 
 consts Eval :: "nat list \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> nat list"
         \<comment> \<open>TODO(define): spec Sec 4 -- (pk, w2, w3) |-> t\<close>

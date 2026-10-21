@@ -86,10 +86,16 @@ filter. `Sset` / `Zset` are the zero / non-zero split of `adapted_of` over
 message could not express, so the two obligations were restated and that
 restatement is recorded in the file.
 
-`hash_target` and `rows3_of` stay uninterpreted on purpose. A hash needs a digest
-function this session does not have, and `rows3` needs the secret `lambda_c`,
-`M3` and the split point; a placeholder that ignored them would turn the lemmas
-into statements about a made-up matrix.
+`rows3_of` no longer stays uninterpreted either: `VWZ_Rows3.thy` builds it from
+`vand`, `matvec` and `transpose` exactly as Sec 6.4.1 lists it. `hash_target` now
+has a body too: the support is drawn from the pool of all positions by a partial
+Fisher-Yates walk (`pick_remove` / `select_support` in `VWZ_Fq3329.thy`), and the
+target is the indicator of that support. The only uninterpreted object left on
+that path is `digest`, the XOF, and nothing claims it is a hash. What is *not*
+yet proved is that the walk returns `k + 1` positions and that the indicator's
+weight equals the support's length; `T3_C1` is marked TODO(proof), and it keeps
+the hypothesis that the digest supplies `k + 1` words, without which the claim is
+simply false.
 
 ### Key generation now has a body
 

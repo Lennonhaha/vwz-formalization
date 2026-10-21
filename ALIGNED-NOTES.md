@@ -1572,3 +1572,66 @@ fq (P2b lb (X2b_of m s) v i) = 0 ∨ fq (P2a la (X2a_of m s) v i) = 0
 1. **T2_B7 重述**：加 `pk ∈ range KeyGen` 与"两向量不平行"，把反例排除 —— 这条不减少 sorry 但把"假命题"从账本里去掉（此前 `VWZ_Refutations.thy` 已机器否证）。
 2. **`hash_target` + T3_C1**：部分 Fisher–Yates + 抽象 XOF，长度/重量从选择算法证出。
 3. **`solve_linear` 的算法层**：需 `rref` 记录主元列；当前 `rref_fuel` 不记录，属扩返回值的改动。
+<!-- seg: seg-b7-target-6616d7c0effe -->
+## 2026-10-21 20:4x -- T2_B7 重述（去假）+ hash_target 落地（函数体入库，T3_C1 仍 TODO(proof)）
+
+### 一、T2_B7：从"假命题"重述为"带完整前提的真命题"
+
+原式 `i < length (pk_psi pk) ⟹ mat_rank (psi_slice pk i) = 2` 已被 `VWZ_Refutations.thy` 机器否证（零切片 rank=0）。现重述为三条前提：
+
+1. `∃kk sd. pk = fst (KeyGen kk sd)` —— pk 真在 KeyGen 的像里，切片才有"两外积之和"的形状；
+2. **存在非零 2×2 子式**（用 `entry` 写全四个下标 + `a ≠ b ∧ c ≠ d`）—— 这才是"两向量不平行"对"两外积之和"的准确说法；
+3. `i < length (pk_psi pk)`。
+
+标注从 `TODO(define)` 改成 **`TODO(proof)`**，并写明缺的两块秩理论：① 两外积之和的 rank ≤ 2；② 非零子式 ⇒ rank ≥ 2（在 `mat_rank = rref 非零行数` 的口径下这是**秩-零化度论证**，不是重写）。**保留 sorry，不造假。**
+
+### 二、hash_target：函数体真的落地了
+
+`VWZ_Fq3329.thy` 里把 `consts hash_target` 换成真实定义：
+
+```
+consts digest :: "nat ⇒ nat list ⇒ nat list"          (* XOF，唯一未解释 *)
+
+fun pick_remove :: "nat list ⇒ nat ⇒ nat × nat list" where
+  "pick_remove [] r = (0, [])"
+| "pick_remove (x # xs) r =
+     ((x # xs) ! (r mod length (x # xs)),
+      filter (λy. y ≠ (x # xs) ! (r mod length (x # xs))) (x # xs))"
+
+fun select_support :: "nat ⇒ nat list ⇒ nat list ⇒ nat list ⇒ nat list × nat list"
+
+definition hash_target k msg =
+  (let (S, _) = select_support (k+1) (digest k msg) [0..<par_n k] [] in
+     map (λj. if j ∈ set S then 1 else 0) [0..<par_n k])
+```
+
+关键设计决定（写进文件注释）：**按"值"移除而不是按"位置"移除**。在无重复池上两者等价，但按值移除让"移除一个／不重复／子集"三条变得近乎 simp 可解，不必在 `take/drop` 的下标算术里挣扎。
+
+### 三、T3_C1：没证出来，如实停在 TODO(proof)
+
+需要的两条簿记事实：
+1. 走 `k+1` 步恰好返回 `k+1` 个位置（归纳要携带"累加器与剩余池不相交"这个不变量，它同时给出无重复）；
+2. 指示向量的 Hamming 重量 = 支撑集长度（对去重且在范围内的 S 归纳）。
+
+**都已写出草稿，构建不通过，按你的指令④整块撤回**（未留半证状态）。撤回原因记录在文件里：卡在列表簿记（`cases` 的 `Cons.prems` 在 `lemma X: "P ⟹ Q"` 形式下不可用，得改 `assumes` 形式；以及 `Let_def` 展开会引入 `x = pool!i` 的 case-split），不是数学上难。
+
+**T3_C1 的陈述新增了一条真实前提**：`length (digest k msg) ≥ k + 1`。理由是硬的：走 `k+1` 步要 `k+1` 个 digest 字；digest 短了支撑就短，**断言无条件成立是假命题**，而这不是定义能修的（字来自 XOF）。
+
+### 四、账本（未变，仍 56/8）
+
+`T0 17/0，T1-A 16/0，T1-D 5/2，T2 10/3，T3 8/3`，**TOTAL 56 / 8**，ledger 8、outside 0；构建 RC=0（15 秒）。
+
+**没有降到 7**：T2_B7 只改了陈述（假命题→真命题，仍 sorry），T3_C1 只落地了函数体（仍 sorry）。两条都是"把假命题/空壳换成有内容的义务"，不是减少计数。
+
+### 五、给下一轮的精确入口（都是簿记，不是数学）
+
+1. `select_support_len` / `select_support_distinct` / `select_support_subset`：把 lemma 改成 **`assumes` 形式**（`assms(1)` 可用），归纳用 `induct m arbitrary: rs pool acc`；`pick_remove` 的四个小引理已经能过（`pick_remove_len` 要用 `filter_neq_length`，后者已写通）。
+2. `weight_indicator`：对 `n` 归纳，`arbitrary: S`；`Suc` 分支按 `n ∈ set S` 分叉，用 `remove1`（`length_remove1`、`distinct_remove1` 都是现成库引理）。
+3. 两条一通，`T3_C1` 就是 `select_support_len` + `weight_indicator` 的 `metis`；**预计 56/7**。
+
+### 六、教训（本轮新增）
+
+- **文本块里的 antiquotation 别塞复杂表达式**：`@{text "weight (map (λj. ...)) = length S"}` 会让 `text` 命令报 `<malformed>`，且错误行号指向 `text` 开头（不是真正出问题的那一行）。**把公式留在正文里用纯文字描述，antiquotation 只放简单标识符。**
+- **`@{text hash_target}` 里的下划线是标记（下标）**，带下划线的标识符必须加引号：`@{text "hash_target"}`。
+- **JS 模板字符串里的 `\<` 会丢反斜杠**（`"\\<ge>"` 在模板串里写成 `"\<ge>"` 会变成 `<ge>`）。写 `.thy` 时凡涉及 `\<...>` 一律用普通字符串 + 双反斜杠，或直接用 `write` 工具落盘。
+- **`lemma X: "P ⟹ Q"` 的 `cases` 拿不到 `Cons.prems`**，要用 `assumes` 形式或 `fix`/`assume` 块。

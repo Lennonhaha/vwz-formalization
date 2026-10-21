@@ -17,7 +17,7 @@ tiers; the counts below are generated, not asserted.
 
 | Session | Content | Lemmas | `sorry` |
 |---|---|---|---|
-| `VWZ_A3_Aligned` | Definition layers + obligation inventory | 56 | 10 |
+| `VWZ_A3_Aligned` | Definition layers + obligation inventory | 56 | 9 |
 
 Rank, nullity and inversion are no longer uninterpreted. `VWZ_RREF.thy` defines
 a fuel-parameterised Gauss-Jordan reduction and derives
@@ -91,6 +91,17 @@ into statements about a made-up matrix.
   matrices, then `x1`), builds `psi` slice by slice with `map2` over the two
   outer-product factors, and fills the secret record with the Sec 3.6 fields,
   using `mat_inv` / `mat_mult` from `VWZ_RREF`.
+
+T2_D4 is closed too, and it was also a restatement rather than a proof attempt.
+`rows3_of` now has the body Sec 6.4.1 lists (Vandermonde rows in the secret
+`lambda_c` for `Za`, and `M3^T` rows for `Zb`), so the lemma takes the four
+arguments the body needs; and the count runs over `nullity A = n_cols A - mat_rank A`,
+not `dim_nullspace A = n_rows A - mat_rank A`.  For a `(k+2) x (2k+1)` system the
+row-count reading gives `k+2-rank`, which cannot bound `k-1` from below at all --
+it would need `rank <= 3` for every such system.  The column nullity gives
+`2k+1-rank >= k-1` from `rank <= k+2`, i.e. from the reduction preserving the row
+count.  Both readings agree on square matrices, so the earlier square lemmas are
+untouched; `nullity` was added next to `dim_nullspace` rather than redefining it.
 
 What was open, T2_B3, is now closed over `F_q`, and the restatement was forced by
 two facts that the first plan got wrong.  First, the bridge as stated is false:

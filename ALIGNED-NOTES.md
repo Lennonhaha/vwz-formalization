@@ -1417,3 +1417,41 @@ by (simp only: step1 step2 step4 step5 step6[symmetric])
 2. 在 `⋀` 形式的归纳目标里，`case (Cons ...)` / `case (Suc ...)` 已经把变量 fix 住，再写 `fix m s` 会报 *Failed to refine any pending goal*；直接 `obtain`/`assume` 即可。
 3. `by simp` 不会因为某个局部事实恰好是原子命题就结束目标；用 `proof (subst eq) show ... qed` 显式替换，或 `by (metis eq fact)`。
 4. `cong_mult_sq` 这类 7 前提引理用 `OF` 逐个喂参数极易 *no unifiers*，改成 `proof (rule cong_mult_sq)` 再逐条 `show`（前提顺序：P、Q、R、S 的 `sq`，`0 < m`，`P ≡ Q`，`R ≡ S`）最稳。
+<!-- seg: seg-t2d4-ee54d74757bb -->
+## 2026-10-21 17:2x -- T2_D4 闭合（56/10 → 56/9）：rows3 落地 + 零空间口径纠错
+
+### 做了什么
+
+1. `aligned/VWZ_Rows3.thy`（新文件，23 theory 之一）给 `rows3_of` 补 body，完全照 §6.4.1：
+   `rows3_of lc M3 Za Zb = map (λi. vand (lc!i) (n_rows M3)) (sorted_list_of_set Za) @
+                              map (λi. matvec (transpose M3) (vand (lc!i) (n_cols M3))) (sorted_list_of_set Zb)`
+   —— 只用既有 `vand`/`matvec`/`transpose`，没有新概念；索引集取 `nat set` + `sorted_list_of_set` 纯为可执行。
+   原一参 `consts rows3_of :: nat ⇒ mat` 删除（签名装不下 λc/M3/Za/Zb，这是当时留 consts 的真实原因）。
+2. `aligned/VWZ_RREF.thy` 新增 `nullity A = n_cols A - mat_rank A`（列数口径的零化度）。**不替换** `dim_nullspace`（行数口径），两者在方阵上相同。
+3. T2_D4 重述为：
+   `2 ≤ k ⟹ card Za + card Zb = k + 2 ⟹ n_rows Mm = 2*k+1 ⟹ n_cols Mm = 2*k+1 ⟹
+    k - 1 ≤ nullity (rows3_of lc Mm Za Zb)`，由 `rows3_dimension_count` 一击闭合。
+4. 账本实跑：**T2 10/4，TOTAL 56/9**（原 10/6 → 10/5 → 10/4），ledger 9、outside 0；23 theory / 361 lemmas。构建 RC=0、13 秒。
+
+### 为什么要改口径（这是本轮最有价值的一条）
+
+对 `(k+2) × (2k+1)` 的 rows3，**行数口径**给出 `(k+2) - rank`，要以 `k-1` 为下界等价于要求 `rank ≤ 3` 对任意这类系统成立 —— 假。
+**列数口径**给出 `(2k+1) - rank`，只需 `rank ≤ k+2`，而这正是「行数上限」：`mat_rank A ≤ n_rows A`。
+
+`mat_rank ≤ n_rows` 的证明链（本轮现证）：
+`length (filter P (rref A)) ≤ length (rref A) = length A`
+—— 关键是 `rref` 保行数：`swap_rows`/`scale_row`/`add_row_mult` 都是 `list_update`，长度不变；`eliminate_col` 是 `foldl`，需先证 `foldl_len`（`(⋀B k. length (f B k) = length B) ⟹ length (foldl f A xs) = length A`），再对 fuel 归纳 `len_rref_fuel`。
+
+**纪律**：口径错（row vs column nullity）不是"少个引理"，是**陈述本身不可满足**。这类错误和 T2_B3 的 ℤ/F_q 错配同族：先问"这个量在什么空间里"，再问"能不能证"。
+
+### Isabelle 工程坑（本轮新增，均为实测）
+
+1. **`by (simp add: rref_def)` 展开 `rref_fuel` 会卡在未 split 的 `case/if/let`**。正解：`unfolding rref_def by (rule len_rref_fuel)` —— 目标就是那条泛函等式，直接 `rule`，别让 simp 去拆。
+2. **`induct f arbitrary: r c A` 的 Suc 分支**：局部归纳假设是 `Suc.hyps`（`⋀r c A. ...` 的名字），但**不会自动进 simp**。分支里必须显式 `simp add: ... Suc.hyps`，否则目标就停在 `length (rref_fuel f r (Suc c) A) = length A`。
+3. **`∀r∈set (concat 两段 map)` 这类目标不要让 simp 展开**：展开成 `(λi. …) \` set … ∪ …` 的集合像形式后 simp 无从下手。正解：`fix r; assume "r ∈ set (rows3_of …)"; hence "r ∈ set (map …) ∨ r ∈ set (map …)" by (simp add: rows3_of_def)`，再分别 `obtain i where "r = …"` + 形状引理。
+4. **`n_cols` 的形状引理写法**：`n_cols X = m` 在 `X ≠ []` 下等价于 `length (X!0) = m`。先证通用 `n_cols_of_rows`（`∀r∈set X. length r = m ⟹ X ≠ [] ⟹ n_cols X = m`），别去拼 append 的分支（`A@B` 的 `if` 分支会被 simp 拆成 `A=[] ∧ B=[] ⟹ m = 0` 的残局）。
+5. **绑定名撞常量**：在 `VWZ_ObligationsAligned.thy` 里用 `M3` 当变量名会被同文件的 `definition M3` 吃掉，报 `Type unification failed ... n_rows :: int list list ⇒ nat` 与 `Operand: M3 :: nat ⇒ nat ⇒ int list list`。改用 `Mm`。
+
+### 下一步的判断（P2a/P2b 为何这轮没动）
+
+给 `P2a`/`P2b` 补 body 必须改签名（`nat ⇒ int` 装不下 λa/X2a/w2），而 T2_D6 的现陈述在 body 落地后会**变成假命题**：Z 里那个"两边都在"的重叠位，采样器只保证 P3a/P3b 为零，不保证 P2a 或 P2b 为零。要真陈述 T2_D6，得先决定"w2 来自采样器"这条假设怎么写（`solve_linear … = Some u2` + `w2 = X2a⁻¹·u2`？还是只约束 Z 上的值）。这是**陈述设计决定**，不是定义工作，故留待拍板；不写占位 body、不把假命题扶正。

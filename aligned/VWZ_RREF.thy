@@ -299,6 +299,17 @@ text \<open>Nullspace dimension in the row-count convention of the spec and of
 definition dim_nullspace :: "mat \<Rightarrow> nat" where
   "dim_nullspace A = n_rows A - mat_rank A"
 
+text \<open>The column-count nullity, @{text "n_cols A - mat_rank A"}.  This is the
+  nullity of the map that @{text A} induces on column vectors, and it is the
+  convention the rank-nullity count needs.  It is recorded separately from
+  @{text dim_nullspace} rather than replacing it, because the row-count reading
+  is what the earlier obligations were phrased in, and silently redefining a
+  shared notion would rewrite history.  The two agree exactly on square
+  matrices.\<close>
+
+definition nullity :: "mat \<Rightarrow> nat" where
+  "nullity A = n_cols A - mat_rank A"
+
 text \<open>The one lemma about the definition that is worth having: unfolding it.
   Kept here rather than in the obligation file so that the ledger counts only
   obligations.\<close>

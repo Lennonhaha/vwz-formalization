@@ -8,7 +8,7 @@
       T0   ( 8)  purely formal rewriting            -- 17 lemmas, 0 sorry
       T1-A       algebraic axioms + closed ser. id. -- 16 lemmas, 0 sorry
       T1-D       definition-dependent (TODO bodies) --  5 lemmas, 2 sorry
-      T2   ( 8)  linear algebra / matrices          -- 10 lemmas, 5 sorry
+      T2   ( 8)  linear algebra / matrices          -- 10 lemmas, 4 sorry
       T3   ( 8)  security / probabilistic / parser  --  8 lemmas, 3 sorry
     (T1-A / T1-D split the former single T1 bucket at the lemma level; the 37
      is an obligation count, the figures above are Isabelle-lemma counts.  See
@@ -25,7 +25,7 @@
 *)
 theory VWZ_ObligationsAligned
   imports VWZ_Fq3329 VWZ_KeyGen VWZ_Matrix VWZ_Protocol VWZ_Aux VWZ_RREF
-    VWZ_ModAlgebra
+    VWZ_ModAlgebra VWZ_Rows3
 begin
 
 section \<open>T0 -- purely formal rewriting (target: 0 sorry)\<close>
@@ -182,9 +182,6 @@ definition M2 :: "nat \<Rightarrow> nat \<Rightarrow> mat" where
 
 definition M3 :: "nat \<Rightarrow> nat \<Rightarrow> mat" where
   "M3 m s = mat_mult (X3b_of m s) (mat_inv (X3a_of m s))"
-
-consts rows3_of :: "nat \<Rightarrow> mat"
-        \<comment> \<open>TODO(define): spec Sec 6.4.1 -- rows3 for parameter k (type anchored on VWZ_Matrix)\<close>
 
 definition psi_slice :: "pkey \<Rightarrow> nat \<Rightarrow> mat" where
   "psi_slice pk i = pk_psi pk ! i"
@@ -763,18 +760,28 @@ text \<open>The obligation, rewritten so that the rank side is unfolded, is the 
 
 subsection \<open>T2 :: D4 -- dim(nullspace(rows3)) \<ge> k - 1  for k \<ge> 2\<close>
 
-text \<open>Still blocked, and deliberately not faked.  Sec 6.4.1 defines
-  @{text rows3} as @{text "[vand(lambda_c[i], m) for i in Za] @
-  [M3\<^sup>T . vand(lambda_c[i], m) for i in Zb]"}, so its body needs four things
-  this signature cannot carry: the secret @{text lambda_c}, the matrix @{text M3},
-  the split point @{text a}, and the resulting @{text Za}/@{text Zb}.  Writing a
-  placeholder that ignores them would make the lemma a statement about a made-up
-  matrix, which is worse than a tagged hole.  What the body needs: change the
-  signature to take @{text "lambda_c"}, @{text M3} and the two sets, then the
-  dimension count becomes @{text "n_rows = k + 2"} and @{text "n_cols = m"}.\<close>
+text \<open>Now well-posed.  @{file VWZ_Rows3.thy} defines @{text rows3_of} exactly as
+  Sec 6.4.1 lists it -- one Vandermonde row in the secret @{text lambda_c} per
+  index of @{text Za}, and one @{text "M3<^sup>T"} row per index of @{text Zb} -- so
+  the lemma takes the four arguments the body actually needs instead of asking a
+  one-argument constant to sum up the whole key.
 
-lemma T2_D4: "2 \<le> k \<Longrightarrow> k - 1 \<le> dim_nullspace (rows3_of k)"
-  sorry
+  The count is stated against @{text nullity} (columns minus rank), not against
+  @{text dim_nullspace} (rows minus rank).  That is a correction, not a
+  convenience.  For a @{text "k + 2"} by @{text "2 * k + 1"} system the row
+  reading gives @{text "k + 2 - rank"}, which cannot bound @{text "k - 1"} from
+  below at all: it would need @{text "rank \<le> 3"} for every such system, which
+  is false.  What the sampler needs is @{text "2 * k + 1 - rank \<ge> k - 1"}, and
+  that follows from the rank never exceeding the number of rows.  The proof is
+  @{text rows3_dimension_count} in @{file VWZ_Rows3.thy}; the two side conditions
+  are the spec's own (@{text "\<bar>Za\<bar> + \<bar>Zb\<bar> = \<bar>Z\<bar> + 1 = k + 2"} and a
+  square mixing matrix of order @{text "2 * k + 1"}).\<close>
+
+lemma T2_D4:
+  "2 \<le> k \<Longrightarrow> card Za + card Zb = k + 2 \<Longrightarrow>
+   n_rows Mm = 2 * k + 1 \<Longrightarrow> n_cols Mm = 2 * k + 1 \<Longrightarrow>
+   k - 1 \<le> nullity (rows3_of lc Mm Za Zb)"
+  by (rule rows3_dimension_count)
 
 subsection \<open>T2 :: D5 -- the u2 rows reproduce adapted on S\<close>
 

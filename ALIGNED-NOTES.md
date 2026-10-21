@@ -1223,3 +1223,52 @@ assumes reduced: "∀r∈set A. ∀x∈set r. 0 ≤ x ∧ x < 3329"
 - `isabelle build -D aligned`：**RC=0，12 秒**
 - 账本不变：**56 lemmas / 11 sorry**（新层不增加义务，也不假装减少义务）
 - 未跟踪文件：`aligned/VWZ_ModProbe.thy`（临时探针，删除被安全策略拦下，待交互确认）、`aligned/Scratch.thy`、`aligned/VWZ_Checks.thy`、`aligned/VWZ_Scratch.thy`
+<!-- seg: seg-bridge-c06eb6c70756 -->
+## 2026-10-21 (cont.): the integer-to-modular bridge, and why `reduced` is not optional
+
+**What landed.** `aligned/VWZ_ModAlgebra.thy` now contains the entry-level layer that the
+bridge needs: `nth_row_add_matrix`, `row_add_matrix_row_len`, `fq_reduced`,
+`sum_sel_one`, `sum_sel_scaled`, `map2_unit_row`, `dot_unit_row`, `dot_sparse_two`,
+`is_rect_rows`, and finally
+
+    mat_mult_mod (row_add_matrix m i j f) A = add_row_mult A i j f
+
+under the hypotheses `i < m`, `j < m`, `i \<noteq> j`, `n_rows A = m`, `is_rect A`, and
+
+    reduced A:  for every row r of A and every x in r,  0 \<le> x \<and> x < 3329.
+
+**Why the hypothesis cannot be dropped.** The two sides reduce different things.
+`mat_mult_mod` maps `fq` over the *whole product*, so rows other than `i` come out as
+`fq (A ! r ! c)`; `add_row_mult` rewrites only row `i` and leaves the other rows alone, as
+`A ! r ! c`.  For a matrix whose entries are already in `[0, 3329)` these agree, because
+`fq x = x` there (`fq_reduced`, from `mod_pos_pos_trivial`).  For a general integer matrix
+they do not: entry `3329` on the left is `0`, on the right it stays `3329`.
+
+So the bridge is a statement about *state invariants of the algorithm*, not an identity of
+pure linear algebra over `int`.  The invariant is honest for this algorithm: `rim_iter`
+starts from `id_mat` and only ever applies `add_row_mult` with `f = int c`, `c \<in> {1..3328}`,
+which keeps every entry in `[0, 3329)`.  Stating it without the invariant is what made the
+earlier "the bridge is false" diagnosis correct, and stating it with the invariant is what
+makes it provable now.
+
+**Tooling traps met on the way.**
+
+1. `map2` has no `nth` lemma in HOL-List for this shape; the usable route is
+   `map2_conv_idx` (proved in `VWZ_MatAlgebra`): convert `map2 f xs ys` to
+   `map (\<lambda>k. f (xs!k) (ys!k)) [0..<n]` once the lengths are both `n`, then `nth_map`
+   and `nth_upt` finish.  The lemma name `nth_map2` does not exist --- do not invent it.
+2. Inside `map (\<lambda>k. ...) [0..<n]`, `simp` cannot discharge the side condition
+   `k < length xs`; prove the pointwise equality with `rule map_cong[OF refl]` plus an
+   explicit `fix k / assume k \<in> set [0..<n] / hence k < n by (simp add: set_upt)`.
+3. `by simp` will not use a local `have` equation.  Pass it explicitly:
+   `by (simp only: conv step)`.
+4. A goal of the form `length (mat_mult_mod A B) = m` needs `length (mat_mult A B) =
+   n_rows A` spelled out (`n_rows_def` + `n_rows_mat_mult`); `simp` will not guess the
+   `n_rows`/`length` coupling.
+5. `fq_add`, `fq_mult`, `fq_idem`, `mod_add_eq`, `mod_mult_eq` must stay out of `simp`:
+   `fq_idem` and `fq_add` rewrite in opposite directions and the simplifier loops silently
+   (build runs for minutes, zero output, no error).
+
+Ledger after this step: 56 lemmas, 11 sorry (T2 10/6, T3 8/3), every sorry inside the
+ledger.  T2_B3 itself is still a `sorry`: what is now available is the bridge, not yet the
+inverse of an elementary matrix nor the associativity of the modular product.

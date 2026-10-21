@@ -1635,3 +1635,45 @@ definition hash_target k msg =
 - **`@{text hash_target}` 里的下划线是标记（下标）**，带下划线的标识符必须加引号：`@{text "hash_target"}`。
 - **JS 模板字符串里的 `\<` 会丢反斜杠**（`"\\<ge>"` 在模板串里写成 `"\<ge>"` 会变成 `<ge>`）。写 `.thy` 时凡涉及 `\<...>` 一律用普通字符串 + 双反斜杠，或直接用 `write` 工具落盘。
 - **`lemma X: "P ⟹ Q"` 的 `cases` 拿不到 `Cons.prems`**，要用 `assumes` 形式或 `fix`/`assume` 块。
+<!-- seg: seg-t3c1-d994a9f1449f -->
+## 2026-10-21 20:2x：T3_C1 关闭 —— 稀疏目标的簿记分两步落地（56/7）
+
+### 结论
+- `T3_C1`（`length (digest k msg) ≥ k+1 ⟹ weight (hash_target k msg) = k+1`）已证，`sorry` 删除，改为 `by (rule hash_target_weight)`。
+- 账本：**56 lemmas / 7 sorry**（T3 从 8/3 → 8/2；T2 10/3，T1-D 5/2，其余 0）。`outside: 0`。
+- 新增理论 `aligned/VWZ_Target.thy`（imports `VWZ_Fq3329`），`weight` 从 obligation 文件迁入，`VWZ_ObligationsAligned` 改为 import `VWZ_Target`。
+
+### 设计改动（本轮最重要的决定）
+**把「池选择（按值移除）」换成「原地交换」**，即真正的 partial Fisher–Yates：
+
+```
+fun fy_fuel :: "nat ⇒ nat ⇒ nat list ⇒ nat list ⇒ nat list" where
+  "fy_fuel 0 j xs rs = xs"
+| "fy_fuel (Suc f) j xs [] = xs"
+| "fy_fuel (Suc f) j xs (r # rs) =
+     (if j < length xs then fy_fuel f (Suc j) (swap_at j (j + r mod (length xs - j)) xs) rs
+      else xs)"
+definition swap_at :: "nat ⇒ nat ⇒ nat list ⇒ nat list" where
+  "swap_at i j xs = xs[i := xs ! j, j := xs ! i]"
+definition hash_target :: "nat ⇒ nat list ⇒ nat list" where
+  "hash_target k msg =
+     (let S = take (k + 1) (fy_fuel (k + 1) 0 [0..<par_n k] (digest k msg)) in
+        map (\<lambda>j. if j ∈ set S then 1 else 0) [0..<par_n k])"
+```
+
+理由：交换**保持长度/集合/互异性**，`List.thy` 已自带 `set_swap`、`distinct_swap`（针对 `xs[i:=xs!j, j:=xs!i]` 这个**表达式**，不是函数——所以自建 `swap_at` 再 `simp add: swap_at_def` 即可直接吃到这两条 simp 规则）；而按值移除版需要自己写「过滤后长度 = 长度−1」（`filter_neq_length`），还要在归纳里维持「累加器与剩余池不相交」的互异性不变量，成本高一个量级。上一轮实测该路线连 `select_support` 的**长度**都证不出来（`Cons.prems` 取不到）。
+
+### 三条新踩的 Isabelle 坑（写下来省下次）
+1. **`fix` 过的变量再 `cases` 只给等式前提，不做替换**。`fix rs; proof (cases rs)` 得到的 goal 是 `rs = r # rs' ⟹ …`，`case (Cons r rs')` 也不会把 `rs` 换掉；`by (cases rs) (simp_all …)` 同样留 `?rs = r # rs'`。**正解**：在 Cons 分支里先用 `using Cons by simp` 显式导出 `step: "fy_fuel (Suc f) j xs rs = (if j < length xs then … else xs)"`，之后所有重写都基于 `step`，不依赖 case 替换。
+2. **`case True` / `case False` 的事实名与常量 `True`/`False` 撞名**。`using True by simp` 可能拿不到「假设 `n ∈ set S`」，表现为目标里出现 `n ∈ set S ⟹ 0 = 1` 这种诡异形态。**正解**：改引 `\<open>n ∈ set S\<close>` 这种字面事实引用，彻底避开撞名。
+3. **`map_cong[OF refl]` 之后不要指望 `simp`/`auto` 收尾**。收敛的写法是：先在 `have me:` 里用显式 `proof (rule map_cong[OF refl]) … fix j; assume …; show …` 逐项分情形证出**映射相等**，再用 `by (subst me, rule refl)` 推出**权重相等**（`using me by simp` 曾整块失效，`subst` 版本稳）。
+
+### 支撑引理（全在 `VWZ_Target.thy`，均已证）
+- `length_swap_at [simp]`、`set_swap_at`、`distinct_swap_at`（都靠 `swap_at_def` + 库规则）。
+- `fy_fuel_len` / `fy_fuel_set` / `fy_fuel_distinct`：`⋀`-形式 + `step` 重写。
+- `support_len`（`take (k+1)` 长度 = k+1，靠 `min_absorb2` + `par_n k = 2k+2`）、`support_distinct`、`support_subset`（`in_set_takeD` + `fy_fuel_set`）。
+- `weight_indicator`：对 `n` 归纳，`n ∈ set S` 分支用 `remove1`，其中「`set S' = set S - {n}` 与 `j ≠ n` ⇒ 成员关系不变」用显式 `ballI` + `cases` 两段。
+- `hash_target_weight`：三个 `support_*` 直接喂 `weight_indicator`。
+
+### 关于前提的诚实说明
+`length (digest k msg) ≥ k+1` **保留为真前提**：走 k+1 步要吃 k+1 个字；短 digest 只损失随机性，不损失长度（长度由 `take (k+1)` 与池容量 `par_n k` 决定）。因此该前提在实现里由 XOF 输出长度保证，不是为凑证明编的。

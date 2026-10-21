@@ -167,39 +167,36 @@ qed
 
 section \<open>Protocol objects (bodies deferred)\<close>
 
-text \<open>The target is sparse by construction, but the sparsity must not be
-  assumed: it has to come out of the selection.  The support is chosen from the
-  pool @{text "[0..<par_n k]"} by a partial Fisher-Yates walk -- each step draws
-  an index modulo the pool's current length and removes the value found there, so
-  no position can be picked twice and nothing outside the pool can appear.  The
-  randomness is a list of words from @{text digest}, which stays uninterpreted:
-  nothing here claims it is a hash, only that it supplies @{text "k + 1"} words
-  (that is the hypothesis of @{text T3_C1}).\<close>
+text \<open>The target is sparse by construction, and the sparsity comes out of the
+  selection rather than being assumed.  The support is produced by a partial
+  Fisher-Yates walk over the pool of all positions: at step @{text j} the walk
+  draws an offset from the XOF, swaps position @{text j} with the drawn position,
+  and moves on, so after @{text "k + 1"} steps the first @{text "k + 1"} entries
+  are a uniform sample without replacement.  The walk length is fixed by the
+  parameter, so a short digest only costs randomness, never length.
+
+  Swapping is used rather than removal because swapping a list in place keeps its
+  length, its set and its distinctness, and the library already knows the last
+  two (@{text set_swap}, @{text distinct_swap}).  Removal would have needed the
+  index arithmetic of @{text take}/@{text drop} by hand.\<close>
 
 consts digest :: "nat \<Rightarrow> nat list \<Rightarrow> nat list"
 
-text \<open>Removal is by value rather than by position.  On a duplicate-free pool the
-  two agree, and removing by value makes the count and the disjointness
-  immediate, which is why the invariant below does not have to reason about
-  indices at all.\<close>
+definition swap_at :: "nat \<Rightarrow> nat \<Rightarrow> nat list \<Rightarrow> nat list" where
+  "swap_at i j xs = xs[i := xs ! j, j := xs ! i]"
 
-fun pick_remove :: "nat list \<Rightarrow> nat \<Rightarrow> nat \<times> nat list" where
-  "pick_remove [] r = (0, [])"
-| "pick_remove (x # xs) r =
-     ((x # xs) ! (r mod length (x # xs)),
-      filter (\<lambda>y. y \<noteq> (x # xs) ! (r mod length (x # xs))) (x # xs))"
-
-fun select_support ::
-  "nat \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> nat list \<times> nat list" where
-  "select_support 0 rs pool acc = (acc, pool)"
-| "select_support (Suc m) [] pool acc = (acc, pool)"
-| "select_support (Suc m) (r # rs) pool acc =
-     (case pick_remove pool r of (v, pool') \<Rightarrow> select_support m rs pool' (acc @ [v]))"
+fun fy_fuel :: "nat \<Rightarrow> nat \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> nat list" where
+  "fy_fuel 0 j xs rs = xs"
+| "fy_fuel (Suc f) j xs [] = xs"
+| "fy_fuel (Suc f) j xs (r # rs) =
+     (if j < length xs then fy_fuel f (Suc j) (swap_at j (j + r mod (length xs - j)) xs) rs
+      else xs)"
 
 definition hash_target :: "nat \<Rightarrow> nat list \<Rightarrow> nat list" where
   "hash_target k msg =
-     (let (S, _) = select_support (k + 1) (digest k msg) [0..<par_n k] [] in
+     (let S = take (k + 1) (fy_fuel (k + 1) 0 [0..<par_n k] (digest k msg)) in
         map (\<lambda>j. if j \<in> set S then 1 else 0) [0..<par_n k])"
+
 
 consts Eval :: "nat list \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> nat list"
         \<comment> \<open>TODO(define): spec Sec 4 -- (pk, w2, w3) |-> t\<close>

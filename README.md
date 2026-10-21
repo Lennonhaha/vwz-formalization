@@ -17,7 +17,7 @@ tiers; the counts below are generated, not asserted.
 
 | Session | Content | Lemmas | `sorry` |
 |---|---|---|---|
-| `VWZ_A3_Aligned` | Definition layers + obligation inventory | 56 | 8 |
+| `VWZ_A3_Aligned` | Definition layers + obligation inventory | 56 | 7 |
 
 Rank, nullity and inversion are no longer uninterpreted. `VWZ_RREF.thy` defines
 a fuel-parameterised Gauss-Jordan reduction and derives

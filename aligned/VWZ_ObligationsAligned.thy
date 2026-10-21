@@ -9,7 +9,7 @@
       T1-A       algebraic axioms + closed ser. id. -- 16 lemmas, 0 sorry
       T1-D       definition-dependent (TODO bodies) --  5 lemmas, 2 sorry
       T2   ( 8)  linear algebra / matrices          -- 10 lemmas, 3 sorry
-      T3   ( 8)  security / probabilistic / parser  --  8 lemmas, 3 sorry
+      T3   ( 8)  security / probabilistic / parser  --  8 lemmas, 2 sorry
     (T1-A / T1-D split the former single T1 bucket at the lemma level; the 37
      is an obligation count, the figures above are Isabelle-lemma counts.  See
      plans/vwz-a3-aligned_20261018.md, Addendum.)
@@ -24,7 +24,7 @@
     wrinkle is recorded in plans/vwz-a3-aligned_20261018.md.
 *)
 theory VWZ_ObligationsAligned
-  imports VWZ_Fq3329 VWZ_KeyGen VWZ_Matrix VWZ_Protocol VWZ_Aux VWZ_RREF VWZ_Solver VWZ_Transpose
+  imports VWZ_Fq3329 VWZ_Target VWZ_KeyGen VWZ_Matrix VWZ_Protocol VWZ_Aux VWZ_RREF VWZ_Solver VWZ_Transpose
     VWZ_ModAlgebra VWZ_Rows3
 begin
 
@@ -201,14 +201,10 @@ definition M3 :: "nat \<Rightarrow> nat \<Rightarrow> mat" where
 definition psi_slice :: "pkey \<Rightarrow> nat \<Rightarrow> mat" where
   "psi_slice pk i = pk_psi pk ! i"
 
-text \<open>Hamming weight, as used by the target-density obligations.  Giving it a
-  body does NOT unblock @{text T3_C1}: that lemma is about
-  @{text "hash_target k msg"}, which is still uninterpreted, so the count is not
-  yet a statement about anything.  The body is here so that the count itself is
-  no longer opaque once @{text hash_target} lands.\<close>
-
-definition weight :: "nat list \<Rightarrow> nat" where
-  "weight xs = length (filter (\<lambda>x. x \<noteq> 0) xs)"
+text \<open>Hamming weight, as used by the target-density obligations, now lives in
+  @{file VWZ_Target.thy}: it is needed there to state the counting lemma, and the
+  dependency runs one way only (the target theory knows nothing about the
+  protocol).\<close>
 
 
 text \<open>Uniformity of the raw reduction.  A 32-bit word is uniform over
@@ -951,14 +947,15 @@ text \<open>@{text "hash_target"} has a body now (see @{file VWZ_Fq3329.thy}): t
   rather than an assumption, and that the only uninterpreted object left is
   @{text digest} -- the XOF.  Nothing here claims it is a hash.
 
-  TODO(proof): the lemma below needs two bookkeeping facts.  First, that the
-  walk returns exactly @{text "k + 1"} positions; the proof is an induction
-  carrying the invariant that the accumulator and the remaining pool are
-  disjoint, which is also what makes the result duplicate-free.  Second, that
-  the indicator vector of a duplicate-free support inside the range has
-  Hamming weight equal to the support's length.  Neither is mathematically
-  hard, and neither is asserted: the first draft of both was blocked on list
-  bookkeeping and reverted rather than left half-proved.
+  Both bookkeeping facts are proved in @{file VWZ_Target.thy} and the lemma
+  below is a one-line consequence.  The walk keeps the pool's length, set and
+  distinctness (each a rewrite, since it only ever swaps a pair of positions),
+  so its first @{text "k + 1"} entries exist and are distinct positions inside
+  @{text "[0, par_n k)"}; the indicator of such a support is then a weight
+  count, proved by induction on the range with @{text remove1} on the positive
+  branch.  The first version of this was blocked on list bookkeeping and
+  reverted rather than left half-proved; the second version moved the
+  invariants into a separate theory and they went through.
 
   One premise is genuine and is kept.  The walk consumes one digest word per
   step, so @{text "k + 1"} words must be available.  Without that hypothesis
@@ -967,7 +964,7 @@ text \<open>@{text "hash_target"} has a body now (see @{file VWZ_Fq3329.thy}): t
 
 lemma T3_C1:
   "length (digest k msg) \<ge> k + 1 \<Longrightarrow> weight (hash_target k msg) = k + 1"
-  sorry
+  by (rule hash_target_weight)
 
 subsection \<open>T3 :: C3 -- the raw reduction is biased for q = 3329\<close>
 

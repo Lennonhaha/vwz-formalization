@@ -2,6 +2,7 @@ session VWZ_A3_Aligned = "HOL-Number_Theory" +
   options [quick_and_dirty]
   theories
     VWZ_Fq3329
+    VWZ_Target
     VWZ_KeyGen
     VWZ_Matrix
     VWZ_Protocol

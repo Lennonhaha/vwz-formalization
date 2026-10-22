@@ -274,25 +274,424 @@ proof (rule ccontr)
   from len al bl ab Pa Pb show False by (rule filter_le_one_two_positions)
 qed
 
+(* seg: shape-batch1 *)
+section \<open>The reduced form keeps its rectangular shape\<close>
+
+text \<open>@{const is_rect} is stated with @{const n_cols}, which is a lookup into the
+  first row.  Recomputing it after every row operation would force a case split
+  on emptiness each time, so the invariant below fixes the row length instead:
+  @{text "rect_len n A"} says every row of @{text A} has length @{text n} for one
+  fixed @{text n}.  For a rectangular @{text A} the two notions agree
+  (@{text rect_len_is_rect}, @{text rect_len_n_cols}), and @{text rect_len} is
+  stable under all three row operations because each of them either permutes rows
+  or maps over rows of equal length.
+
+  Nothing here needs the pigeonhole or inverse arguments of the rank lemmas
+  below; this is a purely structural layer.\<close>
+
+definition rect_len :: "nat \<Rightarrow> mat \<Rightarrow> bool" where
+  "rect_len n A = (\<forall>r \<in> set A. length r = n)"
+
+lemma rect_lenD:
+  assumes rl: "rect_len n A" and rm: "r \<in> set A"
+  shows "length r = n"
+  using rl rm by (simp add: rect_len_def)
+
+lemma rect_len_is_rect:
+  assumes "is_rect A"
+  shows "rect_len (n_cols A) A"
+  using assms by (simp add: is_rect_def rect_len_def)
+
+lemma rect_len_n_cols:
+  assumes rl: "rect_len n A" and ne: "A \<noteq> []"
+  shows "n_cols A = n"
+proof -
+  have h: "A ! 0 \<in> set A" using ne by simp
+  have h0: "length (A ! 0) = n" using rl h by (rule rect_lenD)
+  show ?thesis using h0 ne by (simp add: n_cols_def)
+qed
+
+text \<open>The number of rows is untouched by every row operation, which is what lets
+  the fold in @{const eliminate_col} keep its bounds and what shows that the
+  reduced form of a nonempty matrix is nonempty.\<close>
+
+lemma n_rows_swap_rows [simp]: "n_rows (swap_rows A i j) = n_rows A"
+  by (simp add: swap_rows_def n_rows_def)
+
+lemma n_rows_scale_row [simp]: "n_rows (scale_row A i k) = n_rows A"
+  by (simp add: scale_row_def n_rows_def)
+
+lemma n_rows_add_row_mult [simp]: "n_rows (add_row_mult A i j k) = n_rows A"
+  by (simp add: add_row_mult_def n_rows_def)
+
+text \<open>A swap replaces one row by another row of the same matrix and then does the
+  same again.  The two updates are therefore subsets of the original row set:
+  @{text set_list_update} bounds a single update by
+  @{text "insert x (set xs)"}, and both inserted rows come from @{text A} because
+  the indices are in range.
+
+  The subset facts below are deliberately kept out of @{text simp}.  Chaining a
+  fact of the form @{text "set B \<subseteq> set A"} into @{text simp} lets the
+  simplifier search for set inclusions, and on this goal that search does not
+  terminate promptly; @{text blast} discharges each step directly.\<close>
+
+lemma set_list_update_subset:
+  assumes i: "i < length xs" and x: "x \<in> set xs"
+  shows "set (xs[i := x]) \<subseteq> set xs"
+  using set_update_subset_insert[of xs i x] x by blast
+
+lemma rect_len_swap_rows:
+  assumes rl: "rect_len n A" and i: "i < n_rows A" and j: "j < n_rows A"
+  shows "rect_len n (swap_rows A i j)"
+  unfolding rect_len_def
+proof
+  fix r
+  assume rm: "r \<in> set (swap_rows A i j)"
+  have iA: "i < length A" using i by (simp add: n_rows_def)
+  have jA: "j < length A" using j by (simp add: n_rows_def)
+  have jm: "A ! j \<in> set A"
+  proof (rule nth_mem)
+    show "j < length A" using jA .
+  qed
+  have im: "A ! i \<in> set A"
+  proof (rule nth_mem)
+    show "i < length A" using iA .
+  qed
+  have h1: "set (A[i := A ! j]) \<subseteq> set A" using iA jm by (rule set_list_update_subset)
+  have ins: "r \<in> insert (A ! i) (set (A[i := A ! j]))"
+  proof -
+    have sub: "set ((A[i := A ! j])[j := A ! i])
+                 \<subseteq> insert (A ! i) (set (A[i := A ! j]))"
+      using set_update_subset_insert[of "A[i := A ! j]" j "A ! i"] .
+    have "r \<in> set ((A[i := A ! j])[j := A ! i])" using rm by (simp add: swap_rows_def)
+    with sub show ?thesis by blast
+  qed
+  have rA: "r \<in> set A"
+  proof (cases "r = A ! i")
+    case True
+    with im show ?thesis by simp
+  next
+    case False
+    with ins have "r \<in> set (A[i := A ! j])" by simp
+    with h1 show ?thesis by blast
+  qed
+  with rl show "length r = n" by (rule rect_lenD)
+qed
+
+text \<open>Scaling rewrites exactly one row, with @{text map}, and @{text map} keeps
+  the length.  The other rows are untouched.\<close>
+
+lemma rect_len_scale_row:
+  assumes rl: "rect_len n A" and i: "i < n_rows A"
+  shows "rect_len n (scale_row A i k)"
+  unfolding rect_len_def
+proof
+  fix r
+  assume rm: "r \<in> set (scale_row A i k)"
+  have ins: "r \<in> insert (map (\<lambda>x. fq (k * x)) (A ! i)) (set A)"
+  proof -
+    have sub: "set (A[i := map (\<lambda>x. fq (k * x)) (A ! i)])
+                 \<subseteq> insert (map (\<lambda>x. fq (k * x)) (A ! i)) (set A)"
+      using set_update_subset_insert[of A i "map (\<lambda>x. fq (k * x)) (A ! i)"] .
+    have "r \<in> set (A[i := map (\<lambda>x. fq (k * x)) (A ! i)])"
+      using rm by (simp add: scale_row_def)
+    with sub show ?thesis by blast
+  qed
+  have disj: "r = map (\<lambda>x. fq (k * x)) (A ! i) \<or> r \<in> set A" using ins by simp
+  show "length r = n"
+  proof (cases "r \<in> set A")
+    case True
+    with rl show ?thesis by (rule rect_lenD)
+  next
+    case False
+    with disj have eq: "r = map (\<lambda>x. fq (k * x)) (A ! i)" by blast
+    have li: "length (A ! i) = n" using rl i by (simp add: rect_lenD n_rows_def)
+    show ?thesis using eq li by simp
+  qed
+qed
+
+text \<open>Adding a multiple of one row to another uses @{text map2}, whose length is
+  the minimum of the two row lengths.  Equal lengths turn the minimum back into
+  @{text n}, which is the only place where rectangularity is really used.\<close>
+
+lemma rect_len_add_row_mult:
+  assumes rl: "rect_len n A" and i: "i < n_rows A" and j: "j < n_rows A"
+  shows "rect_len n (add_row_mult A i j k)"
+  unfolding rect_len_def
+proof
+  fix r
+  assume rm: "r \<in> set (add_row_mult A i j k)"
+  have ins: "r \<in> insert (map2 (\<lambda>x y. fq (x + k * y)) (A ! i) (A ! j)) (set A)"
+  proof -
+    have sub: "set (A[i := map2 (\<lambda>x y. fq (x + k * y)) (A ! i) (A ! j)])
+                 \<subseteq> insert (map2 (\<lambda>x y. fq (x + k * y)) (A ! i) (A ! j)) (set A)"
+      using set_update_subset_insert[of A i "map2 (\<lambda>x y. fq (x + k * y)) (A ! i) (A ! j)"] .
+    have "r \<in> set (A[i := map2 (\<lambda>x y. fq (x + k * y)) (A ! i) (A ! j)])"
+      using rm by (simp add: add_row_mult_def)
+    with sub show ?thesis by blast
+  qed
+  have disj: "r = map2 (\<lambda>x y. fq (x + k * y)) (A ! i) (A ! j) \<or> r \<in> set A" using ins by simp
+  show "length r = n"
+  proof (cases "r \<in> set A")
+    case True
+    with rl show ?thesis by (rule rect_lenD)
+  next
+    case False
+    with disj have eq: "r = map2 (\<lambda>x y. fq (x + k * y)) (A ! i) (A ! j)" by blast
+    have li: "length (A ! i) = n" using rl i by (simp add: rect_lenD n_rows_def)
+    have lj: "length (A ! j) = n" using rl j by (simp add: rect_lenD n_rows_def)
+    have "length r = min (length (A ! i)) (length (A ! j))" using eq by simp
+    thus ?thesis using li lj by simp
+  qed
+qed
+
+(* seg: shape-batch2 *)
+text \<open>@{const eliminate_col} is a @{text foldl} over all row indices, adding a
+  multiple of the pivot row to every other row.  Two invariants have to be
+  threaded through the fold: the row length (@{text rect_len}) and the number of
+  rows, because @{const add_row_mult} needs both of its indices to be in range
+  when it is applied again at the next step.\<close>
+
+lemma n_rows_foldl_elim:
+  "n_rows (foldl (\<lambda>B k. if k = r then B else add_row_mult B k r (- entry B k c)) A xs) = n_rows A"
+proof (induct xs arbitrary: A)
+  case Nil
+  then show ?case by simp
+next
+  case (Cons k ks)
+  show ?case
+  proof (cases "k = r")
+    case True
+    have ih: "n_rows (foldl (\<lambda>B k. if k = r then B else add_row_mult B k r (- entry B k c)) A ks)
+                = n_rows A"
+      by (rule Cons.hyps)
+    with True show ?thesis by simp
+  next
+    case False
+    have step: "n_rows (add_row_mult A k r (- entry A k c)) = n_rows A" by simp
+    have ih: "n_rows (foldl (\<lambda>B k. if k = r then B else add_row_mult B k r (- entry B k c))
+                          (add_row_mult A k r (- entry A k c)) ks)
+                = n_rows (add_row_mult A k r (- entry A k c))"
+      by (rule Cons.hyps)
+    with step False show ?thesis by simp
+  qed
+qed
+
+lemma n_rows_eliminate_col [simp]:
+  "n_rows (eliminate_col A r c) = n_rows A"
+  using n_rows_foldl_elim[where A=A and r=r and c=c and xs="[0..<n_rows A]"]
+  by (simp add: eliminate_col_def)
+
+lemma rect_len_foldl_elim:
+  assumes rl: "rect_len n A"
+    and kn: "\<forall>k \<in> set xs. k < n_rows A"
+    and rn: "r < n_rows A"
+  shows "rect_len n (foldl (\<lambda>B k. if k = r then B else add_row_mult B k r (- entry B k c)) A xs)"
+proof -
+  have main: "\<And>A. rect_len n A \<Longrightarrow> (\<forall>k \<in> set xs. k < n_rows A) \<Longrightarrow> r < n_rows A
+        \<Longrightarrow> rect_len n (foldl (\<lambda>B k. if k = r then B else add_row_mult B k r (- entry B k c)) A xs)"
+    for xs :: "nat list"
+  proof (induct xs)
+    case Nil
+    show ?case using Nil.prems by simp
+  next
+    case (Cons k ks)
+    have rlA: "rect_len n A" using Cons.prems(1) .
+    have kn: "\<forall>k' \<in> set (k # ks). k' < n_rows A" using Cons.prems(2) .
+    have rn: "r < n_rows A" using Cons.prems(3) .
+    have knA: "k < n_rows A" using kn by simp
+    show ?case
+    proof (cases "k = r")
+      case True
+      have ksA: "\<forall>k' \<in> set ks. k' < n_rows A" using kn by simp
+      have ih: "rect_len n (foldl (\<lambda>B k. if k = r then B else add_row_mult B k r (- entry B k c)) A ks)"
+        using rlA ksA rn by (rule Cons.hyps)
+      with True show ?thesis by simp
+    next
+      case False
+      note neq = \<open>k \<noteq> r\<close>
+      have ks: "\<forall>k' \<in> set ks. k' < n_rows (add_row_mult A k r (- entry A k c))"
+        using kn by simp
+      have step: "rect_len n (add_row_mult A k r (- entry A k c))"
+        using rlA knA rn by (rule rect_len_add_row_mult)
+      have rn2: "r < n_rows (add_row_mult A k r (- entry A k c))" using rn by simp
+      have ih: "rect_len n (foldl (\<lambda>B k. if k = r then B else add_row_mult B k r (- entry B k c))
+                    (add_row_mult A k r (- entry A k c)) ks)"
+        using step ks rn2 by (rule Cons.hyps)
+      with neq show ?thesis by simp
+    qed
+  qed
+  from main[OF rl kn rn] show ?thesis .
+qed
+
+lemma rect_len_eliminate_col:
+  assumes rl: "rect_len n A" and rn: "r < n_rows A"
+  shows "rect_len n (eliminate_col A r c)"
+proof -
+  have kn: "\<forall>k \<in> set [0..<n_rows A]. k < n_rows A" by simp
+  show ?thesis
+    using rect_len_foldl_elim[OF rl kn rn] by (simp add: eliminate_col_def)
+qed
+
+text \<open>The number of rows survives the whole reduction, which is also what shows
+  that the reduced form of a nonempty matrix stays nonempty.\<close>
+
+lemma n_rows_rref_fuel:
+  "n_rows (rref_fuel f r c A) = n_rows A"
+proof (induct f arbitrary: r c A)
+  case 0
+  then show ?case by simp
+next
+  case (Suc f)
+  show ?case
+  proof (cases "r < n_rows A")
+    case False
+    note rF = \<open>\<not> (r < n_rows A)\<close>
+    thus ?thesis by simp
+  next
+    case True
+    note rT = \<open>r < n_rows A\<close>
+    show ?thesis
+    proof (cases "c < n_cols A")
+      case False
+      note cF = \<open>\<not> (c < n_cols A)\<close>
+      show ?thesis using rT cF by simp
+    next
+      case True
+      note cT = \<open>c < n_cols A\<close>
+      show ?thesis
+      proof (cases "find_pivot_fuel (n_rows A) A r c")
+        case None
+        note nN = \<open>find_pivot_fuel (n_rows A) A r c = None\<close>
+        have eq: "rref_fuel (Suc f) r c A = rref_fuel f r (c + 1) A"
+          using rT cT nN by simp
+        with Suc.hyps show ?thesis by simp
+      next
+        case (Some i)
+        note sS = \<open>find_pivot_fuel (n_rows A) A r c = Some i\<close>
+        have eq: "rref_fuel (Suc f) r c A
+                = rref_fuel f (r + 1) (c + 1)
+                    (eliminate_col (scale_row (swap_rows A r i) r
+                       (invmod (entry (swap_rows A r i) r c))) r c)"
+          using rT cT sS by (simp add: Let_def)
+        have st: "n_rows (rref_fuel f (r + 1) (c + 1)
+                     (eliminate_col (scale_row (swap_rows A r i) r
+                        (invmod (entry (swap_rows A r i) r c))) r c)) = n_rows A"
+          using Suc.hyps by simp
+        with eq show ?thesis by simp
+      qed
+    qed
+  qed
+qed
+
+lemma n_rows_rref [simp]:
+  "n_rows (rref A) = n_rows A"
+  using n_rows_rref_fuel[of "n_rows A * n_cols A + n_rows A + 1" 0 0 A]
+  by (simp add: rref_def)
+
+(* seg: shape-batch3 *)
+text \<open>@{const find_pivot_fuel} returns an index only if that index is a real row.
+  The reduction needs this to know that the swap it performs is in range.\<close>
+
+lemma find_pivot_fuel_bound:
+  "find_pivot_fuel f A r c = Some i \<Longrightarrow> i < n_rows A"
+proof (induct f arbitrary: r)
+  case 0
+  then show ?case by simp
+next
+  case (Suc f)
+  show ?case
+  proof (cases "r < n_rows A")
+    case False
+    hence "find_pivot_fuel (Suc f) A r c = None" by simp
+    with Suc.prems show ?thesis by simp
+  next
+    case True
+    note rT = \<open>r < n_rows A\<close>
+    show ?thesis
+    proof (cases "fq (entry A r c) \<noteq> 0")
+      case True
+      hence "find_pivot_fuel (Suc f) A r c = Some r" using rT by simp
+      with Suc.prems have "i = r" by simp
+      with rT show ?thesis by simp
+    next
+      case False
+      hence eq: "find_pivot_fuel (Suc f) A r c = find_pivot_fuel f A (r + 1) c"
+        using rT by simp
+      from Suc.prems eq have "find_pivot_fuel f A (r + 1) c = Some i" by simp
+      with Suc.hyps show ?thesis by simp
+    qed
+  qed
+qed
+
+text \<open>Shape preservation for the whole reduction, by induction on the fuel.  Each
+  step only applies the three row operations proved above, and the pivot index is
+  in range by @{text find_pivot_fuel_bound}.\<close>
+
+lemma rect_len_rref_fuel_helper:
+  "\<And>A r c. rect_len n A \<Longrightarrow> rect_len n (rref_fuel f r c A)"
+  by (induct f)
+     (simp_all add: rref_fuel.simps Let_def rect_len_swap_rows rect_len_scale_row
+        rect_len_eliminate_col find_pivot_fuel_bound split: option.split)
+
+lemma rect_len_rref_fuel:
+  assumes rl: "rect_len n A"
+  shows "rect_len n (rref_fuel f r c A)"
+  using rl by (rule rect_len_rref_fuel_helper)
+
+lemma rect_len_rref:
+  assumes rl: "rect_len n A"
+  shows "rect_len n (rref A)"
+  unfolding rref_def using rl by (rule rect_len_rref_fuel)
+
+text \<open>The headline result of this section: the reduced form of a rectangular
+  matrix is rectangular.  The only remaining step is bookkeeping, turning
+  @{text rect_len} back into @{const is_rect} by computing @{text n_cols} of the
+  reduced form from its first row.\<close>
+
+lemma is_rect_rref:
+  assumes "is_rect A"
+  shows "is_rect (rref A)"
+proof (cases "A = []")
+  case True
+  have h: "rref A = []" using True by (simp add: rref_def rref_fuel.simps n_rows_def n_cols_def)
+  show ?thesis unfolding h by (simp add: is_rect_def)
+next
+  case False
+  have rl: "rect_len (n_cols A) A" using assms by (rule rect_len_is_rect)
+  have rlR: "rect_len (n_cols A) (rref A)" using rl by (rule rect_len_rref)
+  have nr: "n_rows (rref A) = n_rows A" by simp
+  have ne: "rref A \<noteq> []"
+  proof
+    assume "rref A = []"
+    hence "n_rows (rref A) = 0" by (simp add: n_rows_def)
+    with nr have "n_rows A = 0" by simp
+    with False show False by (simp add: n_rows_def)
+  qed
+  have nc: "n_cols (rref A) = n_cols A" using rlR ne by (rule rect_len_n_cols)
+  show ?thesis using rlR nc by (simp add: is_rect_def rect_len_def)
+qed
+
 text \<open>The main lemma of this section.  Because @{text all_zero_row} is the
   modulo-@{text q} notion, what it yields is congruence of the minor to zero
   modulo @{text 3329}, not integer equality.  That is the right conclusion for
   this development: @{text mat_rank2} and @{text mat_rank1} are also stated
   modulo @{text q}.
 
-  The hypothesis @{text "is_rect (rref A)"} is what turns a column index below
-  @{text n_cols} into an index below the length of a row; establishing that the
-  reduction preserves rectangularity is a separate shape lemma about
-  @{text rref_fuel} and is not part of this section.\<close>
+  The hypothesis @{text "is_rect A"} is what turns a column index below
+  @{text n_cols} into an index below the length of a row: the shape section above
+  shows that @{text rref} preserves rectangularity, so @{text "is_rect (rref A)"}
+  is derived here rather than assumed.\<close>
 
 lemma rank_le_one_imp_minors_vanish:
   assumes rk: "mat_rank A \<le> 1"
-    and rect: "is_rect (rref A)"
+    and rect0: "is_rect A"
     and a: "a < n_rows (rref A)" and b: "b < n_rows (rref A)" and ab: "a \<noteq> b"
     and c: "c < n_cols (rref A)" and d: "d < n_cols (rref A)"
   shows "(entry (rref A) a c * entry (rref A) b d
             - entry (rref A) a d * entry (rref A) b c) mod 3329 = 0"
 proof -
+  have rect: "is_rect (rref A)" using rect0 by (rule is_rect_rref)
   let ?R = "rref A"
   have z: "all_zero_row (?R ! a) \<or> all_zero_row (?R ! b)"
     by (rule row_zero_or_zero_of_rank_le_one[OF rk a b ab])
@@ -325,8 +724,8 @@ text \<open>Nothing in this file bounds the rank of a sum of two outer products,
   that is deliberate rather than an oversight.  The two lemmas the obligation
   needs are out of reach of the definitions in @{file VWZ_RREF.thy} alone,
   because @{text mat_rank} is defined as a count of nonzero rows of @{text rref}
-  and no bridge from @{text rref} back to matrix invariants exists yet.  Precisely
-  what is missing:
+  and no bridge from @{text rref} back to matrix invariants exists yet.  Status of
+  each ingredient:
 
   \<^enum> @{text rref_step}: each of @{text swap_rows}, @{text scale_row} and
   @{text add_row_mult} is multiplication on the left by an invertible matrix.
@@ -338,10 +737,9 @@ text \<open>Nothing in this file bounds the rank of a sum of two outer products,
   is multilinearity of @{text det2}, which the obligation file already has;
   arbitrary index pairs need the general statement.
   \<^enum> @{text rank_le_one_imp_minors_vanish}: if @{text rref} has at most one
-  nonzero row, every @{text "2 x 2"} minor of the reduced form vanishes.  This one
-  is now proved, above, together with @{text row_zero_or_zero_of_rank_le_one};
-  it still assumes @{text "is_rect (rref A)"}, because the shape lemma for
-  @{text rref_fuel} is not established yet.
+  nonzero row, every @{text "2 x 2"} minor of the reduced form vanishes.  Proved
+  in this file, together with @{text row_zero_or_zero_of_rank_le_one} and the
+  shape lemma @{text is_rect_rref}; it assumes only @{text "is_rect A"}.
   \<^enum> combining the three gives @{text rank_ge_two_of_nonzero_minor}, while
   @{text rank_outer_sum_le_two} additionally needs the bound
   @{text "mat_rank (mat_mult A B) \<le> n_cols A"} -- that the rank is at most the

@@ -2609,4 +2609,762 @@ proof -
   show ?thesis by (rule invertible_modI[OF a1 a2 a3 a4 a5])
 qed
 
+
+(* seg: minors-migrated *)
+section \<open>2x2 minors under elementary row operations\<close>
+
+text \<open>These statements are what the rank argument needs: a nonzero minor is an
+  obstruction to rank at most one, and it survives every elementary row operation.
+  The proofs work with divisibility, never by rewriting inside @{text mod}, because
+  the two natural simplification rules for @{text mod} cancel each other.
+  Nothing here adds a sorry: the obligation ledger is unchanged.\<close>
+
+section \<open>The 2x2 minor of a matrix, by row and column indices\<close>
+
+text \<open>The ledger writes a 2x2 determinant out as four entries.  Naming that
+  expression makes the statements below readable, and @{text minor2_def} lets
+  each proof fall back to the entry level.\<close>
+
+definition minor2 :: "mat \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> int" where
+  "minor2 A a b c d = entry A a c * entry A b d - entry A a d * entry A b c"
+
+text \<open>Trading two rows is a permutation of the row indices, and it is its own
+  inverse, which is what makes the swap case exact rather than merely
+  congruent.\<close>
+
+abbreviation swap_idx :: "nat \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> nat" where
+  "swap_idx i j r \<equiv> (if r = i then j else (if r = j then i else r))"
+
+lemma swap_idx_invol [simp]: "swap_idx i j (swap_idx i j r) = r"
+  by (cases "r = i"; cases "r = j"; cases "i = j"; simp_all)
+
+lemma swap_idx_lt:
+  assumes "i < n" and "j < n" and "r < n"
+  shows "swap_idx i j r < n"
+  using assms by (cases "r = i"; cases "r = j"; simp_all)
+
+lemma swap_idx_neq:
+  assumes "a \<noteq> b"
+  shows "swap_idx i j a \<noteq> swap_idx i j b"
+  using assms by (cases "a = i"; cases "a = j"; cases "b = i"; cases "b = j"; simp_all)
+
+
+
+text \<open>Row @{text r} of the swapped matrix is row @{text "swap_idx i j r"} of the
+  original, for every column.  This is the only place where the definition of
+  @{const swap_rows} is unfolded.\<close>
+
+lemma entry_swap_rows:
+  assumes i: "i < n_rows A" and j: "j < n_rows A" and r: "r < n_rows A"
+  shows "entry (swap_rows A i j) r c = entry A (swap_idx i j r) c"
+proof -
+  have h: "swap_rows A i j ! r
+             = (if r = i then A ! j else (if r = j then A ! i else A ! r))"
+    using i j r by (simp add: swap_rows_nth n_rows_def)
+  have "entry (swap_rows A i j) r c
+          = (if r = i then A ! j else (if r = j then A ! i else A ! r)) ! c"
+    using h by (simp add: entry_def)
+  also have "\<dots> = entry A (swap_idx i j r) c"
+  proof (cases "r = i")
+    case True
+    thus ?thesis by (simp add: entry_def)
+  next
+    case False
+    show ?thesis
+    proof (cases "r = j")
+      case True
+      thus ?thesis using False by (simp add: entry_def)
+    next
+      case False2: False
+      thus ?thesis using False by (simp add: entry_def)
+    qed
+  qed
+  finally show ?thesis .
+qed
+
+text \<open>Consequently the minor of the swapped matrix is the minor of the original
+  at the permuted pair, with no sign: @{const swap_rows} permutes the rows and
+  the minor reads the two rows in the order the indices give.\<close>
+
+lemma minor2_swap:
+  assumes i: "i < n_rows A" and j: "j < n_rows A"
+    and a: "a < n_rows A" and b: "b < n_rows A"
+  shows "minor2 (swap_rows A i j) a b c d
+           = minor2 A (swap_idx i j a) (swap_idx i j b) c d"
+proof -
+  have ea: "entry (swap_rows A i j) a c = entry A (swap_idx i j a) c"
+    using i j a by (rule entry_swap_rows)
+  have eb: "entry (swap_rows A i j) b d = entry A (swap_idx i j b) d"
+    using i j b by (rule entry_swap_rows)
+  have ec: "entry (swap_rows A i j) a d = entry A (swap_idx i j a) d"
+    using i j a by (rule entry_swap_rows)
+  have ed: "entry (swap_rows A i j) b c = entry A (swap_idx i j b) c"
+    using i j b by (rule entry_swap_rows)
+  show ?thesis by (simp add: minor2_def ea eb ec ed)
+qed
+
+section \<open>Scaling one row multiplies the minors that mention it\<close>
+
+text \<open>Scaling rewrites exactly one row, entry by entry, through @{text fq}, so
+  the entries of that row are congruent to @{text "k * x"} rather than equal to
+  it.  The two lemmas below are therefore stated so that the residue of the
+  scaled minor is again zero, which is the form the induction later needs.\<close>
+
+lemma entry_scale_row:
+  assumes i: "i < n_rows A" and rect: "is_rect A"
+    and r: "r < n_rows A" and col: "col < n_cols A"
+  shows "entry (scale_row A i k) r col
+           = (if r = i then fq (k * entry A i col) else entry A r col)"
+proof -
+  have il: "i < length A" using i by (simp add: n_rows_def)
+  have mem: "A ! i \<in> set A" using il by (rule nth_mem)
+  have len: "length (A ! i) = n_cols A" using rect mem by (simp add: is_rect_def)
+  have hlen: "col < length (A ! i)" using col len by simp
+  have upd: "(A[i := map (\<lambda>x. fq (k * x)) (A ! i)]) ! i
+               = map (\<lambda>x. fq (k * x)) (A ! i)"
+    using il by (rule nth_list_update_eq)
+  show ?thesis
+  proof (cases "r = i")
+    case True
+    have "entry (scale_row A i k) r col = (map (\<lambda>x. fq (k * x)) (A ! i)) ! col"
+      using True upd by (simp add: scale_row_def entry_def)
+    also have "\<dots> = fq (k * entry A i col)" using hlen by (simp add: entry_def nth_map)
+    finally show ?thesis using True by simp
+  next
+    case False
+    have rl: "r < length A" using r by (simp add: n_rows_def)
+    have neq: "(A[i := map (\<lambda>x. fq (k * x)) (A ! i)]) ! r = A ! r"
+      using rl False by (simp add: nth_list_update_neq)
+    have "entry (scale_row A i k) r col = (A ! r) ! col"
+      using neq by (simp add: scale_row_def entry_def)
+    thus ?thesis using False by (simp add: entry_def)
+  qed
+qed
+
+text \<open>Every residue differs from the number it came from by a multiple of the
+  modulus.  Keeping that as a divisibility fact, rather than rewriting inside
+  @{text mod}, keeps the simplifier away from the pair of rules that cancel
+  each other.\<close>
+
+lemma dvd_fq_diff:
+  fixes x :: int
+  shows "3329 dvd x - fq x"
+proof -
+  have "x = x div 3329 * 3329 + x mod 3329" by (simp add: div_mult_mod_eq)
+  hence h1: "x - fq x = 3329 * (x div 3329)" by (simp add: fq_def algebra_simps)
+  show ?thesis using h1 by (simp add: dvd_triv_left)
+qed
+
+lemma minor2_scale_row_first:
+  assumes i: "i < n_rows A" and rect: "is_rect A"
+    and b: "b < n_rows A" and ib: "i \<noteq> b"
+    and c: "c < n_cols A" and d: "d < n_cols A"
+    and h: "minor2 A i b c d mod 3329 = 0"
+  shows "minor2 (scale_row A i k) i b c d mod 3329 = 0"
+proof -
+  have eic: "entry (scale_row A i k) i c = fq (k * entry A i c)"
+    using i rect c by (simp add: entry_scale_row)
+  have eid: "entry (scale_row A i k) i d = fq (k * entry A i d)"
+    using i rect d by (simp add: entry_scale_row)
+  have ebc: "entry (scale_row A i k) b c = entry A b c"
+    using i rect b c ib by (simp add: entry_scale_row)
+  have ebd: "entry (scale_row A i k) b d = entry A b d"
+    using i rect b d ib by (simp add: entry_scale_row)
+  have eq: "minor2 (scale_row A i k) i b c d
+              = fq (k * entry A i c) * entry A b d
+                - fq (k * entry A i d) * entry A b c"
+    using eic eid ebc ebd by (simp add: minor2_def)
+  have dX: "3329 dvd (k * entry A i c - fq (k * entry A i c)) * entry A b d"
+    by (rule dvd_mult2[OF dvd_fq_diff])
+  have dZ: "3329 dvd (k * entry A i d - fq (k * entry A i d)) * entry A b c"
+    by (rule dvd_mult2[OF dvd_fq_diff])
+  have dd: "3329 dvd (k * entry A i c - fq (k * entry A i c)) * entry A b d
+                     - (k * entry A i d - fq (k * entry A i d)) * entry A b c"
+    using dX dZ by (rule dvd_diff)
+  have dm0: "3329 dvd minor2 A i b c d" using h by (simp add: dvd_eq_mod_eq_0)
+  have dm: "3329 dvd k * minor2 A i b c d" using dm0 by (rule dvd_mult)
+  have dv: "3329 dvd k * minor2 A i b c d
+                     - ((k * entry A i c - fq (k * entry A i c)) * entry A b d
+                        - (k * entry A i d - fq (k * entry A i d)) * entry A b c)"
+    using dm dd by (rule dvd_diff)
+  have split_eq: "k * minor2 A i b c d
+                    - ((k * entry A i c - fq (k * entry A i c)) * entry A b d
+                       - (k * entry A i d - fq (k * entry A i d)) * entry A b c)
+                  = minor2 (scale_row A i k) i b c d"
+    using eq by (simp add: minor2_def algebra_simps)
+  from dv split_eq have "3329 dvd minor2 (scale_row A i k) i b c d" by simp
+  thus ?thesis by (simp add: dvd_eq_mod_eq_0)
+qed
+
+lemma minor2_scale_row_second:
+  assumes i: "i < n_rows A" and rect: "is_rect A"
+    and b: "b < n_rows A" and ib: "i \<noteq> b"
+    and c: "c < n_cols A" and d: "d < n_cols A"
+    and h: "minor2 A b i c d mod 3329 = 0"
+  shows "minor2 (scale_row A i k) b i c d mod 3329 = 0"
+proof -
+  have eic: "entry (scale_row A i k) i c = fq (k * entry A i c)"
+    using i rect c by (simp add: entry_scale_row)
+  have eid: "entry (scale_row A i k) i d = fq (k * entry A i d)"
+    using i rect d by (simp add: entry_scale_row)
+  have ebc: "entry (scale_row A i k) b c = entry A b c"
+    using i rect b c ib by (simp add: entry_scale_row)
+  have ebd: "entry (scale_row A i k) b d = entry A b d"
+    using i rect b d ib by (simp add: entry_scale_row)
+  have eq: "minor2 (scale_row A i k) b i c d
+              = entry A b c * fq (k * entry A i d)
+                - entry A b d * fq (k * entry A i c)"
+    using eic eid ebc ebd by (simp add: minor2_def)
+  have dS: "3329 dvd (k * entry A i d - fq (k * entry A i d)) * entry A b c"
+    by (rule dvd_mult2[OF dvd_fq_diff])
+  have dR: "3329 dvd (k * entry A i c - fq (k * entry A i c)) * entry A b d"
+    by (rule dvd_mult2[OF dvd_fq_diff])
+  have dd: "3329 dvd (k * entry A i d - fq (k * entry A i d)) * entry A b c
+                     - (k * entry A i c - fq (k * entry A i c)) * entry A b d"
+    using dS dR by (rule dvd_diff)
+  have dm0: "3329 dvd minor2 A b i c d" using h by (simp add: dvd_eq_mod_eq_0)
+  have dm: "3329 dvd k * minor2 A b i c d" using dm0 by (rule dvd_mult)
+  have dv: "3329 dvd k * minor2 A b i c d
+                     - ((k * entry A i d - fq (k * entry A i d)) * entry A b c
+                        - (k * entry A i c - fq (k * entry A i c)) * entry A b d)"
+    using dm dd by (rule dvd_diff)
+  have split_eq: "k * minor2 A b i c d
+                    - ((k * entry A i d - fq (k * entry A i d)) * entry A b c
+                       - (k * entry A i c - fq (k * entry A i c)) * entry A b d)
+                  = minor2 (scale_row A i k) b i c d"
+    using eq by (simp add: minor2_def algebra_simps)
+  from dv split_eq have "3329 dvd minor2 (scale_row A i k) b i c d" by simp
+  thus ?thesis by (simp add: dvd_eq_mod_eq_0)
+qed
+
+lemma minor2_scale_row_other:
+  assumes i: "i < n_rows A" and rect: "is_rect A"
+    and a: "a < n_rows A" and b: "b < n_rows A"
+    and ai: "a \<noteq> i" and bi: "b \<noteq> i"
+    and c: "c < n_cols A" and d: "d < n_cols A"
+  shows "minor2 (scale_row A i k) a b c d = minor2 A a b c d"
+proof -
+  have eac: "entry (scale_row A i k) a c = entry A a c"
+    using i rect a c ai by (simp add: entry_scale_row)
+  have ead: "entry (scale_row A i k) a d = entry A a d"
+    using i rect a d ai by (simp add: entry_scale_row)
+  have ebc: "entry (scale_row A i k) b c = entry A b c"
+    using i rect b c bi by (simp add: entry_scale_row)
+  have ebd: "entry (scale_row A i k) b d = entry A b d"
+    using i rect b d bi by (simp add: entry_scale_row)
+  show ?thesis by (simp add: minor2_def eac ead ebc ebd)
+qed
+
+
+section \<open>Adding a multiple of one row leaves the residues of all minors unchanged\<close>
+
+text \<open>Row addition rewrites row @{text i} as the entrywise residue of
+  @{text "P + k * S"}, so a minor that uses row @{text i} picks up a residue on
+  two of its four entries.  As with scaling, the statement is phrased as
+  preservation of a vanishing residue; the arithmetic stays on the divisibility
+  side and never rewrites inside @{text mod}.\<close>
+
+lemma entry_add_row_mult:
+  assumes i: "i < n_rows A" and j: "j < n_rows A" and rect: "is_rect A"
+    and r: "r < n_rows A" and col: "col < n_cols A"
+  shows "entry (add_row_mult A i j k) r col
+           = (if r = i then fq (entry A i col + k * entry A j col) else entry A r col)"
+proof -
+  have il: "i < length A" using i by (simp add: n_rows_def)
+  have memi: "A ! i \<in> set A" using il by (rule nth_mem)
+  have memj: "A ! j \<in> set A" using j by (simp add: n_rows_def; rule nth_mem)
+  have leni: "length (A ! i) = n_cols A" using rect memi by (simp add: is_rect_def)
+  have lenj: "length (A ! j) = n_cols A" using rect memj by (simp add: is_rect_def)
+  show ?thesis
+  proof (cases "r = i")
+    case True
+    have upd: "(A[i := map2 (\<lambda>x y. fq (x + k * y)) (A ! i) (A ! j)]) ! i
+                 = map2 (\<lambda>x y. fq (x + k * y)) (A ! i) (A ! j)"
+      using il by (rule nth_list_update_eq)
+    have conv: "map2 (\<lambda>x y. fq (x + k * y)) (A ! i) (A ! j)
+                  = map (\<lambda>l. fq ((A ! i) ! l + k * (A ! j) ! l)) [0..<n_cols A]"
+      using leni lenj by (rule map2_conv_idx)
+    have nth: "(map (\<lambda>l. fq ((A ! i) ! l + k * (A ! j) ! l)) [0..<n_cols A]) ! col
+                 = fq (entry A i col + k * entry A j col)"
+      using col by (simp add: entry_def nth_map)
+    have "entry (add_row_mult A i j k) r col
+            = (map (\<lambda>l. fq ((A ! i) ! l + k * (A ! j) ! l)) [0..<n_cols A]) ! col"
+      using True upd conv by (simp add: add_row_mult_def entry_def)
+    also have "\<dots> = fq (entry A i col + k * entry A j col)" using nth .
+    finally show ?thesis using True by simp
+  next
+    case False
+    have rl: "r < length A" using r by (simp add: n_rows_def)
+    have neq: "(A[i := map2 (\<lambda>x y. fq (x + k * y)) (A ! i) (A ! j)]) ! r = A ! r"
+      using rl False by (simp add: nth_list_update_neq)
+    have "entry (add_row_mult A i j k) r col = (A ! r) ! col"
+      using neq by (simp add: add_row_mult_def entry_def)
+    thus ?thesis using False by (simp add: entry_def)
+  qed
+qed
+
+lemma minor2_add_row_other:
+  assumes i: "i < n_rows A" and j: "j < n_rows A" and rect: "is_rect A"
+    and a: "a < n_rows A" and b: "b < n_rows A"
+    and ai: "a \<noteq> i" and bi: "b \<noteq> i"
+    and c: "c < n_cols A" and d: "d < n_cols A"
+  shows "minor2 (add_row_mult A i j k) a b c d = minor2 A a b c d"
+proof -
+  have eac: "entry (add_row_mult A i j k) a c = entry A a c"
+    using i j rect a c ai by (simp add: entry_add_row_mult)
+  have ead: "entry (add_row_mult A i j k) a d = entry A a d"
+    using i j rect a d ai by (simp add: entry_add_row_mult)
+  have ebc: "entry (add_row_mult A i j k) b c = entry A b c"
+    using i j rect b c bi by (simp add: entry_add_row_mult)
+  have ebd: "entry (add_row_mult A i j k) b d = entry A b d"
+    using i j rect b d bi by (simp add: entry_add_row_mult)
+  show ?thesis by (simp add: minor2_def eac ead ebc ebd)
+qed
+
+text \<open>When the rewritten row is the upper row of the minor, the residue of the
+  new minor is the residue of @{text "minor (i,b) + k * minor (j,b)"}: the row
+  swap that would put @{text j} in place of @{text i} is not needed, because
+  the addition itself is linear in that row.\<close>
+
+lemma minor2_add_row_first:
+  assumes i: "i < n_rows A" and j: "j < n_rows A" and rect: "is_rect A"
+    and b: "b < n_rows A" and bi: "b \<noteq> i"
+    and c: "c < n_cols A" and d: "d < n_cols A"
+    and h1: "minor2 A i b c d mod 3329 = 0"
+    and h2: "minor2 A j b c d mod 3329 = 0"
+  shows "minor2 (add_row_mult A i j k) i b c d mod 3329 = 0"
+proof -
+  have eic: "entry (add_row_mult A i j k) i c = fq (entry A i c + k * entry A j c)"
+    using i j rect c by (simp add: entry_add_row_mult)
+  have eid: "entry (add_row_mult A i j k) i d = fq (entry A i d + k * entry A j d)"
+    using i j rect d by (simp add: entry_add_row_mult)
+  have ebc: "entry (add_row_mult A i j k) b c = entry A b c"
+    using i j rect b c bi by (simp add: entry_add_row_mult)
+  have ebd: "entry (add_row_mult A i j k) b d = entry A b d"
+    using i j rect b d bi by (simp add: entry_add_row_mult)
+  have eq: "minor2 (add_row_mult A i j k) i b c d
+              = fq (entry A i c + k * entry A j c) * entry A b d
+                - fq (entry A i d + k * entry A j d) * entry A b c"
+    using eic eid ebc ebd by (simp add: minor2_def)
+  have d1: "3329 dvd (entry A i c + k * entry A j c
+                        - fq (entry A i c + k * entry A j c)) * entry A b d"
+    by (rule dvd_mult2[OF dvd_fq_diff])
+  have d2: "3329 dvd (entry A i d + k * entry A j d
+                        - fq (entry A i d + k * entry A j d)) * entry A b c"
+    by (rule dvd_mult2[OF dvd_fq_diff])
+  have dd: "3329 dvd (entry A i c + k * entry A j c
+                        - fq (entry A i c + k * entry A j c)) * entry A b d
+                     - (entry A i d + k * entry A j d
+                        - fq (entry A i d + k * entry A j d)) * entry A b c"
+    using d1 d2 by (rule dvd_diff)
+  have h1d: "3329 dvd minor2 A i b c d" using h1 by (simp add: dvd_eq_mod_eq_0)
+  have h2d: "3329 dvd minor2 A j b c d" using h2 by (simp add: dvd_eq_mod_eq_0)
+  have h2k: "3329 dvd k * minor2 A j b c d" using h2d by (rule dvd_mult)
+  have hs: "3329 dvd minor2 A i b c d + k * minor2 A j b c d"
+    using h1d h2k by (rule dvd_add)
+  have dv: "3329 dvd minor2 A i b c d + k * minor2 A j b c d
+                     - ((entry A i c + k * entry A j c
+                          - fq (entry A i c + k * entry A j c)) * entry A b d
+                        - (entry A i d + k * entry A j d
+                          - fq (entry A i d + k * entry A j d)) * entry A b c)"
+    using hs dd by (rule dvd_diff)
+  have split_eq: "minor2 A i b c d + k * minor2 A j b c d
+                    - ((entry A i c + k * entry A j c
+                         - fq (entry A i c + k * entry A j c)) * entry A b d
+                       - (entry A i d + k * entry A j d
+                         - fq (entry A i d + k * entry A j d)) * entry A b c)
+                  = minor2 (add_row_mult A i j k) i b c d"
+    using eq by (simp add: minor2_def algebra_simps)
+  from dv split_eq have "3329 dvd minor2 (add_row_mult A i j k) i b c d" by simp
+  thus ?thesis by (simp add: dvd_eq_mod_eq_0)
+qed
+
+lemma minor2_add_row_second:
+  assumes i: "i < n_rows A" and j: "j < n_rows A" and rect: "is_rect A"
+    and b: "b < n_rows A" and bi: "b \<noteq> i"
+    and c: "c < n_cols A" and d: "d < n_cols A"
+    and h1: "minor2 A b i c d mod 3329 = 0"
+    and h2: "minor2 A b j c d mod 3329 = 0"
+  shows "minor2 (add_row_mult A i j k) b i c d mod 3329 = 0"
+proof -
+  have eic: "entry (add_row_mult A i j k) i c = fq (entry A i c + k * entry A j c)"
+    using i j rect c by (simp add: entry_add_row_mult)
+  have eid: "entry (add_row_mult A i j k) i d = fq (entry A i d + k * entry A j d)"
+    using i j rect d by (simp add: entry_add_row_mult)
+  have ebc: "entry (add_row_mult A i j k) b c = entry A b c"
+    using i j rect b c bi by (simp add: entry_add_row_mult)
+  have ebd: "entry (add_row_mult A i j k) b d = entry A b d"
+    using i j rect b d bi by (simp add: entry_add_row_mult)
+  have eq: "minor2 (add_row_mult A i j k) b i c d
+              = entry A b c * fq (entry A i d + k * entry A j d)
+                - entry A b d * fq (entry A i c + k * entry A j c)"
+    using eic eid ebc ebd by (simp add: minor2_def)
+  have d1: "3329 dvd (entry A i d + k * entry A j d
+                        - fq (entry A i d + k * entry A j d)) * entry A b c"
+    by (rule dvd_mult2[OF dvd_fq_diff])
+  have d2: "3329 dvd (entry A i c + k * entry A j c
+                        - fq (entry A i c + k * entry A j c)) * entry A b d"
+    by (rule dvd_mult2[OF dvd_fq_diff])
+  have dd: "3329 dvd (entry A i d + k * entry A j d
+                        - fq (entry A i d + k * entry A j d)) * entry A b c
+                     - (entry A i c + k * entry A j c
+                        - fq (entry A i c + k * entry A j c)) * entry A b d"
+    using d1 d2 by (rule dvd_diff)
+  have h1d: "3329 dvd minor2 A b i c d" using h1 by (simp add: dvd_eq_mod_eq_0)
+  have h2d: "3329 dvd minor2 A b j c d" using h2 by (simp add: dvd_eq_mod_eq_0)
+  have h2k: "3329 dvd k * minor2 A b j c d" using h2d by (rule dvd_mult)
+  have hs: "3329 dvd minor2 A b i c d + k * minor2 A b j c d"
+    using h1d h2k by (rule dvd_add)
+  have dv: "3329 dvd minor2 A b i c d + k * minor2 A b j c d
+                     - ((entry A i d + k * entry A j d
+                          - fq (entry A i d + k * entry A j d)) * entry A b c
+                        - (entry A i c + k * entry A j c
+                          - fq (entry A i c + k * entry A j c)) * entry A b d)"
+    using hs dd by (rule dvd_diff)
+  have split_eq: "minor2 A b i c d + k * minor2 A b j c d
+                    - ((entry A i d + k * entry A j d
+                         - fq (entry A i d + k * entry A j d)) * entry A b c
+                       - (entry A i c + k * entry A j c
+                         - fq (entry A i c + k * entry A j c)) * entry A b d)
+                  = minor2 (add_row_mult A i j k) b i c d"
+    using eq by (simp add: minor2_def algebra_simps)
+
+  from dv split_eq have "3329 dvd minor2 (add_row_mult A i j k) b i c d" by simp
+  thus ?thesis by (simp add: dvd_eq_mod_eq_0)
+qed
+
+(* seg: minors-zero-layer-20261023 *)
+section \<open>Duplicate indices and the all-minors-vanish predicate\<close>
+
+text \<open>Two facts the rank argument needs before any induction: a minor with a
+  repeated row or a repeated column is zero, and a minor changes sign when its
+  own two rows are traded.  Neither proof touches @{text mod}; both are
+  identities in the integers.\<close>
+
+lemma minor2_repeat_row [simp]: "minor2 A a a c d = 0"
+  by (simp add: minor2_def)
+
+lemma minor2_repeat_col [simp]: "minor2 A a b c c = 0"
+  by (simp add: minor2_def)
+
+lemma minor2_repeat [simp]:
+  assumes "a = b \<or> c = d"
+  shows "minor2 A a b c d = 0"
+  using assms by (auto simp: minor2_def)
+
+text \<open>@{text minor2_swap} says a row swap permutes the row indices of the
+  minor.  When the swapped pair is exactly the pair the minor reads, that
+  permutation is the transposition of those two rows, so the minor changes
+  sign.\<close>
+
+lemma minor2_swap_antisym:
+  assumes a: "a < n_rows A" and b: "b < n_rows A" and ab: "a \<noteq> b"
+  shows "minor2 (swap_rows A a b) a b c d = - minor2 A a b c d"
+proof -
+  have "minor2 (swap_rows A a b) a b c d
+          = minor2 A (swap_idx a b a) (swap_idx a b b) c d"
+    by (rule minor2_swap [OF a b a b])
+  also have "\<dots> = minor2 A b a c d" using ab by simp
+  also have "\<dots> = - minor2 A a b c d" by (simp add: minor2_def algebra_simps)
+  finally show ?thesis .
+qed
+
+text \<open>A matrix has vanishing minors when every @{text "2 x 2"} minor is
+  divisible by @{text 3329}.  The predicate is phrased with divisibility rather
+  than an equation under @{text mod}, so that a later induction over
+  @{text rref_fuel} can carry the hypothesis along without asking the
+  simplifier to normalise residues.\<close>
+
+definition minors_zero :: "mat \<Rightarrow> bool" where
+  "minors_zero A = (\<forall>a b c d. a < n_rows A \<longrightarrow> b < n_rows A \<longrightarrow>
+      c < n_cols A \<longrightarrow> d < n_cols A \<longrightarrow> 3329 dvd minor2 A a b c d)"
+
+lemma minors_zeroI:
+  assumes "\<And>a b c d. a < n_rows A \<Longrightarrow> b < n_rows A \<Longrightarrow> c < n_cols A \<Longrightarrow>
+             d < n_cols A \<Longrightarrow> 3329 dvd minor2 A a b c d"
+  shows "minors_zero A"
+  using assms by (simp add: minors_zero_def)
+
+lemma minors_zeroE:
+  assumes h: "minors_zero A" and a: "a < n_rows A" and b: "b < n_rows A"
+    and c: "c < n_cols A" and d: "d < n_cols A"
+  shows "3329 dvd minor2 A a b c d"
+  using h a b c d by (simp add: minors_zero_def)
+
+(* seg: minors-preserve-20261023 *)
+
+section \<open>Minors survive the three elementary row operations\<close>
+
+text \<open>Each operation touches the minors in one of three ways: a swap permutes the
+  row indices, a scale multiplies a minor, and a row addition replaces a minor by
+  itself plus a multiple of another one.  Everything is stated as divisibility by
+  the modulus, which is the form @{const minors_zero} uses.\<close>
+
+lemma n_cols_swap_rows:
+  assumes i: "i < n_rows A" and j: "j < n_rows A" and rect: "is_rect A"
+  shows "n_cols (swap_rows A i j) = n_cols A"
+proof (cases "A = []")
+  case True
+  thus ?thesis by (simp add: swap_rows_def n_cols_def)
+next
+  case ne0: False
+  hence len0: "0 < length A" by simp
+  have n0: "0 < n_rows A" using len0 by (simp add: n_rows_def)
+  have iA: "i < length A" using i by (simp add: n_rows_def)
+  have jA: "j < length A" using j by (simp add: n_rows_def)
+  have h: "(swap_rows A i j) ! 0
+             = (if 0 = i then A ! j else (if 0 = j then A ! i else A ! 0))"
+    using len0 iA jA by (rule swap_rows_nth)
+  have ne: "swap_rows A i j \<noteq> []" using ne0 by (simp add: swap_rows_def)
+  have l0: "length (A ! 0) = n_cols A" using rect n0 by (rule is_rect_rows)
+  have li: "length (A ! i) = n_cols A" using rect i by (rule is_rect_rows)
+  have lj: "length (A ! j) = n_cols A" using rect j by (rule is_rect_rows)
+  have "n_cols (swap_rows A i j) = length ((swap_rows A i j) ! 0)"
+    by (simp add: n_cols_def ne)
+  also have "\<dots> = n_cols A"
+  proof (cases "0 = i")
+    case True
+    thus ?thesis using h lj by simp
+  next
+    case f1: False
+    show ?thesis
+    proof (cases "0 = j")
+      case True
+      thus ?thesis using h f1 li by simp
+    next
+      case f2: False
+      thus ?thesis using h f1 l0 by simp
+    qed
+  qed
+  finally show ?thesis .
+qed
+
+lemma n_cols_scale_row:
+  shows "n_cols (scale_row A i k) = n_cols A"
+proof (cases "A = []")
+  case True
+  thus ?thesis by (simp add: scale_row_def n_cols_def)
+next
+  case ne0: False
+  hence len0: "0 < length A" by simp
+  have ne: "scale_row A i k \<noteq> []" using ne0 by (simp add: scale_row_def)
+  have "n_cols (scale_row A i k) = length ((scale_row A i k) ! 0)"
+    by (simp add: n_cols_def ne)
+  also have "\<dots> = length (A ! 0)"
+  proof (cases "i = 0")
+    case True
+    have upd: "(A[i := map (\<lambda>x. fq (k * x)) (A ! i)]) ! i
+                 = map (\<lambda>x. fq (k * x)) (A ! i)"
+      using len0 True by (simp add: nth_list_update_eq)
+    have "(scale_row A i k) ! 0 = map (\<lambda>x. fq (k * x)) (A ! 0)"
+      using True upd by (simp add: scale_row_def)
+    thus ?thesis by simp
+  next
+    case f: False
+    have "(scale_row A i k) ! 0 = A ! 0"
+      using len0 f by (simp add: scale_row_def nth_list_update_neq)
+    thus ?thesis by simp
+  qed
+  also have "\<dots> = n_cols A" using ne0 by (simp add: n_cols_def)
+  finally show ?thesis .
+qed
+
+lemma n_cols_add_row_mult:
+  assumes i: "i < n_rows A" and j: "j < n_rows A" and rect: "is_rect A"
+  shows "n_cols (add_row_mult A i j k) = n_cols A"
+proof (cases "A = []")
+  case True
+  thus ?thesis by (simp add: add_row_mult_def n_cols_def)
+next
+  case ne0: False
+  hence len0: "0 < length A" by simp
+  have li: "length (A ! i) = n_cols A" using rect i by (rule is_rect_rows)
+  have lj: "length (A ! j) = n_cols A" using rect j by (rule is_rect_rows)
+  have conv: "map2 (\<lambda>x y. fq (x + k * y)) (A ! i) (A ! j)
+                = map (\<lambda>l. fq ((A ! i) ! l + k * (A ! j) ! l)) [0..<n_cols A]"
+    using li lj by (rule map2_conv_idx)
+  have ne: "add_row_mult A i j k \<noteq> []" using ne0 by (simp add: add_row_mult_def)
+  have "n_cols (add_row_mult A i j k) = length ((add_row_mult A i j k) ! 0)"
+    by (simp add: n_cols_def ne)
+  also have "\<dots> = n_cols A"
+  proof (cases "i = 0")
+    case True
+    have upd: "(A[i := map2 (\<lambda>x y. fq (x + k * y)) (A ! i) (A ! j)]) ! i
+                 = map2 (\<lambda>x y. fq (x + k * y)) (A ! i) (A ! j)"
+      using len0 True by (simp add: nth_list_update_eq)
+    have "(add_row_mult A i j k) ! 0
+            = map2 (\<lambda>x y. fq (x + k * y)) (A ! i) (A ! j)"
+      using True upd by (simp add: add_row_mult_def)
+    thus ?thesis using conv by simp
+  next
+    case f: False
+    have "(add_row_mult A i j k) ! 0 = A ! 0"
+      using len0 f by (simp add: add_row_mult_def nth_list_update_neq)
+    thus ?thesis using ne0 by (simp add: n_cols_def)
+  qed
+  finally show ?thesis .
+qed
+
+text \<open>Trading two rows only permutes the row indices of a minor, so divisibility
+  carries over with no arithmetic at all.\<close>
+
+lemma minors_zero_swap:
+  assumes mz: "minors_zero A" and i: "i < n_rows A" and j: "j < n_rows A"
+    and rect: "is_rect A"
+  shows "minors_zero (swap_rows A i j)"
+proof (rule minors_zeroI)
+  fix a b c d
+  assume a: "a < n_rows (swap_rows A i j)" and b: "b < n_rows (swap_rows A i j)"
+    and c: "c < n_cols (swap_rows A i j)" and d: "d < n_cols (swap_rows A i j)"
+  have an: "a < n_rows A" using a by (simp add: n_rows_def swap_rows_def)
+  have bn: "b < n_rows A" using b by (simp add: n_rows_def swap_rows_def)
+  have nc: "n_cols (swap_rows A i j) = n_cols A" by (rule n_cols_swap_rows [OF i j rect])
+  have cn: "c < n_cols A" using c nc by simp
+  have dn: "d < n_cols A" using d nc by simp
+  have al: "swap_idx i j a < n_rows A" using i j an by (rule swap_idx_lt)
+  have bl: "swap_idx i j b < n_rows A" using i j bn by (rule swap_idx_lt)
+  have eq: "minor2 (swap_rows A i j) a b c d
+              = minor2 A (swap_idx i j a) (swap_idx i j b) c d"
+    using i j an bn by (rule minor2_swap)
+  have dv: "3329 dvd minor2 A (swap_idx i j a) (swap_idx i j b) c d"
+    using mz al bl cn dn by (rule minors_zeroE)
+  show "3329 dvd minor2 (swap_rows A i j) a b c d" using eq dv by simp
+qed
+
+text \<open>Scaling multiplies exactly the minors that read the scaled row, so
+  divisibility is preserved by multiplying the witness.\<close>
+
+lemma minors_zero_scale_row:
+  assumes mz: "minors_zero A" and i: "i < n_rows A" and rect: "is_rect A"
+  shows "minors_zero (scale_row A i k)"
+proof (rule minors_zeroI)
+  fix a b c d
+  assume a: "a < n_rows (scale_row A i k)" and b: "b < n_rows (scale_row A i k)"
+    and c: "c < n_cols (scale_row A i k)" and d: "d < n_cols (scale_row A i k)"
+  have an: "a < n_rows A" using a by (simp add: n_rows_def scale_row_def)
+  have bn: "b < n_rows A" using b by (simp add: n_rows_def scale_row_def)
+  have nc: "n_cols (scale_row A i k) = n_cols A" by (rule n_cols_scale_row)
+  have cn: "c < n_cols A" using c nc by simp
+  have dn: "d < n_cols A" using d nc by simp
+  have dv: "3329 dvd minor2 A a b c d" using mz an bn cn dn by (rule minors_zeroE)
+  show "3329 dvd minor2 (scale_row A i k) a b c d"
+  proof (cases "a = i")
+    case aT: True
+    show ?thesis
+    proof (cases "b = i")
+      case True
+      thus ?thesis by (simp add: aT True)
+    next
+      case bF: False
+      have bi: "i \<noteq> b" using bF by simp
+      have hm: "minor2 A i b c d mod 3329 = 0"
+        using dv aT by (simp add: dvd_eq_mod_eq_0)
+      have z: "minor2 (scale_row A i k) i b c d mod 3329 = 0"
+        using i rect bn bi cn dn hm by (rule minor2_scale_row_first)
+      show ?thesis using aT z by (simp add: dvd_eq_mod_eq_0)
+    qed
+  next
+    case aF: False
+    show ?thesis
+    proof (cases "b = i")
+      case bT: True
+      have ai: "i \<noteq> a" using aF by simp
+      have hm: "minor2 A a i c d mod 3329 = 0"
+        using dv bT by (simp add: dvd_eq_mod_eq_0)
+      have z: "minor2 (scale_row A i k) a i c d mod 3329 = 0"
+        using i rect an ai cn dn hm by (rule minor2_scale_row_second)
+      show ?thesis using bT z by (simp add: dvd_eq_mod_eq_0)
+    next
+      case bF: False
+      have ai: "a \<noteq> i" using aF by simp
+      have bi: "b \<noteq> i" using bF by simp
+      have eq: "minor2 (scale_row A i k) a b c d = minor2 A a b c d"
+        using i rect an bn ai bi cn dn by (rule minor2_scale_row_other)
+      show ?thesis using eq dv by simp
+    qed
+  qed
+qed
+
+text \<open>Adding a multiple of one row to another replaces a minor by itself plus a
+  multiple of the minor that reads the added row, so divisibility is inherited.\<close>
+
+lemma minors_zero_add_row:
+  assumes mz: "minors_zero A" and i: "i < n_rows A" and j: "j < n_rows A"
+    and ij: "i \<noteq> j" and rect: "is_rect A"
+  shows "minors_zero (add_row_mult A i j k)"
+proof (rule minors_zeroI)
+  fix a b c d
+  assume a: "a < n_rows (add_row_mult A i j k)" and b: "b < n_rows (add_row_mult A i j k)"
+    and c: "c < n_cols (add_row_mult A i j k)" and d: "d < n_cols (add_row_mult A i j k)"
+  have an: "a < n_rows A" using a by (simp add: n_rows_def add_row_mult_def)
+  have bn: "b < n_rows A" using b by (simp add: n_rows_def add_row_mult_def)
+  have nc: "n_cols (add_row_mult A i j k) = n_cols A"
+    by (rule n_cols_add_row_mult [OF i j rect])
+  have cn: "c < n_cols A" using c nc by simp
+  have dn: "d < n_cols A" using d nc by simp
+  have dvab: "3329 dvd minor2 A a b c d" using mz an bn cn dn by (rule minors_zeroE)
+  have dvai: "3329 dvd minor2 A a i c d" using mz an i cn dn by (rule minors_zeroE)
+  have dvaj: "3329 dvd minor2 A a j c d" using mz an j cn dn by (rule minors_zeroE)
+  have dvib: "3329 dvd minor2 A i b c d" using mz i bn cn dn by (rule minors_zeroE)
+  have dvjb: "3329 dvd minor2 A j b c d" using mz j bn cn dn by (rule minors_zeroE)
+  show "3329 dvd minor2 (add_row_mult A i j k) a b c d"
+  proof (cases "a = i")
+    case aT: True
+    show ?thesis
+    proof (cases "b = i")
+      case True
+      thus ?thesis by (simp add: aT True)
+    next
+      case bF: False
+      have bi: "b \<noteq> i" using bF by simp
+      show ?thesis
+      proof (cases "b = j")
+        case bT: True
+        have h1: "minor2 A i j c d mod 3329 = 0" using dvib bT by (simp add: dvd_eq_mod_eq_0)
+        have h2: "minor2 A j j c d mod 3329 = 0" by simp
+        have ji: "j \<noteq> i" using bF bT by simp
+        have "minor2 (add_row_mult A i j k) i j c d mod 3329 = 0"
+          by (rule minor2_add_row_first [where b=j, OF i j rect j ji cn dn h1 h2])
+        thus ?thesis using aT bT by (simp add: dvd_eq_mod_eq_0)
+      next
+        case bFj: False
+        have h1: "minor2 A i b c d mod 3329 = 0" using dvib by (simp add: dvd_eq_mod_eq_0)
+        have h2: "minor2 A j b c d mod 3329 = 0" using dvjb by (simp add: dvd_eq_mod_eq_0)
+        have z: "minor2 (add_row_mult A i j k) i b c d mod 3329 = 0"
+          using i j rect bn bi cn dn h1 h2 by (rule minor2_add_row_first)
+        thus ?thesis using aT by (simp add: dvd_eq_mod_eq_0)
+      qed
+    qed
+  next
+    case aF: False
+    show ?thesis
+    proof (cases "b = i")
+      case bT: True
+      show ?thesis
+      proof (cases "a = j")
+        case aT2: True
+        have h1: "minor2 A j i c d mod 3329 = 0" using dvai aT2 by (simp add: dvd_eq_mod_eq_0)
+        have h2: "minor2 A j j c d mod 3329 = 0" by simp
+        have ji: "j \<noteq> i" using ij by simp
+        have "minor2 (add_row_mult A i j k) j i c d mod 3329 = 0"
+          by (rule minor2_add_row_second [where b=j, OF i j rect j ji cn dn h1 h2])
+        thus ?thesis using bT aT2 by (simp add: dvd_eq_mod_eq_0)
+      next
+        case aFj: False
+        have h1: "minor2 A a i c d mod 3329 = 0" using dvai by (simp add: dvd_eq_mod_eq_0)
+        have h2: "minor2 A a j c d mod 3329 = 0" using dvaj by (simp add: dvd_eq_mod_eq_0)
+        have z: "minor2 (add_row_mult A i j k) a i c d mod 3329 = 0"
+          using i j rect an aF cn dn h1 h2 by (rule minor2_add_row_second)
+        thus ?thesis using bT by (simp add: dvd_eq_mod_eq_0)
+      qed
+    next
+      case bF: False
+      have ai: "a \<noteq> i" using aF by simp
+      have bi: "b \<noteq> i" using bF by simp
+      have eq: "minor2 (add_row_mult A i j k) a b c d = minor2 A a b c d"
+        using i j rect an bn ai bi cn dn by (rule minor2_add_row_other)
+      show ?thesis using eq dvab by simp
+    qed
+  qed
+qed
 end

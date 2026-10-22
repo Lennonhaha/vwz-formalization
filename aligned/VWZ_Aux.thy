@@ -5,7 +5,7 @@
 
     Scope: helper lemmas that exist only to make the T1-D obligations
     provable.  They are deliberately kept OUT of VWZ_ObligationsAligned so
-    that the obligation ledger (56 lemmas / 21 sorry as of 2026-10-19) stays
+    that the obligation ledger (56 lemmas / 7 sorry as of 2026-10-22) stays
     a faithful count of OBLIGATIONS and is not inflated by proof machinery.
     _count.cjs scans only VWZ_ObligationsAligned.thy, so nothing here is ever
     counted.

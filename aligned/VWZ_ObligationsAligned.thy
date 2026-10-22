@@ -767,10 +767,17 @@ text \<open>Both sides have bodies now: @{text mat_rank} (fuel-counted Gauss-Jor
     then every @{text "2 x 2"} minor vanishes.  With @{text mat_rank} defined as
     the number of non-zero rows of the reduced form, that is a rank-nullity
     argument, not a rewrite.
-  Both belong to a rank theory this session does not have.  So this stays
-  @{text sorry}.  The tag is TODO(defect / restatement) and not TODO(proof): the
-  sentence was false as written (see @{text T2_B7_refuted}), and the version
-  below is the repaired one, whose only missing ingredient is the rank theory.\<close>
+  The contrapositive is now available for the reduced form itself:
+  @{text rank_le_one_imp_minors_vanish} in @{file VWZ_Rank.thy} proves that a
+  reduced form with at most one non-zero row has every @{text "2 x 2"} minor
+  congruent to zero, and @{text is_rect_rref} supplies the rectangularity that
+  this fact previously had to assume as a hypothesis.  What is still missing is
+  the transport back to @{text A}: invariance of minors under the three row
+  operations, and the statement for arbitrary index pairs rather than the reduced
+  form.  So this stays @{text sorry}.  The tag is TODO(defect / restatement) and
+  not TODO(proof): the sentence was false as written (see @{text T2_B7_refuted}),
+  and the version below is the repaired one, whose remaining gap is the minor
+  invariance layer plus the rank bound @{text rank_outer_sum_le_two}.\<close>
 
 lemma T2_B7:
   "i < length (pk_psi pk) \<Longrightarrow>

@@ -1767,4 +1767,846 @@ next
   qed
 qed
 
+(* seg: rowops-batch1 *)
+section \<open>Elementary row operations as left multiplication\<close>
+
+text \<open>The row operations in @{text VWZ_RREF} reduce modulo 3329 inside the
+operation (@{text scale_row} applies @{text fq}, @{text add_row_mult} applies
+@{text fq}).  The integer product @{text mat_mult} does not reduce, so an
+equality against @{text mat_mult} cannot hold in general; the correct
+statement lives in the modular product @{text mat_mult_mod} and needs the
+subject matrix to be @{text reduced}, i.e. already normalised.\<close>
+
+definition uvec :: "nat \<Rightarrow> nat \<Rightarrow> int list" where
+  "uvec n k = map (\<lambda>col. if col = k then (1::int) else 0) [0..<n]"
+
+definition svec :: "nat \<Rightarrow> nat \<Rightarrow> int \<Rightarrow> int list" where
+  "svec n k c = map (\<lambda>col. if col = k then c else 0) [0..<n]"
+
+lemma uvec_len [simp]: "length (uvec n k) = n"
+  by (simp add: uvec_def)
+
+lemma svec_len [simp]: "length (svec n k c) = n"
+  by (simp add: svec_def)
+
+lemma fq_row_id:
+  assumes "\<forall>x \<in> set r. 0 \<le> x \<and> x < 3329"
+  shows "map fq r = r"
+  using assms
+proof (induct r)
+  case Nil show ?case by simp
+next
+  case (Cons a r)
+  have ha: "fq a = a" using Cons.prems fq_reduced by auto
+  have hr: "map fq r = r" using Cons.prems Cons.hyps by auto
+  show ?case using ha hr by simp
+qed
+
+lemma id_mat_row:
+  assumes r: "r < m"
+  shows "id_mat m ! r = uvec m r"
+proof -
+  have "id_mat m ! r = map (\<lambda>j. if r = j then (1::int) else 0) [0..<m]"
+    using r by (simp add: id_mat_def nth_map)
+  also have "\<dots> = uvec m r"
+  proof (unfold uvec_def)
+    show "map (\<lambda>j. if r = j then (1::int) else 0) [0..<m]
+        = map (\<lambda>col. if col = r then (1::int) else 0) [0..<m]"
+    proof (rule map_cong[OF refl])
+      fix j assume "j \<in> set [0..<m]"
+      show "(if r = j then (1::int) else 0) = (if j = r then (1::int) else 0)"
+        by (cases "r = j") simp_all
+    qed
+  qed
+  finally show ?thesis .
+qed
+
+lemma swap_rows_nth:
+  assumes r: "r < length A" and i: "i < length A" and j: "j < length A"
+  shows "swap_rows A i j ! r = (if r = i then A ! j else (if r = j then A ! i else A ! r))"
+proof (cases "i = j")
+  case True
+  then show ?thesis using r i by (simp add: swap_rows_def)
+next
+  case False
+  show ?thesis
+  proof (cases "r = i")
+    case True
+    with False r i j show ?thesis by (simp add: swap_rows_def nth_list_update_neq nth_list_update)
+  next
+    case False
+    show ?thesis
+    proof (cases "r = j")
+      case True
+      with False r i j show ?thesis by (simp add: swap_rows_def nth_list_update)
+    next
+      case False
+      with r i j show ?thesis by (simp add: swap_rows_def nth_list_update_neq)
+    qed
+  qed
+qed
+
+lemma row_mat_mult_mod:
+  assumes r: "r < n_rows A"
+  shows "mat_mult_mod A B ! r = map (\<lambda>j. fq (dot (row_vec A r) (col_vec B j))) [0..<n_cols B]"
+proof -
+  have len: "r < length (mat_mult A B)" using r by (simp add: mat_len n_rows_def)
+  have h1: "mat_mult_mod A B ! r = map fq ((mat_mult A B) ! r)"
+    using len by (simp add: mat_mult_mod_def nth_map)
+  have h2: "(mat_mult A B) ! r = map (\<lambda>j. dot (row_vec A r) (col_vec B j)) [0..<n_cols B]"
+    using r by (simp add: mat_mult_def nth_map n_rows_def)
+  show ?thesis using h1 h2 by simp
+qed
+
+lemma dot_uvec_col:
+  assumes km: "k < m" and lenA: "length A = m"
+  shows "dot (uvec m k) (col_vec A d) = A ! k ! d"
+proof -
+  have ylen: "length (col_vec A d) = m" by (simp add: col_vec_def lenA)
+  have "dot (uvec m k) (col_vec A d) = col_vec A d ! k"
+    using km ylen unfolding uvec_def by (rule dot_unit_row)
+  also have "\<dots> = A ! k ! d" using km lenA by (simp add: col_vec_def nth_map)
+  finally show ?thesis .
+qed
+
+lemma dot_svec_col:
+  assumes km: "k < m" and lenA: "length A = m"
+  shows "dot (svec m k c) (col_vec A d) = c * (A ! k ! d)"
+proof -
+  let ?y = "col_vec A d"
+  have ylen: "length ?y = m" by (simp add: col_vec_def lenA)
+  have xs: "length (svec m k c) = m" by (simp add: svec_def)
+  have conv: "map2 (*) (svec m k c) ?y = map (\<lambda>l. (svec m k c) ! l * ?y ! l) [0..<m]"
+    using xs ylen by (rule map2_conv_idx)
+  have ent: "\<And>l. l < m \<Longrightarrow> (svec m k c) ! l * ?y ! l
+      = c * ((if l = k then (1::int) else 0) * ?y ! l)"
+  proof -
+    fix l assume lm: "l < m"
+    have e: "(svec m k c) ! l = (if l = k then c else 0)"
+      using lm km by (simp add: svec_def nth_map)
+    show "(svec m k c) ! l * ?y ! l
+        = c * ((if l = k then (1::int) else 0) * ?y ! l)"
+      using e by (cases "l = k") simp_all
+  qed
+  have eq: "map (\<lambda>l. (svec m k c) ! l * ?y ! l) [0..<m]
+      = map (\<lambda>l. c * ((if l = k then (1::int) else 0) * ?y ! l)) [0..<m]"
+  proof (rule map_cong[OF refl])
+    fix l assume lin: "l \<in> set [0..<m]"
+    hence lm: "l < m" by simp
+    show "(svec m k c) ! l * ?y ! l
+        = c * ((if l = k then (1::int) else 0) * ?y ! l)"
+      using ent[OF lm] .
+  qed
+  have sum: "sum_list (map (\<lambda>l. c * ((if l = k then (1::int) else 0) * ?y ! l)) [0..<m])
+      = c * ?y ! k"
+    using sum_sel_scaled[OF km] .
+  have "dot (svec m k c) ?y = sum_list (map2 (*) (svec m k c) ?y)"
+    by (simp add: dot_def)
+  also have "\<dots> = sum_list (map (\<lambda>l. c * ((if l = k then (1::int) else 0) * ?y ! l)) [0..<m])"
+    using conv eq by simp
+  also have "\<dots> = c * ?y ! k" using sum .
+  also have "\<dots> = c * (A ! k ! d)" using km lenA by (simp add: col_vec_def nth_map)
+  finally show ?thesis .
+qed
+
+(* seg: rowops-batch2 *)
+lemma nth_row_swap_matrix_i:
+  assumes im: "i < m"
+  shows "row_swap_matrix m i j ! i = uvec m j"
+proof (rule nth_equalityI)
+  show "length (row_swap_matrix m i j ! i) = length (uvec m j)"
+    using im by (simp add: row_swap_matrix_def uvec_def)
+  fix c assume c: "c < length (row_swap_matrix m i j ! i)"
+  hence cm: "c < m" using im by (simp add: row_swap_matrix_def)
+  show "row_swap_matrix m i j ! i ! c = uvec m j ! c"
+    using im cm by (simp add: row_swap_matrix_def uvec_def nth_map)
+qed
+
+lemma nth_row_swap_matrix_j:
+  assumes jm: "j < m"
+  shows "row_swap_matrix m i j ! j = uvec m i"
+proof (rule nth_equalityI)
+  show "length (row_swap_matrix m i j ! j) = length (uvec m i)"
+    using jm by (simp add: row_swap_matrix_def uvec_def)
+  fix c assume c: "c < length (row_swap_matrix m i j ! j)"
+  hence cm: "c < m" using jm by (simp add: row_swap_matrix_def)
+  show "row_swap_matrix m i j ! j ! c = uvec m i ! c"
+    using jm cm by (simp add: row_swap_matrix_def uvec_def nth_map)
+qed
+
+lemma nth_row_swap_matrix_other:
+  assumes rm: "r < m" and ri: "r \<noteq> i" and rj: "r \<noteq> j"
+  shows "row_swap_matrix m i j ! r = uvec m r"
+proof (rule nth_equalityI)
+  show "length (row_swap_matrix m i j ! r) = length (uvec m r)"
+    using rm by (simp add: row_swap_matrix_def uvec_def)
+  fix c assume c: "c < length (row_swap_matrix m i j ! r)"
+  hence cm: "c < m" using rm by (simp add: row_swap_matrix_def)
+  have a: "(row_swap_matrix m i j ! r) ! c = (if r = c then (1::int) else 0)"
+    using rm ri rj cm by (simp add: row_swap_matrix_def nth_map)
+  have b: "uvec m r ! c = (if c = r then (1::int) else 0)"
+    using cm by (simp add: uvec_def nth_map)
+  show "row_swap_matrix m i j ! r ! c = uvec m r ! c"
+    using a b by (cases "c = r") simp_all
+qed
+
+lemma nth_row_scale_matrix_i:
+  assumes im: "i < m"
+  shows "row_scale_matrix m i c ! i = svec m i c"
+proof (rule nth_equalityI)
+  show "length (row_scale_matrix m i c ! i) = length (svec m i c)"
+    using im by (simp add: row_scale_matrix_def svec_def)
+  fix col assume co: "col < length (row_scale_matrix m i c ! i)"
+  hence cm: "col < m" using im by (simp add: row_scale_matrix_def)
+  have a: "(row_scale_matrix m i c ! i) ! col
+      = (if col = i then c else (if i = col then (1::int) else 0))"
+    using im cm by (simp add: row_scale_matrix_def nth_map)
+  have b: "svec m i c ! col = (if col = i then c else 0)"
+    using cm by (simp add: svec_def nth_map)
+  show "row_scale_matrix m i c ! i ! col = svec m i c ! col"
+    using a b by (cases "col = i") simp_all
+qed
+
+lemma nth_row_scale_matrix_other:
+  assumes rm: "r < m" and ri: "r \<noteq> i"
+  shows "row_scale_matrix m i c ! r = uvec m r"
+proof (rule nth_equalityI)
+  show "length (row_scale_matrix m i c ! r) = length (uvec m r)"
+    using rm by (simp add: row_scale_matrix_def uvec_def)
+  fix col assume co: "col < length (row_scale_matrix m i c ! r)"
+  hence cm: "col < m" using rm by (simp add: row_scale_matrix_def)
+  have a: "(row_scale_matrix m i c ! r) ! col
+      = (if r = col then (1::int) else 0)"
+    using rm ri cm by (simp add: row_scale_matrix_def nth_map)
+  have b: "uvec m r ! col = (if col = r then (1::int) else 0)"
+    using cm by (simp add: uvec_def nth_map)
+  show "row_scale_matrix m i c ! r ! col = uvec m r ! col"
+    using a b by (cases "col = r") simp_all
+qed
+
+lemma mat_mult_mod_row_eq_uvec:
+  assumes rm: "r < m" and EM: "n_rows M = m"
+    and rectA: "is_rect A" and rowsA: "n_rows A = m" and redA: "reduced A"
+    and e: "M ! r = uvec m k" and km: "k < m"
+  shows "mat_mult_mod M A ! r = A ! k"
+proof -
+  have lenA: "length A = m" using rowsA by (simp add: n_rows_def)
+  have klen: "length (A ! k) = n_cols A"
+  proof (rule is_rect_rows)
+    show "is_rect A" using rectA .
+    show "k < n_rows A" using rowsA km by simp
+  qed
+  have h: "mat_mult_mod M A ! r
+      = map (\<lambda>c. fq (dot (M ! r) (col_vec A c))) [0..<n_cols A]"
+  proof -
+    have rr: "r < n_rows M" using EM rm by simp
+    have "mat_mult_mod M A ! r
+        = map (\<lambda>j. fq (dot (row_vec M r) (col_vec A j))) [0..<n_cols A]"
+      using rr by (rule row_mat_mult_mod)
+    thus ?thesis by (simp add: row_vec_def)
+  qed
+  have step1: "map (\<lambda>c. fq (dot (M ! r) (col_vec A c))) [0..<n_cols A]
+      = map (\<lambda>c. fq (A ! k ! c)) [0..<n_cols A]"
+  proof (rule map_cong[OF refl])
+    fix c assume cin: "c \<in> set [0..<n_cols A]"
+    have d: "dot (M ! r) (col_vec A c) = A ! k ! c"
+      using km lenA e by (simp add: dot_uvec_col)
+    show "fq (dot (M ! r) (col_vec A c)) = fq (A ! k ! c)" using d by simp
+  qed
+  have step2: "map (\<lambda>c. fq (A ! k ! c)) [0..<n_cols A] = A ! k"
+  proof (rule nth_equalityI)
+    show "length (map (\<lambda>c. fq (A ! k ! c)) [0..<n_cols A]) = length (A ! k)"
+      using klen by simp
+    fix c assume c: "c < length (map (\<lambda>c. fq (A ! k ! c)) [0..<n_cols A])"
+    hence cm: "c < n_cols A" by simp
+    have rowin: "A ! k \<in> set A" using km rowsA by (simp add: n_rows_def nth_mem)
+    have val: "A ! k ! c \<in> set (A ! k)"
+    proof -
+      have cl: "c < length (A ! k)" using cm klen by simp
+      show ?thesis by (rule nth_mem[OF cl])
+    qed
+    have rng: "0 \<le> A ! k ! c \<and> A ! k ! c < 3329"
+      using reducedD[OF redA rowin val] .
+    have l: "map (\<lambda>c. fq (A ! k ! c)) [0..<n_cols A] ! c = fq (A ! k ! c)"
+      using cm by (simp add: nth_map)
+    have r: "fq (A ! k ! c) = A ! k ! c" using rng by (simp add: fq_reduced)
+    show "map (\<lambda>c. fq (A ! k ! c)) [0..<n_cols A] ! c = A ! k ! c"
+      using l r by simp
+  qed
+  have "mat_mult_mod M A ! r = map (\<lambda>c. fq (A ! k ! c)) [0..<n_cols A]"
+    using h step1 by simp
+  also have "\<dots> = A ! k" using step2 .
+  finally show ?thesis .
+qed
+
+lemma mat_mult_mod_row_eq_svec:
+  assumes rm: "r < m" and EM: "n_rows M = m"
+    and rectA: "is_rect A" and rowsA: "n_rows A = m"
+    and e: "M ! r = svec m k c" and km: "k < m"
+  shows "mat_mult_mod M A ! r = map (\<lambda>x. fq (c * x)) (A ! k)"
+proof -
+  have lenA: "length A = m" using rowsA by (simp add: n_rows_def)
+  have klen: "length (A ! k) = n_cols A"
+  proof (rule is_rect_rows)
+    show "is_rect A" using rectA .
+    show "k < n_rows A" using rowsA km by simp
+  qed
+  have h: "mat_mult_mod M A ! r
+      = map (\<lambda>d. fq (dot (M ! r) (col_vec A d))) [0..<n_cols A]"
+  proof -
+    have rr: "r < n_rows M" using EM rm by simp
+    have "mat_mult_mod M A ! r
+        = map (\<lambda>j. fq (dot (row_vec M r) (col_vec A j))) [0..<n_cols A]"
+      using rr by (rule row_mat_mult_mod)
+    thus ?thesis by (simp add: row_vec_def)
+  qed
+  have step1: "map (\<lambda>d. fq (dot (M ! r) (col_vec A d))) [0..<n_cols A]
+      = map (\<lambda>d. fq (c * (A ! k ! d))) [0..<n_cols A]"
+  proof (rule map_cong[OF refl])
+    fix d assume din: "d \<in> set [0..<n_cols A]"
+    have dd: "dot (M ! r) (col_vec A d) = c * (A ! k ! d)"
+      using km lenA e by (simp add: dot_svec_col)
+    show "fq (dot (M ! r) (col_vec A d)) = fq (c * (A ! k ! d))" using dd by simp
+  qed
+  have step2: "map (\<lambda>d. fq (c * (A ! k ! d))) [0..<n_cols A]
+      = map (\<lambda>x. fq (c * x)) (A ! k)"
+  proof (rule nth_equalityI)
+    show "length (map (\<lambda>d. fq (c * (A ! k ! d))) [0..<n_cols A])
+        = length (map (\<lambda>x. fq (c * x)) (A ! k))"
+      using klen by simp
+    fix d assume d: "d < length (map (\<lambda>d. fq (c * (A ! k ! d))) [0..<n_cols A])"
+    hence dm: "d < n_cols A" by simp
+    have l: "map (\<lambda>d. fq (c * (A ! k ! d))) [0..<n_cols A] ! d = fq (c * (A ! k ! d))"
+      using dm by (simp add: nth_map)
+    have r: "map (\<lambda>x. fq (c * x)) (A ! k) ! d = fq (c * (A ! k ! d))"
+      using dm klen by (simp add: nth_map)
+    show "map (\<lambda>d. fq (c * (A ! k ! d))) [0..<n_cols A] ! d
+        = map (\<lambda>x. fq (c * x)) (A ! k) ! d"
+      using l r by simp
+  qed
+  have "mat_mult_mod M A ! r = map (\<lambda>d. fq (c * (A ! k ! d))) [0..<n_cols A]"
+    using h step1 by simp
+  also have "\<dots> = map (\<lambda>x. fq (c * x)) (A ! k)" using step2 .
+  finally show ?thesis .
+qed
+
+lemma reduced_row_swap_matrix [simp]:
+  shows "reduced (row_swap_matrix m i j)"
+  by (auto simp add: reduced_def row_swap_matrix_def split: if_split)
+
+lemma is_rect_row_swap_matrix [simp]:
+  shows "is_rect (row_swap_matrix m i j)"
+proof (cases "m = 0")
+  case True
+  then show ?thesis by (simp add: row_swap_matrix_def is_rect_def)
+next
+  case False
+  hence m0: "0 < m" by simp
+  have nc: "n_cols (row_swap_matrix m i j) = m"
+    using m0 by (simp add: n_cols_def row_swap_matrix_def)
+  show ?thesis
+    unfolding is_rect_def using nc by (simp add: row_swap_matrix_def)
+qed
+
+(* seg: rowops-batch3 *)
+lemma swap_rows_self:
+  assumes i: "i < length A"
+  shows "swap_rows A i i = A"
+proof (rule nth_equalityI)
+  show "length (swap_rows A i i) = length A" using i by (simp add: swap_rows_def)
+  fix r assume r: "r < length (swap_rows A i i)"
+  have rA: "r < length A" using r i by (simp add: swap_rows_def)
+  show "swap_rows A i i ! r = A ! r"
+  proof (cases "r = i")
+    case True
+    thus ?thesis using i rA by (simp add: swap_rows_def)
+  next
+    case False
+    thus ?thesis using i rA by (simp add: swap_rows_def nth_list_update_neq)
+  qed
+qed
+
+lemma mat_mult_mod_row_eq_swap_row:
+  assumes rm: "r < m" and rectA: "is_rect A" and rowsA: "n_rows A = m" and redA: "reduced A"
+    and e: "row_swap_matrix m i j ! r = uvec m k" and km: "k < m"
+  shows "mat_mult_mod (row_swap_matrix m i j) A ! r = A ! k"
+proof (rule mat_mult_mod_row_eq_uvec)
+  show "r < m" using rm .
+  show "n_rows (row_swap_matrix m i j) = m" by (simp add: n_rows_def row_swap_matrix_def)
+  show "is_rect A" using rectA .
+  show "n_rows A = m" using rowsA .
+  show "reduced A" using redA .
+  show "row_swap_matrix m i j ! r = uvec m k" using e .
+  show "k < m" using km .
+qed
+
+lemma mat_mult_mod_row_swap:
+  assumes im: "i < m" and jm: "j < m" and rowsA: "n_rows A = m"
+    and rectA: "is_rect A" and redA: "reduced A"
+  shows "mat_mult_mod (row_swap_matrix m i j) A = swap_rows A i j"
+proof -
+  let ?E = "row_swap_matrix m i j"
+  have En: "n_rows ?E = m" by (simp add: n_rows_def row_swap_matrix_def)
+  have lenA: "length A = m" using rowsA by (simp add: n_rows_def)
+  have lenL: "length (mat_mult_mod ?E A) = m"
+  proof -
+    have "length (mat_mult_mod ?E A) = length (mat_mult ?E A)"
+      by (simp add: mat_mult_mod_def)
+    also have "\<dots> = n_rows ?E" by (simp add: mat_len)
+    also have "\<dots> = m" using En .
+    finally show ?thesis .
+  qed
+  have lenR: "length (swap_rows A i j) = m" using lenA by (simp add: swap_rows_def)
+  show ?thesis
+  proof (rule nth_equalityI)
+    show "length (mat_mult_mod ?E A) = length (swap_rows A i j)" using lenL lenR by simp
+    fix r assume rl: "r < length (mat_mult_mod ?E A)"
+    hence rm: "r < m" using lenL by simp
+    show "mat_mult_mod ?E A ! r = swap_rows A i j ! r"
+    proof (cases "i = j")
+      case True
+      have E_id: "?E = id_mat m" using True by (simp add: aux_rref_swap_self)
+      have row: "mat_mult_mod ?E A ! r = A ! r"
+      proof (rule mat_mult_mod_row_eq_swap_row)
+        show "r < m" using rm .
+        show "is_rect A" using rectA .
+        show "n_rows A = m" using rowsA .
+        show "reduced A" using redA .
+        show "?E ! r = uvec m r" using rm E_id by (simp add: id_mat_row)
+        show "r < m" using rm .
+      qed
+      have srow: "swap_rows A i j ! r = A ! r" using True im lenA by (simp add: swap_rows_self)
+      with row show ?thesis by simp
+    next
+      case False
+      have ij: "i \<noteq> j" using False by simp
+      show ?thesis
+      proof (cases "r = i")
+        case True
+        have row: "mat_mult_mod ?E A ! r = A ! j"
+        proof (rule mat_mult_mod_row_eq_swap_row)
+          show "r < m" using rm .
+          show "is_rect A" using rectA .
+          show "n_rows A = m" using rowsA .
+          show "reduced A" using redA .
+          show "?E ! r = uvec m j" using True im by (simp add: nth_row_swap_matrix_i)
+          show "j < m" using jm .
+        qed
+        have srow: "swap_rows A i j ! r = A ! j"
+          using True ij rm lenA im jm by (simp add: swap_rows_nth)
+        with row show ?thesis by simp
+      next
+        case False
+        have ri: "r \<noteq> i" using False by simp
+        show ?thesis
+        proof (cases "r = j")
+          case True
+          have row: "mat_mult_mod ?E A ! r = A ! i"
+          proof (rule mat_mult_mod_row_eq_swap_row)
+            show "r < m" using rm .
+            show "is_rect A" using rectA .
+            show "n_rows A = m" using rowsA .
+            show "reduced A" using redA .
+            show "?E ! r = uvec m i" using True jm by (simp add: nth_row_swap_matrix_j)
+            show "i < m" using im .
+          qed
+          have srow: "swap_rows A i j ! r = A ! i"
+            using True ri rm lenA im jm by (simp add: swap_rows_nth)
+          with row show ?thesis by simp
+        next
+          case False
+          have rj: "r \<noteq> j" using False by simp
+          have row: "mat_mult_mod ?E A ! r = A ! r"
+          proof (rule mat_mult_mod_row_eq_swap_row)
+            show "r < m" using rm .
+            show "is_rect A" using rectA .
+            show "n_rows A = m" using rowsA .
+            show "reduced A" using redA .
+            show "?E ! r = uvec m r"
+              using rm ri rj by (simp add: nth_row_swap_matrix_other)
+            show "r < m" using rm .
+          qed
+          have srow: "swap_rows A i j ! r = A ! r"
+            using ri rj rm lenA im jm by (simp add: swap_rows_nth)
+          with row show ?thesis by simp
+        qed
+      qed
+    qed
+  qed
+qed
+
+lemma swap_rows_row_swap_matrix_id:
+  assumes im: "i < m" and jm: "j < m"
+  shows "swap_rows (row_swap_matrix m i j) i j = id_mat m"
+proof -
+  let ?E = "row_swap_matrix m i j"
+  have En: "n_rows ?E = m" by (simp add: n_rows_def row_swap_matrix_def)
+  have lenE: "length ?E = m" using En by (simp add: n_rows_def)
+  show ?thesis
+  proof (rule nth_equalityI)
+    show "length (swap_rows ?E i j) = length (id_mat m)"
+      using lenE by (simp add: swap_rows_def id_mat_def)
+    fix r assume rl: "r < length (swap_rows ?E i j)"
+    hence rm: "r < m" using lenE by (simp add: swap_rows_def)
+    show "swap_rows ?E i j ! r = id_mat m ! r"
+    proof (cases "i = j")
+      case True
+      have E_id: "?E = id_mat m" using True by (simp add: aux_rref_swap_self)
+      have "swap_rows ?E i j ! r = ?E ! r" using True im lenE by (simp add: swap_rows_self)
+      also have "\<dots> = id_mat m ! r" using E_id by simp
+      finally show ?thesis .
+    next
+      case False
+      have ij: "i \<noteq> j" using False by simp
+      show ?thesis
+      proof (cases "r = i")
+        case True
+        have "swap_rows ?E i j ! r = ?E ! j"
+          using True ij rm lenE im jm by (simp add: swap_rows_nth)
+        also have "\<dots> = uvec m i" using jm by (simp add: nth_row_swap_matrix_j)
+        also have "\<dots> = id_mat m ! i" using im by (simp add: id_mat_row)
+        finally show ?thesis using True by simp
+      next
+        case False
+        have ri: "r \<noteq> i" using False by simp
+        show ?thesis
+        proof (cases "r = j")
+          case True
+          have "swap_rows ?E i j ! r = ?E ! i"
+            using True ri rm lenE im jm by (simp add: swap_rows_nth)
+          also have "\<dots> = uvec m j" using im by (simp add: nth_row_swap_matrix_i)
+          also have "\<dots> = id_mat m ! j" using jm by (simp add: id_mat_row)
+          finally show ?thesis using True by simp
+        next
+          case False
+          have rj: "r \<noteq> j" using False by simp
+          have "swap_rows ?E i j ! r = ?E ! r"
+            using ri rj rm lenE im jm by (simp add: swap_rows_nth)
+          also have "\<dots> = uvec m r" using rm ri rj by (simp add: nth_row_swap_matrix_other)
+          also have "\<dots> = id_mat m ! r" using rm by (simp add: id_mat_row)
+          finally show ?thesis .
+        qed
+      qed
+    qed
+  qed
+qed
+
+lemma row_swap_matrix_invertible_mod:
+  assumes im: "i < m" and jm: "j < m"
+  shows "invertible_mod (row_swap_matrix m i j)"
+proof -
+  let ?E = "row_swap_matrix m i j"
+  have m0: "0 < m" using im by simp
+  have En: "n_rows ?E = m" by (simp add: n_rows_def row_swap_matrix_def)
+  have idE: "mat_mult_mod ?E ?E = id_mat m"
+  proof -
+    have "mat_mult_mod ?E ?E = swap_rows ?E i j"
+      by (rule mat_mult_mod_row_swap[OF im jm En is_rect_row_swap_matrix reduced_row_swap_matrix])
+    also have "\<dots> = id_mat m" by (rule swap_rows_row_swap_matrix_id[OF im jm])
+    finally show ?thesis .
+  qed
+  show ?thesis
+    unfolding invertible_mod_def
+  proof (intro exI[of _ ?E] conjI)
+    show "n_rows ?E = n_rows ?E" by simp
+    show "n_cols ?E = n_rows ?E" using m0 En by (simp add: n_cols_def row_swap_matrix_def)
+    show "is_rect ?E" by simp
+    show "cong_q_mat (mat_mult_mod ?E ?E) (id_mat (n_rows ?E))" using idE En by (simp add: cong_q_mat_eq)
+    show "cong_q_mat (mat_mult_mod ?E ?E) (id_mat (n_rows ?E))" using idE En by (simp add: cong_q_mat_eq)
+  qed
+qed
+
+(* seg: rowops-batch4 *)
+lemma is_rect_row_scale_matrix [simp]:
+  shows "is_rect (row_scale_matrix m i c)"
+proof (cases "m = 0")
+  case True
+  then show ?thesis by (simp add: row_scale_matrix_def is_rect_def)
+next
+  case False
+  hence m0: "0 < m" by simp
+  have nc: "n_cols (row_scale_matrix m i c) = m"
+    using m0 by (simp add: n_cols_def row_scale_matrix_def)
+  show ?thesis
+    unfolding is_rect_def using nc by (simp add: row_scale_matrix_def)
+qed
+
+lemma map_fq_uvec [simp]: "map fq (uvec m k) = uvec m k"
+proof (rule nth_equalityI)
+  show "length (map fq (uvec m k)) = length (uvec m k)" by simp
+  fix c assume c: "c < length (map fq (uvec m k))"
+  hence cm: "c < m" by (simp add: uvec_def)
+  have l: "map fq (uvec m k) ! c = fq (uvec m k ! c)"
+    using cm by (simp add: uvec_def nth_map)
+  have r: "uvec m k ! c = (if c = k then (1::int) else 0)"
+    using cm by (simp add: uvec_def nth_map)
+  show "map fq (uvec m k) ! c = uvec m k ! c"
+    using l r by (cases "c = k") simp_all
+qed
+
+lemma mat_mult_mod_row_eq_uvec_fq:
+  assumes rm: "r < m" and EM: "n_rows M = m"
+    and rectA: "is_rect A" and rowsA: "n_rows A = m"
+    and e: "M ! r = uvec m k" and km: "k < m"
+  shows "mat_mult_mod M A ! r = map fq (A ! k)"
+proof -
+  have lenA: "length A = m" using rowsA by (simp add: n_rows_def)
+  have klen: "length (A ! k) = n_cols A"
+  proof (rule is_rect_rows)
+    show "is_rect A" using rectA .
+    show "k < n_rows A" using rowsA km by simp
+  qed
+  have h: "mat_mult_mod M A ! r
+      = map (\<lambda>c. fq (dot (M ! r) (col_vec A c))) [0..<n_cols A]"
+  proof -
+    have rr: "r < n_rows M" using EM rm by simp
+    have "mat_mult_mod M A ! r
+        = map (\<lambda>j. fq (dot (row_vec M r) (col_vec A j))) [0..<n_cols A]"
+      using rr by (rule row_mat_mult_mod)
+    thus ?thesis by (simp add: row_vec_def)
+  qed
+  have step1: "map (\<lambda>c. fq (dot (M ! r) (col_vec A c))) [0..<n_cols A]
+      = map (\<lambda>c. fq (A ! k ! c)) [0..<n_cols A]"
+  proof (rule map_cong[OF refl])
+    fix c assume cin: "c \<in> set [0..<n_cols A]"
+    have d: "dot (M ! r) (col_vec A c) = A ! k ! c"
+      using km lenA e by (simp add: dot_uvec_col)
+    show "fq (dot (M ! r) (col_vec A c)) = fq (A ! k ! c)" using d by simp
+  qed
+  have step2: "map (\<lambda>c. fq (A ! k ! c)) [0..<n_cols A] = map fq (A ! k)"
+  proof (rule nth_equalityI)
+    show "length (map (\<lambda>c. fq (A ! k ! c)) [0..<n_cols A]) = length (map fq (A ! k))"
+      using klen by simp
+    fix c assume c: "c < length (map (\<lambda>c. fq (A ! k ! c)) [0..<n_cols A])"
+    hence cm: "c < n_cols A" by simp
+    have l: "map (\<lambda>c. fq (A ! k ! c)) [0..<n_cols A] ! c = fq (A ! k ! c)"
+      using cm by (simp add: nth_map)
+    have r: "map fq (A ! k) ! c = fq (A ! k ! c)"
+      using cm klen by (simp add: nth_map)
+    show "map (\<lambda>c. fq (A ! k ! c)) [0..<n_cols A] ! c = map fq (A ! k) ! c"
+      using l r by simp
+  qed
+  have "mat_mult_mod M A ! r = map (\<lambda>c. fq (A ! k ! c)) [0..<n_cols A]"
+    using h step1 by simp
+  also have "\<dots> = map fq (A ! k)" using step2 .
+  finally show ?thesis .
+qed
+
+lemma mat_mult_mod_row_scale:
+  assumes im: "i < m" and rowsA: "n_rows A = m"
+    and rectA: "is_rect A" and redA: "reduced A"
+  shows "mat_mult_mod (row_scale_matrix m i c) A = scale_row A i c"
+proof -
+  let ?S = "row_scale_matrix m i c"
+  have Sn: "n_rows ?S = m" by (simp add: n_rows_def row_scale_matrix_def)
+  have lenA: "length A = m" using rowsA by (simp add: n_rows_def)
+  have lenL: "length (mat_mult_mod ?S A) = m"
+  proof -
+    have "length (mat_mult_mod ?S A) = length (mat_mult ?S A)"
+      by (simp add: mat_mult_mod_def)
+    also have "\<dots> = n_rows ?S" by (simp add: mat_len)
+    also have "\<dots> = m" using Sn .
+    finally show ?thesis .
+  qed
+  have lenR: "length (scale_row A i c) = m" using lenA by (simp add: scale_row_def)
+  show ?thesis
+  proof (rule nth_equalityI)
+    show "length (mat_mult_mod ?S A) = length (scale_row A i c)" using lenL lenR by simp
+    fix r assume rl: "r < length (mat_mult_mod ?S A)"
+    hence rm: "r < m" using lenL by simp
+    show "mat_mult_mod ?S A ! r = scale_row A i c ! r"
+    proof (cases "r = i")
+      case True
+      have row: "mat_mult_mod ?S A ! r = map (\<lambda>x. fq (c * x)) (A ! i)"
+      proof (rule mat_mult_mod_row_eq_svec)
+        show "r < m" using rm .
+        show "n_rows ?S = m" using Sn .
+        show "is_rect A" using rectA .
+        show "n_rows A = m" using rowsA .
+        show "?S ! r = svec m i c" using True im by (simp add: nth_row_scale_matrix_i)
+        show "i < m" using im .
+      qed
+      have sz: "scale_row A i c ! r = map (\<lambda>x. fq (c * x)) (A ! i)"
+        using True im lenA by (simp add: scale_row_def)
+      with row show ?thesis by simp
+    next
+      case False
+      have ri: "r \<noteq> i" using False by simp
+      have row: "mat_mult_mod ?S A ! r = A ! r"
+      proof (rule mat_mult_mod_row_eq_uvec)
+        show "r < m" using rm .
+        show "n_rows ?S = m" using Sn .
+        show "is_rect A" using rectA .
+        show "n_rows A = m" using rowsA .
+        show "reduced A" using redA .
+        show "?S ! r = uvec m r" using rm ri by (simp add: nth_row_scale_matrix_other)
+        show "r < m" using rm .
+      qed
+      have sz: "scale_row A i c ! r = A ! r"
+        using ri im lenA by (simp add: scale_row_def nth_list_update_neq)
+      with row show ?thesis by simp
+    qed
+  qed
+qed
+
+lemma mat_mult_mod_row_scale_id:
+  assumes im: "i < m" and unit: "fq (c * d) = 1"
+  shows "mat_mult_mod (row_scale_matrix m i c) (row_scale_matrix m i d) = id_mat m"
+proof -
+  let ?Sc = "row_scale_matrix m i c"
+  let ?Sd = "row_scale_matrix m i d"
+  have Scn: "n_rows ?Sc = m" by (simp add: n_rows_def row_scale_matrix_def)
+  have Sdn: "n_rows ?Sd = m" by (simp add: n_rows_def row_scale_matrix_def)
+  have lenL: "length (mat_mult_mod ?Sc ?Sd) = m"
+  proof -
+    have "length (mat_mult_mod ?Sc ?Sd) = length (mat_mult ?Sc ?Sd)"
+      by (simp add: mat_mult_mod_def)
+    also have "\<dots> = n_rows ?Sc" by (simp add: mat_len)
+    also have "\<dots> = m" using Scn .
+    finally show ?thesis .
+  qed
+  show ?thesis
+  proof (rule nth_equalityI)
+    show "length (mat_mult_mod ?Sc ?Sd) = length (id_mat m)"
+      using lenL by (simp add: id_mat_def)
+    fix r assume rl: "r < length (mat_mult_mod ?Sc ?Sd)"
+    hence rm: "r < m" using lenL by simp
+    show "mat_mult_mod ?Sc ?Sd ! r = id_mat m ! r"
+    proof (cases "r = i")
+      case True
+      have rowf: "mat_mult_mod ?Sc ?Sd ! r = map (\<lambda>x. fq (c * x)) (?Sd ! i)"
+      proof (rule mat_mult_mod_row_eq_svec)
+        show "r < m" using rm .
+        show "n_rows ?Sc = m" using Scn .
+        show "is_rect ?Sd" by simp
+        show "n_rows ?Sd = m" using Sdn .
+        show "?Sc ! r = svec m i c" using True im by (simp add: nth_row_scale_matrix_i)
+        show "i < m" using im .
+      qed
+      have sd: "?Sd ! i = svec m i d" using im by (simp add: nth_row_scale_matrix_i)
+      have mapeq: "map (\<lambda>x. fq (c * x)) (svec m i d) = uvec m i"
+      proof (rule nth_equalityI)
+        show "length (map (\<lambda>x. fq (c * x)) (svec m i d)) = length (uvec m i)"
+          by (simp add: svec_def uvec_def)
+        fix col assume co: "col < length (map (\<lambda>x. fq (c * x)) (svec m i d))"
+        hence cm: "col < m" by (simp add: svec_def)
+        have l: "map (\<lambda>x. fq (c * x)) (svec m i d) ! col = fq (c * (svec m i d ! col))"
+          using cm by (simp add: svec_def nth_map)
+        have sv: "svec m i d ! col = (if col = i then d else 0)"
+          using cm by (simp add: svec_def nth_map)
+        have u: "uvec m i ! col = (if col = i then (1::int) else 0)"
+          using cm by (simp add: uvec_def nth_map)
+        show "map (\<lambda>x. fq (c * x)) (svec m i d) ! col = uvec m i ! col"
+          using l sv u unit by (cases "col = i") simp_all
+      qed
+      have "mat_mult_mod ?Sc ?Sd ! r = uvec m i" using rowf sd mapeq by simp
+      also have "\<dots> = id_mat m ! i" using im by (simp add: id_mat_row)
+      finally show ?thesis using True by simp
+    next
+      case False
+      have ri: "r \<noteq> i" using False by simp
+      have rowf: "mat_mult_mod ?Sc ?Sd ! r = map fq (?Sd ! r)"
+      proof (rule mat_mult_mod_row_eq_uvec_fq)
+        show "r < m" using rm .
+        show "n_rows ?Sc = m" using Scn .
+        show "is_rect ?Sd" by simp
+        show "n_rows ?Sd = m" using Sdn .
+        show "?Sc ! r = uvec m r" using rm ri by (simp add: nth_row_scale_matrix_other)
+        show "r < m" using rm .
+      qed
+      have sd: "?Sd ! r = uvec m r" using rm ri by (simp add: nth_row_scale_matrix_other)
+      have "mat_mult_mod ?Sc ?Sd ! r = uvec m r" using rowf sd by simp
+      also have "\<dots> = id_mat m ! r" using rm by (simp add: id_mat_row)
+      finally show ?thesis .
+    qed
+  qed
+qed
+
+lemma invertible_modI:
+  assumes a1: "n_rows B = n_rows A" and a2: "n_cols B = n_rows A"
+    and a3: "is_rect B"
+    and a4: "cong_q_mat (mat_mult_mod A B) (id_mat (n_rows A))"
+    and a5: "cong_q_mat (mat_mult_mod B A) (id_mat (n_rows A))"
+  shows "invertible_mod A"
+proof -
+  have "\<exists>B. n_rows B = n_rows A \<and> n_cols B = n_rows A \<and> is_rect B \<and>
+      cong_q_mat (mat_mult_mod A B) (id_mat (n_rows A)) \<and>
+      cong_q_mat (mat_mult_mod B A) (id_mat (n_rows A))"
+  proof (rule exI[of _ B])
+    show "n_rows B = n_rows A \<and> n_cols B = n_rows A \<and> is_rect B \<and>
+        cong_q_mat (mat_mult_mod A B) (id_mat (n_rows A)) \<and>
+        cong_q_mat (mat_mult_mod B A) (id_mat (n_rows A))"
+      using a1 a2 a3 a4 a5 by simp
+  qed
+  thus ?thesis unfolding invertible_mod_def .
+qed
+
+lemma is_rect_row_add_matrix [simp]:
+  shows "is_rect (row_add_matrix m i j f)"
+proof (cases "m = 0")
+  case True
+  then show ?thesis by (simp add: row_add_matrix_def is_rect_def)
+next
+  case False
+  hence m0: "0 < m" by simp
+  have nc: "n_cols (row_add_matrix m i j f) = m"
+    using m0 by (simp add: n_cols_def row_add_matrix_def)
+  show ?thesis
+    unfolding is_rect_def using nc by (simp add: row_add_matrix_def)
+qed
+
+lemma row_scale_matrix_invertible_mod:
+  assumes im: "i < m" and unit: "fq (c * d) = 1"
+  shows "invertible_mod (row_scale_matrix m i c)"
+proof -
+  let ?Sc = "row_scale_matrix m i c"
+  let ?Sd = "row_scale_matrix m i d"
+  have m0: "0 < m" using im by simp
+  have Scn: "n_rows ?Sc = m" by (simp add: n_rows_def row_scale_matrix_def)
+  have Sdn: "n_rows ?Sd = m" by (simp add: n_rows_def row_scale_matrix_def)
+  have ncd: "n_cols ?Sd = m" using m0 by (simp add: n_cols_def row_scale_matrix_def)
+  have comm: "d * c = c * d" by (rule mult.commute)
+  have unit': "fq (d * c) = 1"
+  proof (subst comm)
+    show "fq (c * d) = 1" using unit .
+  qed
+  have L: "mat_mult_mod ?Sc ?Sd = id_mat m"
+    by (rule mat_mult_mod_row_scale_id[OF im unit])
+  have R: "mat_mult_mod ?Sd ?Sc = id_mat m"
+    by (rule mat_mult_mod_row_scale_id[OF im unit'])
+  have rc1: "cong_q_mat (mat_mult_mod ?Sc ?Sd) (id_mat m)" using L by (simp add: cong_q_mat_eq)
+  have rc2: "cong_q_mat (mat_mult_mod ?Sd ?Sc) (id_mat m)" using R by (simp add: cong_q_mat_eq)
+  have a1: "n_rows ?Sd = n_rows ?Sc" using Sdn Scn by simp
+  have a2: "n_cols ?Sd = n_rows ?Sc" using ncd Scn by simp
+  have a3: "is_rect ?Sd" by simp
+  have a4: "cong_q_mat (mat_mult_mod ?Sc ?Sd) (id_mat (n_rows ?Sc))" using rc1 Scn by simp
+  have a5: "cong_q_mat (mat_mult_mod ?Sd ?Sc) (id_mat (n_rows ?Sc))" using rc2 Scn by simp
+  show ?thesis by (rule invertible_modI[OF a1 a2 a3 a4 a5])
+qed
+
+lemma row_add_matrix_invertible_mod:
+  assumes im: "i < m" and jm: "j < m" and ij: "i \<noteq> j"
+  shows "invertible_mod (row_add_matrix m i j f)"
+proof -
+  let ?E = "row_add_matrix m i j f"
+  let ?F = "row_add_matrix m i j (- f)"
+  have m0: "0 < m" using im by simp
+  have En: "n_rows ?E = m" by (simp add: n_rows_def row_add_matrix_def)
+  have Fn: "n_rows ?F = m" by (simp add: n_rows_def row_add_matrix_def)
+  have ncf: "n_cols ?F = m" using m0 by (simp add: n_cols_def row_add_matrix_def)
+  have L: "mat_mult_mod ?E ?F = id_mat m"
+    by (rule mat_mult_mod_elem_inverse[OF im jm ij])
+  have R0: "mat_mult_mod (row_add_matrix m i j (- f)) (row_add_matrix m i j (- (- f))) = id_mat m"
+    by (rule mat_mult_mod_elem_inverse[OF im jm ij])
+  have R: "mat_mult_mod ?F ?E = id_mat m" using R0 by simp
+  have rc1: "cong_q_mat (mat_mult_mod ?E ?F) (id_mat m)" using L by (simp add: cong_q_mat_eq)
+  have rc2: "cong_q_mat (mat_mult_mod ?F ?E) (id_mat m)" using R by (simp add: cong_q_mat_eq)
+  have a1: "n_rows ?F = n_rows ?E" using Fn En by simp
+  have a2: "n_cols ?F = n_rows ?E" using ncf En by simp
+  have a3: "is_rect ?F" by simp
+  have a4: "cong_q_mat (mat_mult_mod ?E ?F) (id_mat (n_rows ?E))" using rc1 En by simp
+  have a5: "cong_q_mat (mat_mult_mod ?F ?E) (id_mat (n_rows ?E))" using rc2 En by simp
+  show ?thesis by (rule invertible_modI[OF a1 a2 a3 a4 a5])
+qed
+
 end

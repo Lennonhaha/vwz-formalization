@@ -2122,6 +2122,52 @@ next
   qed
 qed
 
+(* seg: staircase-def-20261023 *)
+section \<open>The staircase invariant\<close>
+
+text \<open>The invariant the reduction is supposed to reach: the rows from @{text r} down have zeros
+  in every column left of @{text c}, and every row above @{text r} has already found its leading
+  entry, strictly left of @{text c}.  The row pointer is bounded as well -- without that bound a
+  pointer past the last row would make the quantifier vacuous and the invariant would say nothing
+  about the matrix at all.\<close>
+
+definition staircase :: "nat \<Rightarrow> nat \<Rightarrow> mat \<Rightarrow> bool" where
+  "staircase r c A = (r \<le> n_rows A \<and> is_rect A \<and> zero_below r c A
+                        \<and> (\<forall>k < r. lead (A ! k) < c))"
+
+text \<open>The two projection lemmas below are the interface the fuel induction uses: the decomposition
+  turns the invariant into facts a proof can consume, and the introduction rule rebuilds it from
+  exactly those facts, so neither direction needs to unfold the definition at the use site.\<close>
+
+lemma staircase_row_bound: "staircase r c A \<Longrightarrow> r \<le> n_rows A"
+  by (simp add: staircase_def)
+
+lemma staircase_rect: "staircase r c A \<Longrightarrow> is_rect A"
+  by (simp add: staircase_def)
+
+lemma staircase_zero_below: "staircase r c A \<Longrightarrow> zero_below r c A"
+  by (simp add: staircase_def)
+
+lemma staircase_leads: "staircase r c A \<Longrightarrow> \<forall>k < r. lead (A ! k) < c"
+  by (simp add: staircase_def)
+
+lemma staircaseI:
+  assumes rn: "r \<le> n_rows A" and rect: "is_rect A" and zb: "zero_below r c A"
+    and above: "\<forall>k < r. lead (A ! k) < c"
+  shows "staircase r c A"
+  using rn rect zb above by (simp add: staircase_def)
+
+lemma staircase_leads_weaken:
+  assumes h: "staircase r c A"
+  shows "\<forall>k < r. lead (A ! k) < c + d"
+proof (intro allI impI)
+  fix k
+  assume k: "k < r"
+  have lc: "lead (A ! k) < c" using staircase_leads [OF h] k by auto
+  have "c \<le> c + d" by simp
+  with lc show "lead (A ! k) < c + d" by simp
+qed
+
 (* seg: pivot-step-lead-20261023 *)
 section \<open>A pivot step fixes the leading column and leaves the rows above it alone\<close>
 

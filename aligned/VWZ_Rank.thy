@@ -12,7 +12,7 @@
 *)
 
 theory VWZ_Rank
-  imports VWZ_RREF
+  imports VWZ_ModAlgebra
 begin
 
 section \<open>Outer products\<close>
@@ -918,4 +918,478 @@ proof -
   show ?thesis using step imod by (simp add: fq_def)
 qed
 
+lemma cong_q_power: "cong_q x y \<Longrightarrow> cong_q (x ^ n) (y ^ n)"
+proof (induct n)
+  case 0
+  show ?case by (simp add: cong_q_def)
+next
+  case (Suc n)
+  have p: "x ^ Suc n = x * x ^ n" by simp
+  have q: "y ^ Suc n = y * y ^ n" by simp
+  have hh: "cong_q x y" using Suc.prems by simp
+  have ih: "cong_q (x ^ n) (y ^ n)" using Suc.hyps hh by simp
+  have mid: "cong_q (x * x ^ n) (y * y ^ n)" using hh ih by (rule cong_q_mult)
+  from mid have mf: "fq (x * x ^ n) = fq (y * y ^ n)" by (simp add: cong_q_def)
+  from mf p q show ?case by (simp add: cong_q_def)
+qed
+
+lemma fq_power_cong: "fq (x ^ n) = fq ((fq x) ^ n)"
+  using cong_q_power[OF cong_q_sym[OF cong_q_fq]] by (simp add: cong_q_def)
+
+lemma fq_mult_invmod: "fq (x * invmod x) = fq (x ^ (3329 - 1))"
+proof -
+  have a1: "fq (x * invmod x) = fq (x * (x ^ (3329 - 2) mod 3329))"
+    by (simp add: invmod_def)
+  have a2: "fq (x * (x ^ (3329 - 2) mod 3329)) = fq (x * x ^ (3329 - 2))"
+    by (simp add: fq_def mod_mult_right_eq)
+  have a3: "x ^ (3329 - 1) = x * x ^ (3329 - 2)"
+  proof -
+    have c: "x * x ^ (3329 - 2) = x ^ (3329 - 2) * x" by (rule mult.commute)
+    also have "\<dots> = x ^ Suc (3329 - 2)" by (rule power_Suc2 [symmetric])
+    also have "\<dots> = x ^ (3329 - 1)" by simp
+    finally show ?thesis by (rule sym)
+  qed
+  show ?thesis using a1 a2 a3 by simp
+qed
+
+(* seg: rank-col-bound-1-20261023 *)
+section \<open>Clearing a column below the pivot\<close>
+
+text \<open>@{const eliminate_col} folds row additions over all row indices, so the
+  entry of the result needs an induction over that list.  The pivot row itself is
+  skipped by the step, and the row that is being cleared is touched exactly once,
+  which is why the entry of the result is a single subtraction.\<close>
+
+lemma entry_foldl_elim:
+  fixes A :: mat and ks :: "nat list"
+  assumes d: "distinct ks" and bound: "\<forall>a\<in>set ks. a < n_rows A"
+    and rect: "is_rect A" and r: "r < n_rows A" and k: "k < n_rows A"
+    and col: "col < n_cols A" and c: "c < n_cols A"
+  shows "entry (foldl (\<lambda>B a. if a = r then B else add_row_mult B a r (- (entry B a c))) A ks) k col
+           = (if k \<noteq> r \<and> k \<in> set ks then fq (entry A k col - entry A k c * entry A r col)
+                else entry A k col)"
+  using d bound rect r k col c
+proof (induct ks arbitrary: A)
+  case Nil
+  then show ?case by simp
+next
+  case (Cons a ks)
+  then show ?case
+    by (cases "a = r"; cases "k = a")
+       (simp_all add: entry_add_row_mult is_rect_add_row_mult n_cols_add_row_mult algebra_simps)
+qed
+
+lemma entry_eliminate_col:
+  assumes rect: "is_rect A" and r: "r < n_rows A" and k: "k < n_rows A"
+    and col: "col < n_cols A" and c: "c < n_cols A"
+  shows "entry (eliminate_col A r c) k col
+           = (if k = r then entry A k col
+                else fq (entry A k col - entry A k c * entry A r col))"
+proof -
+  have d: "distinct [0..<n_rows A]" by simp
+  have b: "\<forall>a\<in>set [0..<n_rows A]. a < n_rows A" by simp
+  note h = entry_foldl_elim[OF d b rect r k col c]
+  show ?thesis using h r k by (simp add: eliminate_col_def)
+qed
+
+(* seg: rank-col-bound-2-20261023 *)
+text \<open>A pivot of the reduction is a nonzero entry, and after scaling its row by
+  the modular inverse it becomes exactly 1.  Elimination then turns every other
+  entry of that column into 0, because each subtraction is a multiple of 1.\<close>
+
+lemma invmod_correct_gen:
+  assumes nz: "fq x \<noteq> 0"
+  shows "fq (x * invmod x) = 1"
+proof -
+  have y0: "0 < fq x"
+  proof -
+    have le: "0 \<le> fq x" and ne: "fq x \<noteq> 0" using fq_range nz by auto
+    show ?thesis using le ne by simp
+  qed
+  have yl: "fq x < 3329" using fq_range by simp
+  have iy: "fq (fq x * invmod (fq x)) = 1" using invmod_correct[OF y0 yl] .
+  have e1: "fq (x * invmod x) = fq (x ^ (3329 - 1))" by (rule fq_mult_invmod)
+  have e2: "fq (x ^ (3329 - 1)) = fq ((fq x) ^ (3329 - 1))" by (rule fq_power_cong)
+  have e3: "fq ((fq x) ^ (3329 - 1)) = fq (fq x * invmod (fq x))"
+    using fq_mult_invmod[of "fq x"] by simp
+  show ?thesis using e1 e2 e3 iy by simp
+qed
+
+lemma entry_scale_row_pivot:
+  assumes rect: "is_rect A" and r: "r < n_rows A" and c: "c < n_cols A"
+    and pv: "entry A r c = p" and nz: "fq p \<noteq> 0"
+  shows "entry (scale_row A r (invmod p)) r c = 1"
+proof -
+  have e: "entry (scale_row A r (invmod p)) r c = fq (invmod p * entry A r c)"
+    using entry_scale_row[OF r rect r c] by simp
+  have ic: "fq (p * invmod p) = 1" using invmod_correct_gen[OF nz] .
+  have e2: "invmod p * entry A r c = entry A r c * invmod p" by (rule mult.commute)
+  have e3: "entry A r c * invmod p = p * invmod p" using pv by simp
+  show ?thesis using e ic e2 e3 by simp
+qed
+
+lemma entry_eliminate_col_self:
+  assumes rect: "is_rect A" and r: "r < n_rows A" and col: "col < n_cols A" and c: "c < n_cols A"
+  shows "entry (eliminate_col A r c) r col = entry A r col"
+  using entry_eliminate_col[OF rect r r col c] by simp
+
+lemma entry_eliminate_col_below:
+  assumes rect: "is_rect A" and r: "r < n_rows A" and k: "k < n_rows A"
+    and kn: "k \<noteq> r" and c: "c < n_cols A" and piv: "entry A r c = 1"
+  shows "entry (eliminate_col A r c) k c = 0"
+proof -
+  have h: "entry (eliminate_col A r c) k c
+              = fq (entry A k c - entry A k c * entry A r c)"
+    using entry_eliminate_col[OF rect r k c c] kn by simp
+  have z: "entry A k c - entry A k c * entry A r c = 0" using piv by simp
+  show ?thesis using h z by simp
+qed
+
+(* seg: rank-col-bound-3-20261023 *)
+section \<open>What the pivot search reports\<close>
+
+text \<open>@{const find_pivot_fuel} walks down a column from a given row.  A hit is the
+  first row of the column that is nonzero modulo 3329, and a miss over the full
+  fuel -- which is always the row count here -- means the whole column below is
+  zero.  Both halves are needed to say what a reduction step does to the shape.\<close>
+
+lemma pivot_some_ge:
+  "\<And>r i. find_pivot_fuel f A r c = Some i \<Longrightarrow> r \<le> i"
+proof (induct f)
+  case 0
+  then show ?case by simp
+next
+  case (Suc f)
+  note h = Suc.prems
+  show ?case
+  proof (cases "r < n_rows A \<and> fq (entry A r c) \<noteq> 0")
+    case True
+    with h show ?thesis by simp
+  next
+    case fls: False
+    with h have h2: "find_pivot_fuel f A (r + 1) c = Some i" and rn: "r < n_rows A"
+      by (auto split: if_split_asm)
+    have ge: "r + 1 \<le> i" using Suc.hyps[OF h2] .
+    show ?thesis using ge by simp
+  qed
+qed
+
+lemma pivot_some_lt:
+  "\<And>r i. find_pivot_fuel f A r c = Some i \<Longrightarrow> i < n_rows A"
+  by (induct f) (auto split: if_split_asm)
+
+lemma pivot_some_nz:
+  "\<And>r i. find_pivot_fuel f A r c = Some i \<Longrightarrow> fq (entry A i c) \<noteq> 0"
+  by (induct f) (auto split: if_split_asm)
+
+lemma pivot_some_zeros:
+  "\<And>r i. find_pivot_fuel f A r c = Some i
+    \<Longrightarrow> \<forall>j. r \<le> j \<longrightarrow> j < i \<longrightarrow> fq (entry A j c) = 0"
+proof (induct f)
+  case 0
+  then show ?case by simp
+next
+  case (Suc f)
+  note h = Suc.prems
+  show ?case
+  proof (cases "r < n_rows A \<and> fq (entry A r c) \<noteq> 0")
+    case True
+    with h show ?thesis by simp
+  next
+    case fls: False
+    with h have h2: "find_pivot_fuel f A (r + 1) c = Some i" and rn: "r < n_rows A"
+      by (auto split: if_split_asm)
+    have rz: "fq (entry A r c) = 0" using fls rn by simp
+    note ih = Suc.hyps[OF h2]
+    show ?thesis
+    proof (intro allI impI)
+      fix j
+      assume rj: "r \<le> j" and ji: "j < i"
+      show "fq (entry A j c) = 0"
+      proof (cases "j = r")
+        case True
+        with rz show ?thesis by simp
+      next
+        case jr2: False
+        with rj have "r + 1 \<le> j" by simp
+        with ih ji show ?thesis by simp
+      qed
+    qed
+  qed
+qed
+
+lemma pivot_none_zeros:
+  "\<And>r. find_pivot_fuel f A r c = None \<Longrightarrow> n_rows A \<le> r + f
+    \<Longrightarrow> \<forall>j. r \<le> j \<longrightarrow> j < n_rows A \<longrightarrow> fq (entry A j c) = 0"
+proof (induct f)
+  case 0
+  then show ?case by simp
+next
+  case (Suc f)
+  note h = Suc.prems(1)
+  note fuel = Suc.prems(2)
+  show ?case
+  proof (cases "r < n_rows A \<and> fq (entry A r c) \<noteq> 0")
+    case True
+    with h show ?thesis by simp
+  next
+    case fls: False
+    show ?thesis
+    proof (intro allI impI)
+      fix j
+      assume rj: "r \<le> j" and jn: "j < n_rows A"
+      have rn: "r < n_rows A" using rj jn by simp
+      have nz: "fq (entry A r c) = 0" using fls rn by simp
+      have h2: "find_pivot_fuel f A (r + 1) c = None" using h rn nz by (simp add: find_pivot_fuel.simps)
+      have fuel2: "n_rows A \<le> (r + 1) + f" using fuel by simp
+      note ih = Suc.hyps[OF h2 fuel2]
+      show "fq (entry A j c) = 0"
+      proof (cases "j = r")
+        case True
+        with nz show ?thesis by simp
+      next
+        case jr2: False
+        with rj have "r + 1 \<le> j" by simp
+        with ih jn show ?thesis by simp
+      qed
+    qed
+  qed
+qed
+
+(* seg: rank-col-bound-4-20261023 *)
+section \<open>Rows below the pointer stay zero in the columns already scanned\<close>
+
+text \<open>The invariant of the reduction is not a statement about rank but about
+  position: below the row pointer every entry in the columns already scanned is
+  zero modulo the modulus.  That is all the counting at the end needs, because
+  the number of rows is otherwise bounded by the row pointer, and the row
+  pointer never overtakes the column pointer.\<close>
+
+definition zero_below :: "nat \<Rightarrow> nat \<Rightarrow> mat \<Rightarrow> bool" where
+  "zero_below r c A = (\<forall>k col. r \<le> k \<and> k < n_rows A \<and> col < c \<longrightarrow> fq (entry A k col) = 0)"
+
+lemma zero_below_entry:
+  assumes zb: "zero_below r c A" and a: "r \<le> a" and b: "a < n_rows A" and col: "col < c"
+  shows "fq (entry A a col) = 0"
+  using assms by (simp add: zero_below_def)
+
+lemma zero_below_skip:
+  assumes zb: "zero_below r c A"
+    and colz: "\<forall>k. r \<le> k \<and> k < n_rows A \<longrightarrow> fq (entry A k c) = 0"
+  shows "zero_below r (c + 1) A"
+  using zb colz by (auto simp add: zero_below_def less_Suc_eq)
+
+lemma entry_scale_row_other:
+  assumes rect: "is_rect A" and i: "i < n_rows A" and k: "k < n_rows A"
+    and kn: "k \<noteq> i" and col: "col < n_cols A"
+  shows "entry (scale_row A i x) k col = entry A k col"
+  using entry_scale_row[OF i rect k col] kn by simp
+
+lemma swap_idx_ge:
+  assumes ri: "r \<le> i" and rk: "r \<le> k"
+  shows "r \<le> swap_idx r i k"
+  using assms by (cases "k = r"; cases "k = i"; simp_all)
+
+lemma zero_below_pivot:
+  assumes zb: "zero_below r c A" and rect: "is_rect A"
+    and rn: "r < n_rows A" and cn: "c < n_cols A"
+    and i: "i < n_rows A" and ri: "r \<le> i"
+    and pnz: "fq (entry A i c) \<noteq> 0"
+  shows "zero_below (r + 1) (c + 1)
+           (eliminate_col (scale_row (swap_rows A r i) r
+              (invmod (entry (swap_rows A r i) r c))) r c)"
+proof (unfold zero_below_def, intro allI impI)
+  fix k col
+  assume pre: "r + 1 \<le> k \<and> k < n_rows (eliminate_col (scale_row (swap_rows A r i) r (invmod (entry (swap_rows A r i) r c))) r c) \<and> col < c + 1"
+  from pre have klo: "r + 1 \<le> k" and kn: "k < n_rows (eliminate_col (scale_row (swap_rows A r i) r (invmod (entry (swap_rows A r i) r c))) r c)" and clo: "col < c + 1" by simp_all
+  have nc1: "n_cols (swap_rows A r i) = n_cols A" using n_cols_swap_rows[OF rn i rect] .
+  have nc2: "n_cols (scale_row (swap_rows A r i) r (invmod (entry (swap_rows A r i) r c))) = n_cols A"
+    using n_cols_scale_row[of "(swap_rows A r i)" r "invmod (entry (swap_rows A r i) r c)"] nc1 by simp
+  have r1: "is_rect (swap_rows A r i)" using is_rect_swap_rows[OF rect rn i] .
+  have rn1: "r < n_rows (swap_rows A r i)" using rn by simp
+  have r2: "is_rect (scale_row (swap_rows A r i) r (invmod (entry (swap_rows A r i) r c)))" using is_rect_scale_row[OF r1 rn1] .
+  have rn2: "r < n_rows (scale_row (swap_rows A r i) r (invmod (entry (swap_rows A r i) r c)))" using rn by simp
+  have knA: "k < n_rows A" using kn by simp
+  have kn1: "k < n_rows (swap_rows A r i)" using kn by simp
+  have kn2: "k < n_rows (scale_row (swap_rows A r i) r (invmod (entry (swap_rows A r i) r c)))" using kn by simp
+  have knr: "k \<noteq> r" using klo by simp
+  have cn1: "c < n_cols (swap_rows A r i)" using cn nc1 by simp
+  have cn2: "c < n_cols (scale_row (swap_rows A r i) r (invmod (entry (swap_rows A r i) r c)))" using cn nc2 by simp
+  have pv: "entry (swap_rows A r i) r c = entry A i c"
+    using entry_swap_rows[OF rn i rn] by simp
+  have pnz1: "fq (entry (swap_rows A r i) r c) \<noteq> 0" using pnz pv by simp
+  have piv: "entry (scale_row (swap_rows A r i) r (invmod (entry (swap_rows A r i) r c))) r c = 1"
+    using entry_scale_row_pivot[of "(swap_rows A r i)" r c "entry (swap_rows A r i) r c", OF r1 rn1 cn1 refl pnz1] .
+  have e2k: "\<forall>col. col < c \<longrightarrow> fq (entry (scale_row (swap_rows A r i) r (invmod (entry (swap_rows A r i) r c))) k col) = 0"
+  proof (intro allI impI)
+    fix col
+    assume colc: "col < c"
+    have colA: "col < n_cols A" using colc cn by simp
+    have col1: "col < n_cols (swap_rows A r i)" using colA nc1 by simp
+    have s1: "entry (scale_row (swap_rows A r i) r (invmod (entry (swap_rows A r i) r c))) k col = entry (swap_rows A r i) k col"
+      using entry_scale_row_other[OF r1 rn1 kn1 knr col1] .
+    have s2: "entry (swap_rows A r i) k col = entry A (swap_idx r i k) col"
+      using entry_swap_rows[OF rn i knA] .
+    have swlt: "swap_idx r i k < n_rows A" using swap_idx_lt[OF rn i knA] .
+    have swge: "r \<le> swap_idx r i k" using swap_idx_ge[OF ri] klo by simp
+    have z: "fq (entry A (swap_idx r i k) col) = 0"
+      using zb swge swlt colc by (rule zero_below_entry)
+    show "fq (entry (scale_row (swap_rows A r i) r (invmod (entry (swap_rows A r i) r c))) k col) = 0" using s1 s2 z by simp
+  qed
+  have e2r: "\<forall>col. col < c \<longrightarrow> fq (entry (scale_row (swap_rows A r i) r (invmod (entry (swap_rows A r i) r c))) r col) = 0"
+  proof (intro allI impI)
+    fix col
+    assume colc: "col < c"
+    have colA: "col < n_cols A" using colc cn by simp
+    have col1: "col < n_cols (swap_rows A r i)" using colA nc1 by simp
+    have s2: "entry (swap_rows A r i) r col = entry A (swap_idx r i r) col"
+      using entry_swap_rows[OF rn i rn] .
+    have si: "swap_idx r i r = i" by simp
+    have z1: "fq (entry A i col) = 0" using zb ri i colc by (rule zero_below_entry)
+    have z2: "fq (entry (swap_rows A r i) r col) = 0" using s2 si z1 by simp
+    have s3: "entry (scale_row (swap_rows A r i) r (invmod (entry (swap_rows A r i) r c))) r col = fq (invmod (entry (swap_rows A r i) r c) * entry (swap_rows A r i) r col)"
+      using entry_scale_row[OF rn1 r1 rn1 col1] by simp
+    show "fq (entry (scale_row (swap_rows A r i) r (invmod (entry (swap_rows A r i) r c))) r col) = 0" using s3 z2 by (simp add: fq_mult fq_idem)
+  qed
+  have ez: "fq (entry (eliminate_col (scale_row (swap_rows A r i) r (invmod (entry (swap_rows A r i) r c))) r c) k col) = 0"
+  proof (cases "col < c")
+    case True
+    have colA: "col < n_cols A" using True cn by simp
+    have col2: "col < n_cols (scale_row (swap_rows A r i) r (invmod (entry (swap_rows A r i) r c)))" using colA nc2 by simp
+    have e: "entry (eliminate_col (scale_row (swap_rows A r i) r (invmod (entry (swap_rows A r i) r c))) r c) k col = fq (entry (scale_row (swap_rows A r i) r (invmod (entry (swap_rows A r i) r c))) k col - entry (scale_row (swap_rows A r i) r (invmod (entry (swap_rows A r i) r c))) k c * entry (scale_row (swap_rows A r i) r (invmod (entry (swap_rows A r i) r c))) r col)"
+      using entry_eliminate_col[OF r2 rn2 kn2 col2 cn2] knr by simp
+    have za: "3329 dvd entry (scale_row (swap_rows A r i) r (invmod (entry (swap_rows A r i) r c))) k col" using e2k True by (simp add: fq_def dvd_eq_mod_eq_0)
+    have zr: "3329 dvd entry (scale_row (swap_rows A r i) r (invmod (entry (swap_rows A r i) r c))) r col" using e2r True by (simp add: fq_def dvd_eq_mod_eq_0)
+    have zd: "3329 dvd entry (scale_row (swap_rows A r i) r (invmod (entry (swap_rows A r i) r c))) k col - entry (scale_row (swap_rows A r i) r (invmod (entry (swap_rows A r i) r c))) k c * entry (scale_row (swap_rows A r i) r (invmod (entry (swap_rows A r i) r c))) r col"
+      using za zr by (simp add: dvd_diff dvd_mult2)
+    have zm: "(entry (scale_row (swap_rows A r i) r (invmod (entry (swap_rows A r i) r c))) k col - entry (scale_row (swap_rows A r i) r (invmod (entry (swap_rows A r i) r c))) k c * entry (scale_row (swap_rows A r i) r (invmod (entry (swap_rows A r i) r c))) r col) mod 3329 = 0"
+      using zd by (simp add: dvd_eq_mod_eq_0)
+    show ?thesis using e zm by (simp add: fq_def)
+  next
+    case fls: False
+    with clo have ceq: "col = c" by simp
+    have e: "entry (eliminate_col (scale_row (swap_rows A r i) r (invmod (entry (swap_rows A r i) r c))) r c) k c = 0"
+      using entry_eliminate_col_below[OF r2 rn2 kn2 knr cn2 piv] .
+    show ?thesis using e ceq by simp
+  qed
+  show "fq (entry (eliminate_col (scale_row (swap_rows A r i) r (invmod (entry (swap_rows A r i) r c))) r c) k col) = 0" using ez .
+qed
+
+lemma zero_below_step_skip:
+  assumes zb: "zero_below r c A" and rect: "is_rect A"
+    and rn: "r < n_rows A" and cn: "c < n_cols A"
+    and none: "find_pivot_fuel (n_rows A) A r c = None"
+  shows "zero_below r (c + 1) A"
+proof (rule zero_below_skip)
+  show "zero_below r c A" by (rule zb)
+next
+  show "\<forall>k. r \<le> k \<and> k < n_rows A \<longrightarrow> fq (entry A k c) = 0"
+    using pivot_none_zeros[where f="n_rows A" and A=A and c=c and r=r] none by simp
+qed
+
+
+(* seg: rank-col-bound-5-20261023 *)
+section \<open>Counting columns: the rank is bounded by the number of columns\<close>
+
+text \<open>The elimination is driven by the column pointer, which increases at
+  every step, and by the row pointer, which never overtakes it.  Hence at the
+  end either the columns are exhausted or the rows are, and in both cases the
+  number of nonzero rows is at most the number of columns.\<close>
+
+lemma zero_below_zero [simp]: "zero_below 0 0 A"
+  by (simp add: zero_below_def)
+
+lemma n_cols_pivot_step:
+  assumes rn: "r < n_rows A" and i: "i < n_rows A" and rect: "is_rect A"
+  shows "n_cols (eliminate_col (scale_row (swap_rows A r i) r (invmod (entry (swap_rows A r i) r c))) r c) = n_cols A"
+proof -
+  have a1: "n_cols (swap_rows A r i) = n_cols A"
+    using n_cols_swap_rows[OF rn i rect] .
+  have a2: "n_cols (scale_row (swap_rows A r i) r (invmod (entry (swap_rows A r i) r c))) = n_cols A"
+    using n_cols_scale_row[of "(swap_rows A r i)" r "invmod (entry (swap_rows A r i) r c)"] a1 by simp
+  have rn1: "r < n_rows (swap_rows A r i)" using rn by simp
+  have r1: "is_rect (swap_rows A r i)" using is_rect_swap_rows[OF rect rn i] .
+  have r2: "is_rect (scale_row (swap_rows A r i) r (invmod (entry (swap_rows A r i) r c)))" using is_rect_scale_row[OF r1 rn1] .
+  have rn2: "r < n_rows (scale_row (swap_rows A r i) r (invmod (entry (swap_rows A r i) r c)))" using rn by simp
+  show ?thesis using n_cols_eliminate_col[OF r2 rn2] a2 by simp
+qed
+
+lemma all_zero_row_below:
+  assumes zb: "zero_below r (n_cols B) B" and rect: "is_rect B"
+    and kn: "k < n_rows B" and rk: "r \<le> k"
+  shows "all_zero_row (B ! k)"
+proof (unfold all_zero_row_def, intro ballI)
+  fix x
+  assume xm: "x \<in> set (B ! k)"
+  have len: "length (B ! k) = n_cols B" using is_rect_rows[OF rect kn] .
+  obtain col where col: "col < length (B ! k)" and x: "x = (B ! k) ! col"
+    using xm by (auto simp add: in_set_conv_nth)
+  have cn: "col < n_cols B" using col len by simp
+  have e: "fq (entry B k col) = 0" using zb rk kn cn by (rule zero_below_entry)
+  show "fq x = 0" using x e by (simp add: entry_def)
+qed
+
+lemma filter_take_eq:
+  assumes all: "\<forall>x \<in> set (drop r xs). \<not> P x"
+  shows "filter P xs = filter P (take r xs)"
+proof -
+  have e0: "take r xs @ drop r xs = xs" using append_take_drop_id .
+  have e1: "filter P xs = filter P (take r xs @ drop r xs)" using e0 by (simp only: e0)
+  have e2: "filter P (take r xs @ drop r xs) = filter P (take r xs) @ filter P (drop r xs)"
+    by (simp only: filter_append)
+  have e3: "filter P (drop r xs) = []" using all by (simp only: filter_empty_conv)
+  show ?thesis using e1 e2 e3 by simp
+qed
+
+lemma mat_rank_le_of_zero_below:
+  assumes zb: "zero_below r' c' B" and rc: "r' \<le> c'" and cn: "c' \<le> n_cols B"
+    and nc: "n_cols B = n_cols A" and rect: "is_rect B"
+    and disj: "n_rows B \<le> r' \<or> n_cols B \<le> c'"
+  shows "length (filter (\<lambda>r. \<not> all_zero_row r) B) \<le> n_cols A"
+proof -
+  have le: "length (filter (\<lambda>r. \<not> all_zero_row r) B) \<le> r'"
+  proof -
+    have allz: "\<forall>x \<in> set (drop r' B). all_zero_row x"
+    proof (intro ballI)
+      fix x
+      assume xm: "x \<in> set (drop r' B)"
+      obtain j where j: "j < length (drop r' B)" and x: "(drop r' B) ! j = x"
+        using xm by (auto simp add: in_set_conv_nth)
+      have idx: "r' + j < n_rows B"
+      proof -
+        have l1: "length (drop r' B) = length B - r'" by simp
+        have l2: "j < length B - r'" using j l1 by simp
+        have l4: "r' + j < length B" using l2 by (simp add: less_diff_conv add.commute)
+        show ?thesis using l4 by (simp add: n_rows_def)
+      qed
+      have xe: "x = B ! (r' + j)" using x j by (simp add: nth_drop)
+      show "all_zero_row x"
+      proof (cases "n_cols B \<le> c'")
+        case True
+        have z1: "zero_below r' (n_cols B) B" using zb True by (simp add: zero_below_def)
+        have az: "all_zero_row (B ! (r' + j))"
+          using z1 rect idx by (rule all_zero_row_below, simp)
+        show ?thesis using xe az by simp
+      next
+        case fls: False
+        with disj have nr: "n_rows B \<le> r'" by simp
+        with idx show ?thesis by simp
+      qed
+    qed
+    have allz2: "\<forall>x \<in> set (drop r' B). \<not> (\<lambda>r. \<not> all_zero_row r) x"
+      using allz by simp
+    have e: "filter (\<lambda>r. \<not> all_zero_row r) B
+        = filter (\<lambda>r. \<not> all_zero_row r) (take r' B)"
+      using allz2 by (rule filter_take_eq)
+    have "length (filter (\<lambda>r. \<not> all_zero_row r) B)
+        = length (filter (\<lambda>r. \<not> all_zero_row r) (take r' B))" using e by simp
+    also have "\<dots> \<le> length (take r' B)" by (rule length_filter_le)
+    also have "\<dots> \<le> r'" by (simp add: length_take min_def)
+    finally show ?thesis .
+  qed
+  have "r' \<le> n_cols A" using rc cn nc by simp
+  with le show ?thesis by simp
+qed
+
 end
+

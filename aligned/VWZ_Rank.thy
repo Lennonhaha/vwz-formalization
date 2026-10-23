@@ -1770,4 +1770,217 @@ proof (rule ccontr)
   have z: "minor2 A a b c d mod 3329 = 0" using dvd by (simp add: dvd_eq_mod_eq_0)
   show False using nz z by simp
 qed
+section \<open>Rows in the span of two vectors\<close>
+
+text \<open>The rank-2 slice produced by @{text KeyGen} has every row in the span of two
+  fixed vectors.  Rather than define a general linear-combination language, the
+  predicate below records exactly what the rank argument needs: a row is a
+  combination of two given vectors \emph{modulo} @{text q}.  Working modulo
+  @{text q} keeps the closure proofs pure @{text fq} arithmetic -- scaling and
+  adding rows only recombine the coefficients -- while matching the level at which
+  @{text all_zero_row} and @{text mat_rank} are stated.\<close>
+
+definition in_span2 :: "int list \<Rightarrow> int list \<Rightarrow> int list \<Rightarrow> bool" where
+  "in_span2 p q r = (length r = length p \<and> length r = length q \<and>
+    (\<exists>a b. \<forall>j. j < length p \<longrightarrow> fq (r ! j) = fq (a * (p ! j) + b * (q ! j))))"
+
+definition rows_in_span :: "int list \<Rightarrow> int list \<Rightarrow> mat \<Rightarrow> bool" where
+  "rows_in_span p q M = (\<forall>i. i < n_rows M \<longrightarrow> in_span2 p q (M ! i))"
+
+lemma in_span2_scale:
+  assumes r: "in_span2 p q r"
+  shows "in_span2 p q (map (\<lambda>x. fq (k * x)) r)"
+proof -
+  have lrp: "length r = length p" and lrq: "length r = length q"
+    using r by (simp_all add: in_span2_def)
+  obtain a b where h: "\<forall>j. j < length p \<longrightarrow> fq (r ! j) = fq (a * (p ! j) + b * (q ! j))"
+    using r by (auto simp add: in_span2_def)
+  have len: "length (map (\<lambda>x. fq (k * x)) r) = length p" using lrp by simp
+  show ?thesis
+  proof (unfold in_span2_def, intro conjI)
+    show "length (map (\<lambda>x. fq (k * x)) r) = length p" using len .
+    show "length (map (\<lambda>x. fq (k * x)) r) = length q" using lrq len by simp
+    show "\<exists>a b. \<forall>j. j < length p \<longrightarrow>
+            fq (map (\<lambda>x. fq (k * x)) r ! j) = fq (a * (p ! j) + b * (q ! j))"
+    proof (intro exI allI impI)
+      fix j
+      assume jp: "j < length p"
+      hence jr: "j < length r" using lrp by simp
+      have h1: "fq (map (\<lambda>x. fq (k * x)) r ! j) = fq (k * r ! j)"
+        using jr by (simp add: nth_map fq_idem)
+      have h2: "fq (k * r ! j) = fq (k * (a * (p ! j) + b * (q ! j)))"
+      proof (rule fq_cong_mult)
+        show "fq k = fq k" by simp
+        show "fq (r ! j) = fq (a * (p ! j) + b * (q ! j))" using h jp by simp
+      qed
+      have h3: "k * (a * (p ! j) + b * (q ! j)) = (k * a) * (p ! j) + (k * b) * (q ! j)"
+        by (simp add: algebra_simps)
+      show "fq (map (\<lambda>x. fq (k * x)) r ! j) = fq ((k * a) * (p ! j) + (k * b) * (q ! j))"
+        using h1 h2 h3 by simp
+    qed
+  qed
+qed
+
+lemma in_span2_add:
+  assumes r: "in_span2 p q r" and s: "in_span2 p q s" and lrs: "length r = length s"
+  shows "in_span2 p q (map2 (\<lambda>x y. fq (x + k * y)) r s)"
+proof -
+  have lrp: "length r = length p" and lrq: "length r = length q"
+    using r by (simp_all add: in_span2_def)
+  obtain a b where hr: "\<forall>j. j < length p \<longrightarrow> fq (r ! j) = fq (a * (p ! j) + b * (q ! j))"
+    using r by (auto simp add: in_span2_def)
+  obtain a' b' where hs: "\<forall>j. j < length p \<longrightarrow> fq (s ! j) = fq (a' * (p ! j) + b' * (q ! j))"
+    using s by (auto simp add: in_span2_def)
+  have conv: "map2 (\<lambda>x y. fq (x + k * y)) r s
+      = map (\<lambda>i. fq (r ! i + k * s ! i)) [0..<length r]"
+  proof (rule map2_conv_idx)
+    show "length r = length r" by simp
+    show "length s = length r" using lrs by simp
+  qed
+  have len: "length (map2 (\<lambda>x y. fq (x + k * y)) r s) = length p"
+    using conv lrp by simp
+  have hpq: "length p = length q" using lrp lrq by metis
+  show ?thesis
+  proof (unfold in_span2_def, intro conjI)
+    show "length (map2 (\<lambda>x y. fq (x + k * y)) r s) = length p" using len .
+    show "length (map2 (\<lambda>x y. fq (x + k * y)) r s) = length q" using len hpq by simp
+    show "\<exists>a b. \<forall>j. j < length p \<longrightarrow>
+            fq (map2 (\<lambda>x y. fq (x + k * y)) r s ! j) = fq (a * (p ! j) + b * (q ! j))"
+    proof (intro exI allI impI)
+      fix j
+      assume jp: "j < length p"
+      hence jr: "j < length r" using lrp by simp
+      hence js: "j < length s" using lrs by simp
+      have nth: "map2 (\<lambda>x y. fq (x + k * y)) r s ! j = fq (r ! j + k * s ! j)"
+        using conv jr by (simp add: nth_map)
+      have step: "fq (map2 (\<lambda>x y. fq (x + k * y)) r s ! j) = fq (r ! j + k * s ! j)"
+        using nth by simp
+      have hk: "fq (k * s ! j) = fq (k * (a' * (p ! j) + b' * (q ! j)))"
+      proof (rule fq_cong_mult)
+        show "fq k = fq k" by simp
+        show "fq (s ! j) = fq (a' * (p ! j) + b' * (q ! j))" using hs jp by simp
+      qed
+      have h2: "fq (r ! j + k * s ! j)
+          = fq ((a * (p ! j) + b * (q ! j)) + k * (a' * (p ! j) + b' * (q ! j)))"
+      proof (rule fq_cong_add)
+        show "fq (r ! j) = fq (a * (p ! j) + b * (q ! j))" using hr jp by simp
+        show "fq (k * s ! j) = fq (k * (a' * (p ! j) + b' * (q ! j)))" using hk .
+      qed
+      have arith: "(a * (p ! j) + b * (q ! j)) + k * (a' * (p ! j) + b' * (q ! j))
+          = (a + k * a') * (p ! j) + (b + k * b') * (q ! j)"
+        by (simp add: algebra_simps)
+      show "fq (map2 (\<lambda>x y. fq (x + k * y)) r s ! j)
+          = fq ((a + k * a') * (p ! j) + (b + k * b') * (q ! j))"
+        using step h2 arith by simp
+    qed
+  qed
+qed
+
+lemma rows_in_span_swap:
+  assumes rs: "rows_in_span p q A" and i: "i < n_rows A" and j: "j < n_rows A"
+  shows "rows_in_span p q (swap_rows A i j)"
+proof (unfold rows_in_span_def, intro allI impI)
+  fix r
+  assume r: "r < n_rows (swap_rows A i j)"
+  hence rA: "r < n_rows A" by simp
+  have rl: "r < length A" using rA by (simp add: n_rows_def)
+  have il: "i < length A" using i by (simp add: n_rows_def)
+  have jl: "j < length A" using j by (simp add: n_rows_def)
+  have hrow: "swap_rows A i j ! r
+      = (if r = i then A ! j else (if r = j then A ! i else A ! r))"
+    using swap_rows_nth [OF rl il jl] .
+  show "in_span2 p q (swap_rows A i j ! r)"
+  proof (cases "r = i")
+    case True
+    have h1: "swap_rows A i j ! r = A ! j" using hrow True by simp
+    have h2: "in_span2 p q (A ! j)" using rs j by (simp add: rows_in_span_def)
+    show ?thesis using h1 h2 by simp
+  next
+    case ri: False
+    show ?thesis
+    proof (cases "r = j")
+      case True
+      have h1: "swap_rows A i j ! r = A ! i" using hrow ri True by simp
+      have h2: "in_span2 p q (A ! i)" using rs i by (simp add: rows_in_span_def)
+      show ?thesis using h1 h2 by simp
+    next
+      case rj: False
+      have h1: "swap_rows A i j ! r = A ! r" using hrow ri rj by simp
+      have h2: "in_span2 p q (A ! r)" using rs rA by (simp add: rows_in_span_def)
+      show ?thesis using h1 h2 by simp
+    qed
+  qed
+qed
+
+lemma rows_in_span_scale_row:
+  assumes rs: "rows_in_span p q A" and i: "i < n_rows A"
+  shows "rows_in_span p q (scale_row A i k)"
+proof (unfold rows_in_span_def, intro allI impI)
+  fix r
+  assume r: "r < n_rows (scale_row A i k)"
+  hence rA: "r < n_rows A" by simp
+  have hrow: "scale_row A i k ! r
+      = (if r = i then map (\<lambda>x. fq (k * x)) (A ! i) else A ! r)"
+  proof (cases "r = i")
+    case True
+    thus ?thesis using rA i by (simp add: scale_row_def nth_list_update n_rows_def)
+  next
+    case False
+    thus ?thesis using rA i by (simp add: scale_row_def nth_list_update_neq n_rows_def)
+  qed
+  show "in_span2 p q (scale_row A i k ! r)"
+  proof (cases "r = i")
+    case True
+    have h1: "scale_row A i k ! r = map (\<lambda>x. fq (k * x)) (A ! i)" using hrow True by simp
+    have h2: "in_span2 p q (map (\<lambda>x. fq (k * x)) (A ! i))"
+    proof (rule in_span2_scale)
+      show "in_span2 p q (A ! i)" using rs i by (simp add: rows_in_span_def)
+    qed
+    show ?thesis using h1 h2 by simp
+  next
+    case False
+    have h1: "scale_row A i k ! r = A ! r" using hrow False by simp
+    have h2: "in_span2 p q (A ! r)" using rs rA by (simp add: rows_in_span_def)
+    show ?thesis using h1 h2 by simp
+  qed
+qed
+
+lemma rows_in_span_add_row_mult:
+  assumes rs: "rows_in_span p q A" and rect: "is_rect A"
+    and i: "i < n_rows A" and j: "j < n_rows A"
+  shows "rows_in_span p q (add_row_mult A i j k)"
+proof (unfold rows_in_span_def, intro allI impI)
+  fix r
+  assume r: "r < n_rows (add_row_mult A i j k)"
+  hence rA: "r < n_rows A" by simp
+  have hrow: "add_row_mult A i j k ! r
+      = (if r = i then map2 (\<lambda>x y. fq (x + k * y)) (A ! i) (A ! j) else A ! r)"
+  proof (cases "r = i")
+    case True
+    thus ?thesis using rA i j by (simp add: add_row_mult_def nth_list_update n_rows_def)
+  next
+    case False
+    thus ?thesis using rA i j by (simp add: add_row_mult_def nth_list_update_neq n_rows_def)
+  qed
+  show "in_span2 p q (add_row_mult A i j k ! r)"
+  proof (cases "r = i")
+    case True
+    have h1: "add_row_mult A i j k ! r
+        = map2 (\<lambda>x y. fq (x + k * y)) (A ! i) (A ! j)" using hrow True by simp
+    have hi: "in_span2 p q (A ! i)" using rs i by (simp add: rows_in_span_def)
+    have hj: "in_span2 p q (A ! j)" using rs j by (simp add: rows_in_span_def)
+    have memi: "A ! i \<in> set A" using i by (simp add: n_rows_def)
+    have memj: "A ! j \<in> set A" using j by (simp add: n_rows_def)
+    have lrows: "length (A ! i) = length (A ! j)"
+      using rect memi memj by (simp add: is_rect_def)
+    have h2: "in_span2 p q (map2 (\<lambda>x y. fq (x + k * y)) (A ! i) (A ! j))"
+      using in_span2_add [OF hi hj lrows] .
+    show ?thesis using h1 h2 by simp
+  next
+    case False
+    have h1: "add_row_mult A i j k ! r = A ! r" using hrow False by simp
+    have h2: "in_span2 p q (A ! r)" using rs rA by (simp add: rows_in_span_def)
+    show ?thesis using h1 h2 by simp
+  qed
+qed
 end

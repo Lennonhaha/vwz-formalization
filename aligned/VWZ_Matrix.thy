@@ -205,6 +205,108 @@ definition det3 :: "mat \<Rightarrow> int" where
           - entry A 0 1 * entry A 1 0 * entry A 2 2
           - entry A 0 0 * entry A 1 2 * entry A 2 1"
 
+text \<open>The 3x3 determinant is multilinear in each row, it vanishes when two rows
+  coincide, and on an upper triangular matrix it is the product of the diagonal.
+  The obligations that read a 3x3 slice use exactly these four shapes, so they are
+  recorded here once instead of being re-expanded at every call site.
+
+  The primality of 3329 is needed in the @{text "mod 3329"} corollary.  It is
+  derived below from @{text prime_3329} of @{file VWZ_Fq3329.thy}; @{file VWZ_Aux.thy}
+  has the same fact as @{text aux_prime_int'}, but it sits downstream of this file
+  and cannot be used here.\<close>
+
+lemma det3_prime_3329_int: "prime (3329::int)"
+proof -
+  have h: "prime (int 3329)" by (subst prime_nat_int_transfer) (rule prime_3329)
+  have e: "(int 3329) = (3329::int)" by simp
+  from h e show ?thesis by metis
+qed
+
+lemma det3_scale_row0:
+  fixes k a b c d e f g h i :: int
+  shows "det3 [[k * a, k * b, k * c], [d, e, f], [g, h, i]]
+       = k * det3 [[a, b, c], [d, e, f], [g, h, i]]"
+  by (simp add: det3_def entry_def algebra_simps)
+
+lemma det3_scale_row1:
+  fixes k a b c d e f g h i :: int
+  shows "det3 [[a, b, c], [k * d, k * e, k * f], [g, h, i]]
+       = k * det3 [[a, b, c], [d, e, f], [g, h, i]]"
+  by (simp add: det3_def entry_def algebra_simps)
+
+lemma det3_scale_row2:
+  fixes k a b c d e f g h i :: int
+  shows "det3 [[a, b, c], [d, e, f], [k * g, k * h, k * i]]
+       = k * det3 [[a, b, c], [d, e, f], [g, h, i]]"
+  by (simp add: det3_def entry_def algebra_simps)
+
+lemma det3_add_row0:
+  fixes a1 b1 c1 a2 b2 c2 d e f g h i :: int
+  shows "det3 [[a1 + a2, b1 + b2, c1 + c2], [d, e, f], [g, h, i]]
+       = det3 [[a1, b1, c1], [d, e, f], [g, h, i]]
+         + det3 [[a2, b2, c2], [d, e, f], [g, h, i]]"
+  by (simp add: det3_def entry_def algebra_simps)
+
+lemma det3_add_row1:
+  fixes a b c d1 e1 f1 d2 e2 f2 g h i :: int
+  shows "det3 [[a, b, c], [d1 + d2, e1 + e2, f1 + f2], [g, h, i]]
+       = det3 [[a, b, c], [d1, e1, f1], [g, h, i]]
+         + det3 [[a, b, c], [d2, e2, f2], [g, h, i]]"
+  by (simp add: det3_def entry_def algebra_simps)
+
+lemma det3_add_row2:
+  fixes a b c d e f g1 h1 i1 g2 h2 i2 :: int
+  shows "det3 [[a, b, c], [d, e, f], [g1 + g2, h1 + h2, i1 + i2]]
+       = det3 [[a, b, c], [d, e, f], [g1, h1, i1]]
+         + det3 [[a, b, c], [d, e, f], [g2, h2, i2]]"
+  by (simp add: det3_def entry_def algebra_simps)
+
+lemma det3_repeat_01:
+  fixes a b c g h i :: int
+  shows "det3 [[a, b, c], [a, b, c], [g, h, i]] = 0"
+  by (simp add: det3_def entry_def algebra_simps)
+
+lemma det3_repeat_02:
+  fixes a b c d e f :: int
+  shows "det3 [[a, b, c], [d, e, f], [a, b, c]] = 0"
+  by (simp add: det3_def entry_def algebra_simps)
+
+lemma det3_repeat_12:
+  fixes a b c d e f :: int
+  shows "det3 [[a, b, c], [d, e, f], [d, e, f]] = 0"
+  by (simp add: det3_def entry_def algebra_simps)
+
+lemma det3_triangular:
+  fixes a x y b z c :: int
+  shows "det3 [[a, x, y], [0, b, z], [0, 0, c]] = a * b * c"
+  by (simp add: det3_def entry_def algebra_simps)
+
+lemma det3_triangular_nz_mod:
+  fixes a x y b z c :: int
+  assumes a: "a mod 3329 \<noteq> 0" and b: "b mod 3329 \<noteq> 0" and c: "c mod 3329 \<noteq> 0"
+  shows "det3 [[a, x, y], [0, b, z], [0, 0, c]] mod 3329 \<noteq> 0"
+proof -
+  have d: "det3 [[a, x, y], [0, b, z], [0, 0, c]] = a * b * c"
+    by (simp add: det3_def entry_def algebra_simps)
+  have p: "prime (3329::int)" by (rule det3_prime_3329_int)
+  have prod: "(a * b * c) mod 3329 \<noteq> 0"
+  proof (rule ccontr)
+    assume nz: "\<not> (a * b * c) mod 3329 \<noteq> 0"
+    hence dz: "3329 dvd (a * b) * c" by (simp add: dvd_eq_mod_eq_0)
+    have nab: "\<not> 3329 dvd a * b"
+    proof
+      assume dab: "3329 dvd a * b"
+      from dab p have "3329 dvd a \<or> 3329 dvd b"
+        by (metis prime_dvd_mult_iff)
+      with a b show False by (auto simp add: dvd_eq_mod_eq_0)
+    qed
+    from dz p have "3329 dvd a * b \<or> 3329 dvd c"
+      by (metis prime_dvd_mult_iff)
+    with nab c show False by (auto simp add: dvd_eq_mod_eq_0)
+  qed
+  show ?thesis using d prod by simp
+qed
+
 text \<open>Deferred: general Gauss-Jordan solve (the 2x2 body is mat_solve2 above).
   Rank, nullspace dimension and the inverse are no longer uninterpreted: all
   three are defined from the RREF algorithm in \<open>VWZ_RREF\<close>, which is

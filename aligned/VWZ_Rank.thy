@@ -721,34 +721,49 @@ qed
 section \<open>What is still missing for T2_B7\<close>
 
 text \<open>Nothing in this file bounds the rank of a sum of two outer products, and
-  that is deliberate rather than an oversight.  The two lemmas the obligation
-  needs are out of reach of the definitions in @{file VWZ_RREF.thy} alone,
-  because @{text mat_rank} is defined as a count of nonzero rows of @{text rref}
-  and no bridge from @{text rref} back to matrix invariants exists yet.  Status of
-  each ingredient:
+  that is deliberate rather than an oversight.  @{text mat_rank} counts the nonzero
+  rows of @{text rref}, so every statement about @{text A} has to be carried through
+  the reduction, and the status of the ingredients differs from what an earlier note
+  in this section claimed:
 
-  \<^enum> @{text rref_step}: each of @{text swap_rows}, @{text scale_row} and
-  @{text add_row_mult} is multiplication on the left by an invertible matrix.
-  Needed to say anything about @{text A} after reducing it, including that
-  reduction preserves the row space.
-  \<^enum> @{text minors_invariant_under_row_ops}: if every @{text "2 x 2"} minor of
-  a matrix vanishes, the same holds after a row swap, after scaling a row by a
-  unit, and after adding a multiple of one row to another.  The top-left case
-  is multilinearity of @{text det2}, which the obligation file already has;
-  arbitrary index pairs need the general statement.
-  \<^enum> @{text rank_le_one_imp_minors_vanish}: if @{text rref} has at most one
-  nonzero row, every @{text "2 x 2"} minor of the reduced form vanishes.  Proved
-  in this file, together with @{text row_zero_or_zero_of_rank_le_one} and the
-  shape lemma @{text is_rect_rref}; it assumes only @{text "is_rect A"}.
-  \<^enum> combining the three gives @{text rank_ge_two_of_nonzero_minor}, while
-  @{text rank_outer_sum_le_two} additionally needs the bound
-  @{text "mat_rank (mat_mult A B) \<le> n_cols A"} -- that the rank is at most the
-  number of pivot columns, which is again the reduced-shape characterisation.
+  \<^enum> @{text rref_step}: not available as stated.  Reading a row operation as
+  multiplication on the left by an invertible matrix needs @{text mat_inv} to be a
+  two-sided inverse, and @{file VWZ_RREF.thy} leaves that as an unproved claim.  The
+  bridge is therefore built without left multiplication.
+  \<^enum> @{text minors_invariant_under_row_ops}: the forward direction is complete
+  and already general in the index pairs.  @{text minors_zero_swap},
+  @{text minors_zero_scale_row}, @{text minors_zero_add_row} and
+  @{text minors_zero_eliminate_col} in @{file VWZ_ModAlgebra.thy} say
+  @{text "minors_zero A \<Longrightarrow> minors_zero (op A)"} for every operation, and the
+  predicate itself quantifies over all index pairs, so nothing is left to
+  generalise here.
+  \<^enum> the half that is missing is the opposite direction,
+  @{text "minors_zero (op A) \<Longrightarrow> minors_zero A"}.  It cannot be stated as an
+  equality of matrices: @{text "scale_row (scale_row A i q) i p"} agrees with
+  @{text A} only up to @{text fq} on the touched row, two @{text add_row_mult}
+  steps behave the same way, and @{text eliminate_col} is idempotent rather than
+  invertible, so replaying it does not undo it.  @{file VWZ_ModAlgebra.thy} now
+  carries the residue form of that direction: @{text dvd_minor2_cong} together
+  with @{text minors_zero_swap_undo}, @{text minors_zero_scale_row_undo} and
+  @{text minors_zero_add_row_undo}.  The fold-level reflection for
+  @{text eliminate_col} and the fuel induction over @{text rref_fuel} are still
+  open.
+  \<^enum> @{text rank_le_one_imp_minors_vanish}: proved in this file together with
+  @{text row_zero_or_zero_of_rank_le_one} and the shape lemma @{text is_rect_rref};
+  it assumes only @{text "is_rect A"} and gives vanishing minors of the reduced
+  form.
+  \<^enum> combining the reflected minors with the previous item gives
+  @{text rank_ge_two_of_nonzero_minor}, while @{text rank_outer_sum_le_two}
+  additionally needs the inner-dimension bound
+  @{text "mat_rank (mat_mult A B) \<le> n_cols A"}.  That bound is not what
+  @{text mat_rank_le_n_cols} provides: instantiating the latter at
+  @{text "mat_mult A B"} yields @{text "mat_rank (mat_mult A B) \<le> n_cols B"},
+  which constrains the outer dimension instead.
 
   Writing the remaining headers down without proofs would put @{text sorry}s
-  outside the obligation ledger, so they stay a work list: the ledger keeps its
-  exact count of 56 lemmas and 7 sorry, and the lemmas added above carry no
-  @{text sorry} at all.\<close>
+  outside the obligation ledger, so they stay a work list: the ledger in
+  @{file VWZ_ObligationsAligned.thy} keeps its 7 @{text sorry}, and the lemmas
+  added alongside carry no @{text sorry} at all.\<close>
 
 (* seg: rank-lead-invmod-20261023 *)
 

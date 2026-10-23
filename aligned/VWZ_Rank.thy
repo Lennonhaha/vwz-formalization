@@ -768,6 +768,34 @@ text \<open>Nothing in this file bounds the rank of a sum of two outer products,
   @{file VWZ_ObligationsAligned.thy} keeps its 7 @{text sorry}, and the lemmas
   added alongside carry no @{text sorry} at all.\<close>
 
+(* TODO(proof): the inner-dimension bound, the one piece route A still owes.
+
+   lemma mat_rank_le_two_of_rows_in_span:
+     "length p = length q \<Longrightarrow> rows_in_span p q M \<Longrightarrow> mat_rank M \<le> 2"
+
+   Not a header on purpose: a stub proof would put a sorry outside the obligation
+   ledger, and the ledger gate counts every sorry in the tree.  So the statement
+   stays a comment until the proof exists.
+
+   What is already in place for it: rows_in_span and its closure under swap, scale,
+   add_row_mult and eliminate_col; rows_in_span_rref_fuel, which carries the
+   predicate through the whole reduction; and rref_fuel_shape, which now takes and
+   returns the staircase invariant, so the reduced form arrives as a staircase.
+
+   What is missing: the det3 route.  Three nonzero rows of a staircase have three
+   distinct leading columns, so the square submatrix at those rows and columns is
+   upper triangular with nonzero diagonal, hence its determinant is nonzero mod
+   3329; rowwise congruence then transfers that to the matrix whose rows lie in the
+   span of p and q, where the same determinant vanishes because every row is a
+   combination of two vectors.  The congruence step (det3_cong) has no proof in the
+   tree yet, but its shape is settled: pointwise fq-equality of the nine entries
+   gives fq (det3 B) = fq (det3 A), through fq_cong_add and fq_cong_mult, with one
+   sign helper for the three subtracted monomials -- about 64 lines in total.
+
+   Consumers once proved: rank_outer_sum_le_two, and through it T2_B7, whose own
+   statement is still the defective one recorded in VWZ_ObligationsAligned.thy.
+*)
+
 (* seg: rank-lead-invmod-20261023 *)
 
 text \<open>The leading column of a row is the index of its first entry that is nonzero

@@ -3969,4 +3969,88 @@ proof (rule minors_zeroI)
   thus "3329 dvd minor2 A a b c d" by simp
 qed
 
+section \<open>Reflecting the elimination sweep\<close>
+
+text \<open>@{const eliminate_col} is a left fold that clears one column using the
+  entries of the matrix as it stands at that moment, so its coefficients are not
+  known in advance and replaying the sweep does not undo it: after the first pass
+  the column already reads zero and the second pass adds nothing.  The reflection
+  therefore runs the sweep backwards.  Because the fold consumes the row list from
+  the left, the induction below keeps the starting matrix arbitrary and peels the
+  head off the row list: the induction hypothesis then speaks about the one-step
+  matrix, and a single reflection step returns to the original.\<close>
+
+lemma minors_zero_eliminate_fold_undo:
+  "is_rect A \<Longrightarrow> r < n_rows A \<Longrightarrow> (\<forall>k\<in>set ks. k < n_rows A) \<Longrightarrow>
+   minors_zero (foldl (\<lambda>B k. if k = r then B else add_row_mult B k r (- entry B k c)) A ks) \<Longrightarrow>
+   minors_zero A"
+proof (induct ks arbitrary: A)
+  case Nil
+  show ?case using Nil.prems by simp
+next
+  case (Cons x xs)
+  have xb: "x < n_rows A" using Cons.prems by simp
+  have rA: "r < n_rows A" using Cons.prems by simp
+  have rect: "is_rect A" using Cons.prems by simp
+  have xsb: "\<forall>k\<in>set xs. k < n_rows A" using Cons.prems by simp
+  show ?case
+  proof (cases "x = r")
+    case True
+    have xr: "x = r" using True .
+    have mzfold: "minors_zero (foldl (\<lambda>B k. if k = r then B else add_row_mult B k r (- entry B k c)) A xs)"
+      using Cons.prems xr by simp
+    show ?thesis
+    proof (rule Cons.hyps [of A])
+      show "is_rect A" using rect .
+      show "r < n_rows A" using rA .
+      show "\<forall>k\<in>set xs. k < n_rows A" using xsb .
+      show "minors_zero (foldl (\<lambda>B k. if k = r then B else add_row_mult B k r (- entry B k c)) A xs)"
+        using mzfold .
+    qed
+  next
+    case False
+    have xnr: "x \<noteq> r" using False .
+    let ?B = "add_row_mult A x r (- entry A x c)"
+    have mzfold: "minors_zero (foldl (\<lambda>B k. if k = r then B else add_row_mult B k r (- entry B k c)) ?B xs)"
+      using Cons.prems xnr by simp
+    have rectB: "is_rect ?B"
+    proof (rule is_rect_add_row_mult)
+      show "is_rect A" using rect .
+      show "x < n_rows A" using xb .
+      show "r < n_rows A" using rA .
+    qed
+    have nrB: "n_rows ?B = n_rows A" by simp
+    have rb: "r < n_rows ?B" using rA nrB by simp
+    have xsbB: "\<forall>k\<in>set xs. k < n_rows ?B" using xsb nrB by simp
+    have mzB: "minors_zero ?B"
+    proof (rule Cons.hyps [of ?B])
+      show "is_rect ?B" using rectB .
+      show "r < n_rows ?B" using rb .
+      show "\<forall>k\<in>set xs. k < n_rows ?B" using xsbB .
+      show "minors_zero (foldl (\<lambda>B k. if k = r then B else add_row_mult B k r (- entry B k c)) ?B xs)"
+        using mzfold .
+    qed
+    show ?thesis
+    proof (rule minors_zero_add_row_undo [of A x r "- entry A x c"])
+      show "minors_zero (add_row_mult A x r (- entry A x c))" using mzB .
+      show "x < n_rows A" using xb .
+      show "r < n_rows A" using rA .
+      show "x \<noteq> r" using xnr .
+      show "is_rect A" using rect .
+    qed
+  qed
+qed
+
+lemma minors_zero_eliminate_col_undo:
+  assumes mz: "minors_zero (eliminate_col A r c)"
+    and rect: "is_rect A" and r: "r < n_rows A"
+  shows "minors_zero A"
+proof (rule minors_zero_eliminate_fold_undo)
+  show "is_rect A" using rect .
+  show "r < n_rows A" using r .
+  show "\<forall>k\<in>set [0..<n_rows A]. k < n_rows A" by simp
+  show "minors_zero (foldl (\<lambda>B k. if k = r then B else add_row_mult B k r (- entry B k c))
+          A [0..<n_rows A])"
+    using mz by (simp add: eliminate_col_def)
+qed
 end

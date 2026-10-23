@@ -2122,4 +2122,322 @@ next
   qed
 qed
 
+(* seg: pivot-step-lead-20261023 *)
+section \<open>A pivot step fixes the leading column and leaves the rows above it alone\<close>
+
+text \<open>Two facts about one pivot step are needed by the staircase invariant.  The first is the
+  leading column of the pivot row after the step: it is exactly @{text c}.  The second is that
+  the rows strictly above the pivot keep their leading columns, because the step only rewrites
+  the pivot row and adds multiples of it -- and that row is zero in every column left of
+  @{text c}.
+
+  Both are stated so that they can be used as conjuncts of the staircase invariant without
+  reproving anything: the pivot row gets an equality on @{text lead}, the rows above get an
+  equality on @{text lead} as well, not a weaker "unchanged up to congruence" statement.\<close>
+
+lemma entry_eliminate_col_prefix:
+  assumes rect: "is_rect A" and r: "r < n_rows A" and k: "k < n_rows A"
+    and col: "col < n_cols A" and c: "c < n_cols A"
+    and z: "fq (entry A r col) = 0"
+  shows "fq (entry (eliminate_col A r c) k col) = fq (entry A k col)"
+proof (cases "k = r")
+  case True
+  then show ?thesis by (simp add: entry_eliminate_col_self [OF rect r col c])
+next
+  case False
+  have h: "entry (eliminate_col A r c) k col
+             = fq (entry A k col - entry A k c * entry A r col)"
+    using entry_eliminate_col [OF rect r k col c] False by simp
+  have zr: "cong_q (entry A r col) 0" using z by (simp add: cong_q_def)
+  have zp: "cong_q (entry A k c * entry A r col) 0"
+    using cong_q_mult [OF cong_q_refl zr] by simp
+  have hh: "cong_q (entry A k col - entry A k c * entry A r col) (entry A k col)"
+  proof -
+    have c2: "cong_q (- (entry A k c * entry A r col)) 0"
+    proof -
+      have "fq (- (entry A k c * entry A r col))
+          = fq ((- 1) * (entry A k c * entry A r col))" by simp
+      also have "\<dots> = fq (fq (- 1) * fq (entry A k c * entry A r col))" by (rule fq_mult)
+      also have "\<dots> = 0" using zp by (simp add: cong_q_def)
+      finally show ?thesis by (simp add: cong_q_def)
+    qed
+    have sum: "cong_q (entry A k col + (- (entry A k c * entry A r col)))
+                     (entry A k col + 0)"
+      using cong_q_add [OF cong_q_refl c2] .
+    have e: "entry A k col - entry A k c * entry A r col
+           = entry A k col + (- (entry A k c * entry A r col))" by simp
+    show ?thesis unfolding e using sum by simp
+  qed
+  show ?thesis using h hh by (simp add: cong_q_def)
+qed
+
+lemma pivot_step_preserves_prefix:
+  assumes rect: "is_rect A" and rn: "r < n_rows A" and i: "i < n_rows A" and ri: "r \<le> i"
+    and k: "k < r" and col: "col < n_cols A" and cn: "c < n_cols A" and colc: "col < c"
+    and zb: "zero_below r c A"
+  shows "fq (entry (eliminate_col (scale_row (swap_rows A r i) r
+            (invmod (entry (swap_rows A r i) r c))) r c) k col)
+       = fq (entry A k col)"
+proof -
+  have kn: "k < n_rows A" using k rn by simp
+  have kr: "k \<noteq> r" using k by simp
+  have ki: "k \<noteq> i" using k ri by simp
+  have r1: "is_rect (swap_rows A r i)" using is_rect_swap_rows [OF rect rn i] .
+  have kn1: "k < n_rows (swap_rows A r i)" using kn by simp
+  have nc1: "n_cols (swap_rows A r i) = n_cols A" using n_cols_swap_rows [OF rn i rect] .
+  have col1: "col < n_cols (swap_rows A r i)" using col nc1 by simp
+  have sw: "entry (swap_rows A r i) k col = entry A k col"
+    using entry_swap_rows [OF rn i kn] ki kr by simp
+  have rn1: "r < n_rows (swap_rows A r i)" using rn by simp
+  have r2: "is_rect (scale_row (swap_rows A r i) r (invmod (entry (swap_rows A r i) r c)))"
+    using is_rect_scale_row [OF r1 rn1] .
+  have rn2: "r < n_rows (scale_row (swap_rows A r i) r (invmod (entry (swap_rows A r i) r c)))"
+    using rn by simp
+  have kn2: "k < n_rows (scale_row (swap_rows A r i) r (invmod (entry (swap_rows A r i) r c)))"
+    using kn by simp
+  have nc2: "n_cols (scale_row (swap_rows A r i) r (invmod (entry (swap_rows A r i) r c))) = n_cols A"
+    using n_cols_scale_row [of "swap_rows A r i" r "invmod (entry (swap_rows A r i) r c)"] nc1 by simp
+  have col2: "col < n_cols (scale_row (swap_rows A r i) r (invmod (entry (swap_rows A r i) r c)))"
+    using col nc2 by simp
+  have cn2: "c < n_cols (scale_row (swap_rows A r i) r (invmod (entry (swap_rows A r i) r c)))"
+    using cn nc2 by simp
+  have sc: "entry (scale_row (swap_rows A r i) r (invmod (entry (swap_rows A r i) r c))) k col
+              = entry (swap_rows A r i) k col"
+    using entry_scale_row_other [OF r1 rn1 kn1 kr col1] .
+  have pv: "entry (swap_rows A r i) r col = entry A i col"
+    using entry_swap_rows [OF rn i rn] by simp
+  have zi: "fq (entry A i col) = 0" using zero_below_entry [OF zb ri i colc] .
+  have zrow: "fq (entry (scale_row (swap_rows A r i) r (invmod (entry (swap_rows A r i) r c))) r col) = 0"
+  proof -
+    have e: "entry (scale_row (swap_rows A r i) r (invmod (entry (swap_rows A r i) r c))) r col
+           = fq (invmod (entry (swap_rows A r i) r c) * entry A i col)"
+    proof -
+      have h1: "entry (scale_row (swap_rows A r i) r (invmod (entry (swap_rows A r i) r c))) r col
+              = fq (invmod (entry (swap_rows A r i) r c) * entry (swap_rows A r i) r col)"
+        using entry_scale_row_at_self [OF rn1 r1 col1] .
+      have h2: "fq (invmod (entry (swap_rows A r i) r c) * entry (swap_rows A r i) r col)
+              = fq (invmod (entry (swap_rows A r i) r c) * entry A i col)"
+        using pv by simp
+      show ?thesis using h1 h2 by simp
+    qed
+    have f: "fq (invmod (entry (swap_rows A r i) r c) * entry A i col) = 0"
+    proof -
+      have "fq (invmod (entry (swap_rows A r i) r c) * entry A i col)
+          = fq (fq (invmod (entry (swap_rows A r i) r c)) * fq (entry A i col))"
+        by (rule fq_mult)
+      also have "\<dots> = fq (fq (invmod (entry (swap_rows A r i) r c)) * 0)" using zi by simp
+      also have "\<dots> = 0" by simp
+      finally show ?thesis .
+    qed
+    with e show ?thesis by simp
+  qed
+  have res: "fq (entry (eliminate_col (scale_row (swap_rows A r i) r
+                (invmod (entry (swap_rows A r i) r c))) r c) k col)
+           = fq (entry (scale_row (swap_rows A r i) r (invmod (entry (swap_rows A r i) r c))) k col)"
+    using entry_eliminate_col_prefix
+            [OF r2 rn2 kn2 col2 cn2 zrow] .
+  show ?thesis using res sc sw by simp
+qed
+
+text \<open>The value of @{text lead} is pinned by a zero prefix and a nonzero entry: nothing else
+  about the row matters.  Stating it separately keeps the pivot computation free of any
+  case analysis on the recursion of @{text lead}.\<close>
+
+lemma lead_eq_of_prefix_zero:
+  assumes c: "c < length r" and z: "\<forall>j < c. fq (r ! j) = 0"
+    and nz: "fq (r ! c) \<noteq> 0"
+  shows "lead r = c"
+proof (rule antisym)
+  show "lead r \<le> c"
+  proof (rule ccontr)
+    assume "\<not> lead r \<le> c"
+    hence lc: "c < lead r" by simp
+    have "fq (r ! c) = 0" using lc by (rule lead_nth_zero)
+    with nz show False by simp
+  qed
+next
+  show "c \<le> lead r"
+  proof (rule ccontr)
+    assume "\<not> c \<le> lead r"
+    hence lc: "lead r < c" by simp
+    have ll: "lead r < length r" using lc c by simp
+    have nz2: "fq (r ! lead r) \<noteq> 0" using ll by (rule lead_nth_nonzero)
+    have "fq (r ! lead r) = 0" using lc z by simp
+    with nz2 show False by simp
+  qed
+qed
+
+lemma lead_eq_of_agree_below:
+  assumes lc: "lead r < c" and cr: "c \<le> length r" and cr': "c \<le> length r'"
+    and ag: "\<forall>j < c. fq (r' ! j) = fq (r ! j)"
+  shows "lead r' = lead r"
+proof (rule antisym)
+  show "lead r' \<le> lead r"
+  proof (rule ccontr)
+    assume "\<not> lead r' \<le> lead r"
+    hence lt: "lead r < lead r'" by simp
+    have z: "fq (r' ! lead r) = 0" using lt by (rule lead_nth_zero)
+    have agj: "fq (r' ! lead r) = fq (r ! lead r)" using ag lc by simp
+    have ll: "lead r < length r" using lc cr by simp
+    have nz: "fq (r ! lead r) \<noteq> 0" using ll by (rule lead_nth_nonzero)
+    show False using z agj nz by simp
+  qed
+next
+  show "lead r \<le> lead r'"
+  proof (rule ccontr)
+    assume "\<not> lead r \<le> lead r'"
+    hence lt: "lead r' < lead r" by simp
+    have lc': "lead r' < c" using lt lc by simp
+    have ll: "lead r' < length r'" using lc' cr' by simp
+    have nz: "fq (r' ! lead r') \<noteq> 0" using ll by (rule lead_nth_nonzero)
+    have agj: "fq (r' ! lead r') = fq (r ! lead r')" using ag lc' by simp
+    have "fq (r ! lead r') = 0" using lt by (rule lead_nth_zero)
+    with nz agj show False by simp
+  qed
+qed
+
+lemma lead_pivot_step:
+  assumes zb: "zero_below r c A" and rect: "is_rect A" and rn: "r < n_rows A"
+    and cn: "c < n_cols A" and i: "i < n_rows A" and ri: "r \<le> i"
+    and pnz: "fq (entry A i c) \<noteq> 0"
+  shows "lead ((eliminate_col (scale_row (swap_rows A r i) r
+            (invmod (entry (swap_rows A r i) r c))) r c) ! r) = c"
+proof -
+  have r1: "is_rect (swap_rows A r i)" using is_rect_swap_rows [OF rect rn i] .
+  have rn1: "r < n_rows (swap_rows A r i)" using rn by simp
+  have r2: "is_rect (scale_row (swap_rows A r i) r (invmod (entry (swap_rows A r i) r c)))"
+    using is_rect_scale_row [OF r1 rn1] .
+  have rn2: "r < n_rows (scale_row (swap_rows A r i) r (invmod (entry (swap_rows A r i) r c)))"
+    using rn by simp
+  have r3: "is_rect (eliminate_col (scale_row (swap_rows A r i) r
+              (invmod (entry (swap_rows A r i) r c))) r c)"
+    using is_rect_eliminate_col [OF r2 rn2] .
+  have rn3: "r < n_rows (eliminate_col (scale_row (swap_rows A r i) r
+              (invmod (entry (swap_rows A r i) r c))) r c)" using rn by simp
+  have nc1: "n_cols (swap_rows A r i) = n_cols A" using n_cols_swap_rows [OF rn i rect] .
+  have nc2: "n_cols (scale_row (swap_rows A r i) r (invmod (entry (swap_rows A r i) r c))) = n_cols A"
+    using n_cols_scale_row nc1 by simp
+  have cc2: "c < n_cols (scale_row (swap_rows A r i) r (invmod (entry (swap_rows A r i) r c)))"
+    using cn nc2 by simp
+  have nc3: "n_cols (eliminate_col (scale_row (swap_rows A r i) r
+              (invmod (entry (swap_rows A r i) r c))) r c) = n_cols A"
+    using n_cols_eliminate_col [OF r2 rn2] nc2 by simp
+  have len3: "length ((eliminate_col (scale_row (swap_rows A r i) r
+                (invmod (entry (swap_rows A r i) r c))) r c) ! r) = n_cols A"
+    using is_rect_rows [OF r3 rn3] nc3 by simp
+  have pv: "entry (swap_rows A r i) r c = entry A i c"
+    using entry_swap_rows [OF rn i rn] by simp
+  have nzp: "fq (entry (swap_rows A r i) r c) \<noteq> 0" using pv pnz by simp
+  have cc1: "c < n_cols (swap_rows A r i)" using cn nc1 by simp
+  have e2: "entry (scale_row (swap_rows A r i) r (invmod (entry (swap_rows A r i) r c))) r c = 1"
+  proof -
+    have s1: "entry (scale_row (swap_rows A r i) r (invmod (entry (swap_rows A r i) r c))) r c
+            = fq (invmod (entry (swap_rows A r i) r c) * entry (swap_rows A r i) r c)"
+      using entry_scale_row_at_self [OF rn1 r1 cc1] .
+    have ic: "fq (entry (swap_rows A r i) r c * invmod (entry (swap_rows A r i) r c)) = 1"
+      using invmod_correct_gen [OF nzp] .
+    have cm: "invmod (entry (swap_rows A r i) r c) * entry (swap_rows A r i) r c
+            = entry (swap_rows A r i) r c * invmod (entry (swap_rows A r i) r c)"
+      by (rule mult.commute)
+    show ?thesis using s1 ic cm by simp
+  qed
+  have ec: "fq (entry (eliminate_col (scale_row (swap_rows A r i) r
+              (invmod (entry (swap_rows A r i) r c))) r c) r c) = 1"
+    using entry_eliminate_col_self [OF r2 rn2 cc2 cc2] e2 by simp
+  have zc: "fq (((eliminate_col (scale_row (swap_rows A r i) r
+              (invmod (entry (swap_rows A r i) r c))) r c) ! r) ! c) \<noteq> 0"
+    using ec by (simp add: entry_def)
+  have z0: "\<forall>j < c. fq (((eliminate_col (scale_row (swap_rows A r i) r
+              (invmod (entry (swap_rows A r i) r c))) r c) ! r) ! j) = 0"
+  proof (intro allI impI)
+    fix j
+    assume jc: "j < c"
+    have colj: "j < n_cols A" using jc cn by simp
+    have colj1: "j < n_cols (swap_rows A r i)" using colj nc1 by simp
+    have colj2: "j < n_cols (scale_row (swap_rows A r i) r (invmod (entry (swap_rows A r i) r c)))"
+      using colj nc2 by simp
+    have e1: "entry (swap_rows A r i) r j = entry A i j"
+      using entry_swap_rows [OF rn i rn] by simp
+    have s1: "entry (scale_row (swap_rows A r i) r (invmod (entry (swap_rows A r i) r c))) r j
+              = fq (invmod (entry (swap_rows A r i) r c) * entry (swap_rows A r i) r j)"
+      using entry_scale_row_at_self [OF rn1 r1 colj1] .
+    have e3: "entry (eliminate_col (scale_row (swap_rows A r i) r
+                (invmod (entry (swap_rows A r i) r c))) r c) r j
+              = entry (scale_row (swap_rows A r i) r (invmod (entry (swap_rows A r i) r c))) r j"
+      using entry_eliminate_col_self [OF r2 rn2 colj2 cc2] .
+    have zi: "fq (entry A i j) = 0" using zero_below_entry [OF zb ri i jc] .
+    have f: "fq (invmod (entry (swap_rows A r i) r c) * entry (swap_rows A r i) r j) = 0"
+    proof -
+      have "fq (invmod (entry (swap_rows A r i) r c) * entry (swap_rows A r i) r j)
+          = fq (fq (invmod (entry (swap_rows A r i) r c)) * fq (entry (swap_rows A r i) r j))"
+        by (rule fq_mult)
+      also have "\<dots> = fq (fq (invmod (entry (swap_rows A r i) r c)) * 0)"
+        using e1 zi by simp
+      also have "\<dots> = 0" by simp
+      finally show ?thesis .
+    qed
+    show "fq (((eliminate_col (scale_row (swap_rows A r i) r
+                (invmod (entry (swap_rows A r i) r c))) r c) ! r) ! j) = 0"
+      using e3 s1 f by (simp add: entry_def)
+  qed
+  have lenc: "c < length ((eliminate_col (scale_row (swap_rows A r i) r
+                (invmod (entry (swap_rows A r i) r c))) r c) ! r)"
+    using len3 cn by simp
+  show ?thesis using lead_eq_of_prefix_zero [OF lenc z0 zc] .
+qed
+
+lemma pivot_step_preserves_leads:
+  assumes rect: "is_rect A" and rn: "r < n_rows A" and i: "i < n_rows A" and ri: "r \<le> i"
+    and cn: "c < n_cols A" and zb: "zero_below r c A"
+    and above: "\<forall>k < r. lead (A ! k) < c"
+  shows "\<forall>k < r. lead ((eliminate_col (scale_row (swap_rows A r i) r
+            (invmod (entry (swap_rows A r i) r c))) r c) ! k) = lead (A ! k)"
+proof (intro allI impI)
+  fix k
+  assume k: "k < r"
+  have kn: "k < n_rows A" using k rn by simp
+  have r1: "is_rect (swap_rows A r i)" using is_rect_swap_rows [OF rect rn i] .
+  have rn1: "r < n_rows (swap_rows A r i)" using rn by simp
+  have r2: "is_rect (scale_row (swap_rows A r i) r (invmod (entry (swap_rows A r i) r c)))"
+    using is_rect_scale_row [OF r1 rn1] .
+  have rn2: "r < n_rows (scale_row (swap_rows A r i) r (invmod (entry (swap_rows A r i) r c)))"
+    using rn by simp
+  have r3: "is_rect (eliminate_col (scale_row (swap_rows A r i) r
+              (invmod (entry (swap_rows A r i) r c))) r c)"
+    using is_rect_eliminate_col [OF r2 rn2] .
+  have kn3: "k < n_rows (eliminate_col (scale_row (swap_rows A r i) r
+              (invmod (entry (swap_rows A r i) r c))) r c)" using kn by simp
+  have nc1: "n_cols (swap_rows A r i) = n_cols A" using n_cols_swap_rows [OF rn i rect] .
+  have nc2: "n_cols (scale_row (swap_rows A r i) r (invmod (entry (swap_rows A r i) r c))) = n_cols A"
+    using n_cols_scale_row nc1 by simp
+  have cc2: "c < n_cols (scale_row (swap_rows A r i) r (invmod (entry (swap_rows A r i) r c)))"
+    using cn nc2 by simp
+  have nc3: "n_cols (eliminate_col (scale_row (swap_rows A r i) r
+              (invmod (entry (swap_rows A r i) r c))) r c) = n_cols A"
+    using n_cols_eliminate_col [OF r2 rn2] nc2 by simp
+  have lc: "lead (A ! k) < c" using above k by auto
+  have lenA: "c \<le> length (A ! k)"
+    using is_rect_rows [OF rect kn] cn by simp
+  have lenA3: "c \<le> length ((eliminate_col (scale_row (swap_rows A r i) r
+                (invmod (entry (swap_rows A r i) r c))) r c) ! k)"
+    using is_rect_rows [OF r3 kn3] nc3 cn by simp
+  have ag: "\<forall>j < c. fq (((eliminate_col (scale_row (swap_rows A r i) r
+              (invmod (entry (swap_rows A r i) r c))) r c) ! k) ! j) = fq ((A ! k) ! j)"
+  proof (intro allI impI)
+    fix j
+    assume jc: "j < c"
+    have colj: "j < n_cols A" using jc cn by simp
+    have h: "fq (entry (eliminate_col (scale_row (swap_rows A r i) r
+                (invmod (entry (swap_rows A r i) r c))) r c) k j) = fq (entry A k j)"
+      using pivot_step_preserves_prefix [OF rect rn i ri k colj cn jc zb] .
+    show "fq (((eliminate_col (scale_row (swap_rows A r i) r
+                (invmod (entry (swap_rows A r i) r c))) r c) ! k) ! j) = fq ((A ! k) ! j)"
+      using h by (simp add: entry_def)
+  qed
+  show "lead ((eliminate_col (scale_row (swap_rows A r i) r
+            (invmod (entry (swap_rows A r i) r c))) r c) ! k) = lead (A ! k)"
+    using lead_eq_of_agree_below [OF lc lenA lenA3 ag] .
+qed
+
+
 end

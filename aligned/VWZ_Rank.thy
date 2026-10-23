@@ -737,26 +737,27 @@ text \<open>Nothing in this file bounds the rank of a sum of two outer products,
   @{text "minors_zero A \<Longrightarrow> minors_zero (op A)"} for every operation, and the
   predicate itself quantifies over all index pairs, so nothing is left to
   generalise here.
-  \<^enum> the half that is missing is the opposite direction,
-  @{text "minors_zero (op A) \<Longrightarrow> minors_zero A"}.  It cannot be stated as an
-  equality of matrices: @{text "scale_row (scale_row A i q) i p"} agrees with
-  @{text A} only up to @{text fq} on the touched row, two @{text add_row_mult}
-  steps behave the same way, and @{text eliminate_col} is idempotent rather than
-  invertible, so replaying it does not undo it.  @{file VWZ_ModAlgebra.thy} now
-  carries the residue form of that direction: @{text dvd_minor2_cong} together
-  with @{text minors_zero_swap_undo}, @{text minors_zero_scale_row_undo} and
-  @{text minors_zero_add_row_undo}.  The fold-level reflection for
-  @{text eliminate_col} and the fuel induction over @{text rref_fuel} are still
-  open.
+  \<^enum> the opposite direction, @{text "minors_zero (op A) \<Longrightarrow> minors_zero A"},
+  is now complete.  It cannot be stated as an equality of matrices:
+  @{text "scale_row (scale_row A i q) i p"} agrees with @{text A} only up to
+  @{text fq} on the touched row, two @{text add_row_mult} steps behave the same
+  way, and @{text eliminate_col} is idempotent rather than invertible, so
+  replaying it does not undo it.  @{file VWZ_ModAlgebra.thy} carries the residue
+  form of the single steps (@{text dvd_minor2_cong} with
+  @{text minors_zero_swap_undo}, @{text minors_zero_scale_row_undo} and
+  @{text minors_zero_add_row_undo}) plus the fold-level reflection
+  @{text minors_zero_eliminate_col_undo}; this file carries the fuel induction
+  @{text minors_zero_rref_fuel_undo} and its wrapper @{text minors_zero_rref_undo}.
   \<^enum> @{text rank_le_one_imp_minors_vanish}: proved in this file together with
   @{text row_zero_or_zero_of_rank_le_one} and the shape lemma @{text is_rect_rref};
   it assumes only @{text "is_rect A"} and gives vanishing minors of the reduced
   form.
-  \<^enum> combining the reflected minors with the previous item gives
-  @{text rank_ge_two_of_nonzero_minor}, while @{text rank_outer_sum_le_two}
-  additionally needs the inner-dimension bound
-  @{text "mat_rank (mat_mult A B) \<le> n_cols A"}.  That bound is not what
-  @{text mat_rank_le_n_cols} provides: instantiating the latter at
+  \<^enum> @{text rank_ge_two_of_nonzero_minor} is now an assembly step:
+  @{text rank_le_one_imp_minors_vanish} gives vanishing minors of the reduced
+  form from @{text "mat_rank A \<le> 1"}, and @{text minors_zero_rref_undo} carries
+  that back to @{text A}.  @{text rank_outer_sum_le_two} still needs the
+  inner-dimension bound @{text "mat_rank (mat_mult A B) \<le> n_cols A"}, and that
+  is not what @{text mat_rank_le_n_cols} provides: instantiating the latter at
   @{text "mat_mult A B"} yields @{text "mat_rank (mat_mult A B) \<le> n_cols B"},
   which constrains the outer dimension instead.
 
@@ -1612,5 +1613,101 @@ proof -
   have le: "length (filter (\<lambda>r. \<not> all_zero_row r) (rref A)) \<le> n_cols A"
     using mat_rank_le_of_zero_below[OF zbR rcle cnB ncR rectR disj] .
   show ?thesis using le by (simp add: mat_rank_def)
+qed
+section \<open>Reflecting the reduction back to the original matrix\<close>
+
+text \<open>The reduction is a sequence of three elementary operations per pivot step, so
+  a vanishing-minor statement about @{const rref_fuel} reflects back one step at a
+  time: undo the elimination sweep, undo the scaling, undo the swap.  The fuel
+  induction below makes that sequence explicit; the guard of the step decides
+  which of the three shapes the recursive call takes.\<close>
+
+lemma minors_zero_rref_fuel_undo:
+  "is_rect A \<Longrightarrow> minors_zero (rref_fuel f r c A) \<Longrightarrow> minors_zero A"
+proof (induct f arbitrary: r c A rule: nat_induct)
+  case 0
+  then show ?case by simp
+next
+  case (Suc f)
+  show ?case
+  proof (cases "r < n_rows A \<and> c < n_cols A")
+    case False
+    show ?thesis using Suc.prems False by (simp add: rref_fuel.simps)
+  next
+    case True
+    have rA: "r < n_rows A" and cA: "c < n_cols A" using True by simp_all
+    show ?thesis
+    proof (cases "find_pivot_fuel (n_rows A) A r c")
+      case None
+      have mz1: "minors_zero (rref_fuel f r (c + 1) A)"
+        using Suc.prems True None by (simp add: rref_fuel.simps)
+      show ?thesis
+      proof (rule Suc.hyps [of A r "c + 1"])
+        show "is_rect A" using Suc.prems(1) .
+        show "minors_zero (rref_fuel f r (c + 1) A)" using mz1 .
+      qed
+    next
+      case (Some i)
+      define A1 where "A1 = swap_rows A r i"
+      define p where "p = entry A1 r c"
+      define A2 where "A2 = scale_row A1 r (invmod p)"
+      define A3 where "A3 = eliminate_col A2 r c"
+      have mz3: "minors_zero (rref_fuel f (r + 1) (c + 1) A3)"
+        using Suc.prems True Some
+        by (simp add: rref_fuel.simps Let_def A1_def[symmetric] p_def[symmetric]
+                      A2_def[symmetric] A3_def[symmetric])
+      have iA: "i < n_rows A" using Some by (rule pivot_some_lt)
+      have pnzA: "fq (entry A i c) \<noteq> 0" using Some by (rule pivot_some_nz)
+      have eA: "entry A1 r c = entry A i c"
+      proof -
+        have h: "entry (swap_rows A r i) r c = entry A (swap_idx r i r) c"
+        proof (rule entry_swap_rows)
+          show "r < n_rows A" using rA .
+          show "i < n_rows A" using iA .
+          show "r < n_rows A" using rA .
+        qed
+        have "entry A1 r c = entry (swap_rows A r i) r c" by (simp add: A1_def)
+        thus ?thesis using h by simp
+      qed
+      have pnz: "fq p \<noteq> 0" using pnzA eA by (simp add: p_def)
+      have pq: "fq (p * invmod p) = 1" using pnz by (rule invmod_correct_gen)
+      have rectA1: "is_rect A1"
+        using is_rect_swap_rows [OF Suc.prems(1) rA iA] by (simp add: A1_def)
+      have rA1: "r < n_rows A1" using rA by (simp add: A1_def)
+      have rectA2: "is_rect A2"
+        using is_rect_scale_row [OF rectA1 rA1] by (simp add: A2_def)
+      have rA2: "r < n_rows A2" using rA1 by (simp add: A2_def)
+      have rectA3: "is_rect A3"
+        using is_rect_eliminate_col [OF rectA2 rA2] by (simp add: A3_def)
+      have mzA3: "minors_zero A3"
+      proof (rule Suc.hyps [of A3 "r + 1" "c + 1"])
+        show "is_rect A3" using rectA3 .
+        show "minors_zero (rref_fuel f (r + 1) (c + 1) A3)" using mz3 .
+      qed
+      have mzE: "minors_zero (eliminate_col A2 r c)" using mzA3 by (simp add: A3_def)
+      have mzA2: "minors_zero A2"
+        using mzE rectA2 rA2 by (rule minors_zero_eliminate_col_undo)
+      have mzS: "minors_zero (scale_row A1 r (invmod p))" using mzA2 by (simp add: A2_def)
+      have mzA1: "minors_zero A1"
+        using mzS rA1 rectA1 pq by (rule minors_zero_scale_row_undo)
+      have mzS1: "minors_zero (swap_rows A r i)" using mzA1 by (simp add: A1_def)
+      have mzA: "minors_zero A"
+        using mzS1 rA iA Suc.prems(1) by (rule minors_zero_swap_undo)
+      show ?thesis using mzA .
+    qed
+  qed
+qed
+
+lemma minors_zero_rref_undo:
+  assumes rect: "is_rect A" and mz: "minors_zero (rref A)"
+  shows "minors_zero A"
+proof -
+  have h: "minors_zero (rref_fuel (n_rows A * n_cols A + n_rows A + 1) 0 0 A)"
+    using mz by (simp add: rref_def)
+  show ?thesis
+  proof (rule minors_zero_rref_fuel_undo)
+    show "is_rect A" using rect .
+    show "minors_zero (rref_fuel (n_rows A * n_cols A + n_rows A + 1) 0 0 A)" using h .
+  qed
 qed
 end

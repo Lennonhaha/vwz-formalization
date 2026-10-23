@@ -750,4 +750,172 @@ text \<open>Nothing in this file bounds the rank of a sum of two outer products,
   exact count of 56 lemmas and 7 sorry, and the lemmas added above carry no
   @{text sorry} at all.\<close>
 
+(* seg: rank-lead-invmod-20261023 *)
+
+text \<open>The leading column of a row is the index of its first entry that is nonzero
+  modulo @{text 3329}; a zero row has no such index and gets the length of the row
+  instead.  The recursion mirrors the list, which keeps the two facts that matter --
+  entries before the leading column vanish, the entry at it does not -- available by
+  plain induction.\<close>
+
+fun lead :: "int list \<Rightarrow> nat" where
+  "lead [] = 0"
+| "lead (x # xs) = (if fq x = 0 then Suc (lead xs) else 0)"
+
+lemma lead_le_length [simp]: "lead r \<le> length r"
+  by (induct r) simp_all
+
+lemma lead_nth_zero:
+  assumes j: "j < lead r"
+  shows "fq (r ! j) = 0"
+  using j
+proof (induct r arbitrary: j)
+  case Nil
+  thus ?case by simp
+next
+  case (Cons x xs)
+  show ?case
+  proof (cases "fq x = 0")
+    case hx: True
+    show ?thesis
+    proof (cases j)
+      case 0
+      thus ?thesis using hx by simp
+    next
+      case (Suc k)
+      with Cons.prems have "k < lead xs" using hx by simp
+      with Cons.hyps have "fq (xs ! k) = 0" .
+      thus ?thesis using Suc by simp
+    qed
+  next
+    case hx: False
+    with Cons.prems have False by simp
+    thus ?thesis ..
+  qed
+qed
+
+lemma lead_nth_nonzero:
+  assumes k: "lead r < length r"
+  shows "fq (r ! lead r) \<noteq> 0"
+  using k
+proof (induct r)
+  case Nil
+  thus ?case by simp
+next
+  case (Cons x xs)
+  show ?case
+  proof (cases "fq x = 0")
+    case True
+    hence l: "lead (x # xs) = Suc (lead xs)" by simp
+    with Cons.prems have "lead xs < length xs" by simp
+    with Cons.hyps have "fq (xs ! lead xs) \<noteq> 0" .
+    thus ?thesis using True l by simp
+  next
+    case False
+    thus ?thesis by simp
+  qed
+qed
+
+lemma lead_eq_length_all_zero [simp]: "lead r = length r \<longleftrightarrow> all_zero_row r"
+proof
+  assume h: "lead r = length r"
+  have idx: "\<forall>j < length r. fq (r ! j) = 0"
+  proof (intro allI impI)
+    fix j
+    assume jl: "j < length r"
+    have "j < lead r" using h jl by simp
+    thus "fq (r ! j) = 0" by (rule lead_nth_zero)
+  qed
+  have "\<forall>x \<in> set r. fq x = 0"
+  proof
+    fix x
+    assume xs: "x \<in> set r"
+    then obtain j where j: "j < length r" and jx: "r ! j = x"
+      by (metis in_set_conv_nth)
+    have z: "fq (r ! j) = 0" using idx j by auto
+    thus "fq x = 0" using jx by simp
+  qed
+  thus "all_zero_row r" by (simp add: all_zero_row_def)
+next
+  assume h: "all_zero_row r"
+  show "lead r = length r"
+    using h
+  proof (induct r)
+    case Nil
+    thus ?case by simp
+  next
+    case (Cons x xs)
+    have hx: "fq x = 0" using Cons.prems by (auto simp add: all_zero_row_def)
+    have hxs: "all_zero_row xs" using Cons.prems by (auto simp add: all_zero_row_def)
+    have "lead xs = length xs" by (rule Cons.hyps [OF hxs])
+    thus ?case using hx by simp
+  qed
+qed
+
+
+text \<open>Normalising a pivot to @{text 1} needs @{text "x * invmod x \<equiv> 1"}.  The
+  inverse is defined through Fermat's little theorem as @{text "x ^ (3329 - 2)"}, and
+  the library theorem is stated for @{typ nat}, so the residue is carried to
+  @{typ int} below.  Without this fact no elimination step can be shown to clear a
+  column, which is what the column count of the reduced form rests on.\<close>
+
+lemma invmod_correct:
+  assumes x0: "0 < x" and xq: "x < 3329"
+  shows "fq (x * invmod x) = 1"
+proof -
+  have p: "prime (3329::nat)" by (rule prime_3329)
+  have xn0: "0 < nat x" using x0 by simp
+  have xnl: "nat x < 3329" using xq by simp
+  have nd: "\<not> 3329 dvd nat x"
+  proof
+    assume d: "3329 dvd nat x"
+    have le: "3329 \<le> nat x" using xn0 d by (metis dvd_imp_le less_le_trans)
+    with xnl show False by simp
+  qed
+  have f: "[(nat x) ^ (3329 - 1) = 1] (mod 3329)"
+    by (rule fermat_theorem [OF p nd])
+  have xn1: "1 \<le> nat x" using xn0 by simp
+  have ge: "1 \<le> (nat x) ^ (3329 - 1)" using xn1 by (rule one_le_power)
+  have d1: "3329 dvd (nat x) ^ (3329 - 1) - 1"
+    using f ge by (simp add: cong_altdef_nat)
+  from d1 obtain k where k: "(nat x) ^ (3329 - 1) - 1 = 3329 * k"
+    by (rule dvdE)
+  have np: "(nat x) ^ (3329 - 1) = 3329 * k + 1" using k ge by simp
+  have imod: "(x ^ (3329 - 1)) mod 3329 = 1"
+  proof -
+    have ip: "x ^ (3329 - 1) = int (3329 * k + 1)"
+    proof -
+      have xr: "int (nat x) = x" using x0 by simp
+      have "x ^ (3329 - 1) = (int (nat x)) ^ (3329 - 1)" using xr by simp
+      also have "\<dots> = int ((nat x) ^ (3329 - 1))" by (simp add: of_nat_power)
+      also have "\<dots> = int (3329 * k + 1)" using np by simp
+      finally show ?thesis .
+    qed
+    have h: "int (3329 * k + 1) mod (int 3329) = 1"
+    proof -
+      have "int (3329 * k + 1) mod (int 3329) = int ((3329 * k + 1) mod 3329)"
+        by (simp add: zmod_int)
+      also have "\<dots> = (1::int)" by (simp add: mod_mult_self1)
+      finally show ?thesis .
+    qed
+    show ?thesis using ip h by simp
+  qed
+  have step: "fq (x * invmod x) = fq (x ^ (3329 - 1))"
+  proof -
+    have a1: "fq (x * invmod x) = fq (x * (x ^ (3329 - 2) mod 3329))"
+      by (simp add: invmod_def)
+    have a2: "fq (x * (x ^ (3329 - 2) mod 3329)) = fq (x * x ^ (3329 - 2))"
+      by (simp add: fq_def mod_mult_right_eq)
+    have a3: "x ^ (3329 - 1) = x * x ^ (3329 - 2)"
+    proof -
+      have c: "x * x ^ (3329 - 2) = x ^ (3329 - 2) * x" by (rule mult.commute)
+      also have "\<dots> = x ^ Suc (3329 - 2)" by (rule power_Suc2 [symmetric])
+      also have "\<dots> = x ^ (3329 - 1)" by simp
+      finally show ?thesis by (rule sym)
+    qed
+    show ?thesis using a1 a2 a3 by simp
+  qed
+  show ?thesis using step imod by (simp add: fq_def)
+qed
+
 end

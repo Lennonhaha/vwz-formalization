@@ -3367,4 +3367,245 @@ proof (rule minors_zeroI)
     qed
   qed
 qed
+(* seg: shape-rect-20261023 *)
+section \<open>Row counts and rectangularity under the row operations\<close>
+
+text \<open>Column counts for the three operations are already proved above.  What
+  the elimination fold needs on top of that is that rectangularity itself is
+  preserved, and that the row count never moves.  Both are list facts: every
+  operation is a single update, and the replacement row has the common width.\<close>
+
+lemma n_rows_swap_rows [simp]: "n_rows (swap_rows A i j) = n_rows A"
+  by (simp add: swap_rows_def n_rows_def)
+
+lemma n_rows_scale_row [simp]: "n_rows (scale_row A i k) = n_rows A"
+  by (simp add: scale_row_def n_rows_def)
+
+lemma n_rows_add_row_mult [simp]: "n_rows (add_row_mult A i j k) = n_rows A"
+  by (simp add: add_row_mult_def n_rows_def)
+
+lemma n_rows_eliminate_fold [simp]:
+  "n_rows (foldl (\<lambda>B k. if k = r then B else add_row_mult B k r (- entry B k c)) A ks)
+     = n_rows A"
+  by (induct ks arbitrary: A) simp_all
+
+lemma n_rows_eliminate_col [simp]: "n_rows (eliminate_col A r c) = n_rows A"
+  by (simp add: eliminate_col_def)
+
+lemma is_rect_swap_rows:
+  assumes rect: "is_rect A" and i: "i < n_rows A" and j: "j < n_rows A"
+  shows "is_rect (swap_rows A i j)"
+proof (simp add: is_rect_def, intro ballI)
+  fix row
+  assume h: "row \<in> set (swap_rows A i j)"
+  have nc: "n_cols (swap_rows A i j) = n_cols A"
+    by (rule n_cols_swap_rows [OF i j rect])
+  obtain p where p: "p < length (swap_rows A i j)" "swap_rows A i j ! p = row"
+    using h by (auto simp: in_set_conv_nth)
+  have lp: "length (swap_rows A i j) = length A"
+    by (simp add: swap_rows_def)
+  have pA: "p < length A" using p lp by simp
+  have iA: "i < length A" and jA: "j < length A" using i j by (simp_all add: n_rows_def)
+  have row_eq: "row = (if p = i then A ! j else (if p = j then A ! i else A ! p))"
+    using swap_rows_nth [OF pA iA jA] p by simp
+  show "length row = n_cols (swap_rows A i j)"
+    using row_eq nc rect iA jA pA
+    by (cases "p = i"; cases "p = j") (auto simp: is_rect_rows n_rows_def)
+qed
+
+lemma is_rect_scale_row:
+  assumes rect: "is_rect A" and i: "i < n_rows A"
+  shows "is_rect (scale_row A i k)"
+proof (simp add: is_rect_def, intro ballI)
+  fix row
+  assume h: "row \<in> set (scale_row A i k)"
+  have nc: "n_cols (scale_row A i k) = n_cols A" by (rule n_cols_scale_row)
+  obtain p where p: "p < length (scale_row A i k)" "scale_row A i k ! p = row"
+    using h by (auto simp: in_set_conv_nth)
+  have lp: "p < length A" using p by (simp add: scale_row_def)
+  show "length row = n_cols (scale_row A i k)"
+  proof (cases "p = i")
+    case True
+    have eq: "row = map (\<lambda>x. fq (k * x)) (A ! i)"
+      using p True i by (simp add: scale_row_def n_rows_def nth_list_update_eq)
+    have li: "length (A ! i) = n_cols A" using rect i by (simp add: is_rect_rows)
+    show ?thesis using eq li nc by simp
+  next
+    case False
+    have eq: "row = A ! p"
+      using p False i by (simp add: scale_row_def n_rows_def nth_list_update_neq)
+    have lp2: "length (A ! p) = n_cols A" using rect lp by (simp add: is_rect_rows n_rows_def)
+    show ?thesis using eq lp2 nc by simp
+  qed
+qed
+
+lemma is_rect_add_row_mult:
+  assumes rect: "is_rect A" and i: "i < n_rows A" and j: "j < n_rows A"
+  shows "is_rect (add_row_mult A i j k)"
+proof (simp add: is_rect_def, intro ballI)
+  fix row
+  assume h: "row \<in> set (add_row_mult A i j k)"
+  have nc: "n_cols (add_row_mult A i j k) = n_cols A"
+    by (rule n_cols_add_row_mult [OF i j rect])
+  obtain p where p: "p < length (add_row_mult A i j k)" "add_row_mult A i j k ! p = row"
+    using h by (auto simp: in_set_conv_nth)
+  have lp: "p < length A" using p by (simp add: add_row_mult_def)
+  show "length row = n_cols (add_row_mult A i j k)"
+  proof (cases "p = i")
+    case True
+    have li: "length (A ! i) = n_cols A" using rect i by (simp add: is_rect_rows)
+    have lj: "length (A ! j) = n_cols A" using rect j by (simp add: is_rect_rows)
+    have conv: "map2 (\<lambda>x y. fq (x + k * y)) (A ! i) (A ! j)
+                  = map (\<lambda>l. fq ((A ! i) ! l + k * (A ! j) ! l)) [0..<n_cols A]"
+      using li lj by (rule map2_conv_idx)
+    have eq: "row = map2 (\<lambda>x y. fq (x + k * y)) (A ! i) (A ! j)"
+      using p True i by (simp add: add_row_mult_def n_rows_def nth_list_update_eq)
+    show ?thesis using eq conv nc by simp
+  next
+    case False
+    have eq: "row = A ! p"
+      using p False i by (simp add: add_row_mult_def n_rows_def nth_list_update_neq)
+    have lp2: "length (A ! p) = n_cols A" using rect lp by (simp add: is_rect_rows n_rows_def)
+    show ?thesis using eq lp2 nc by simp
+  qed
+qed
+
+(* seg: shape-eliminate-20261023 *)
+text \<open>@{const eliminate_col} is a fold of row additions over
+  @{text "[0..<n_rows A]"}, so every fact above lifts to it by induction on the
+  index list.  The bound hypothesis says every index the fold visits is a real
+  row; @{const eliminate_col} discharges it because its list is exactly the row
+  range.\<close>
+
+lemma is_rect_eliminate_fold:
+  assumes rect: "is_rect A" and r: "r < n_rows A" and ks: "\<forall>k\<in>set ks. k < n_rows A"
+  shows "is_rect (foldl (\<lambda>B k. if k = r then B else add_row_mult B k r (- entry B k c)) A ks)"
+  using assms
+proof (induct ks arbitrary: A)
+  case Nil
+  thus ?case by simp
+next
+  case (Cons x xs)
+  have xb: "x < n_rows A" using Cons.prems by simp
+  show ?case
+  proof (cases "x = r")
+    case True
+    thus ?thesis using Cons.hyps [of A] Cons.prems by simp
+  next
+    case False
+    have rA: "r < n_rows A" using Cons.prems by simp
+    let ?B = "add_row_mult A x r (- entry A x c)"
+    have nr: "n_rows ?B = n_rows A" by simp
+    have rect2: "is_rect ?B"
+    proof (rule is_rect_add_row_mult)
+      show "is_rect A" using Cons.prems by simp
+      show "x < n_rows A" using xb by simp
+      show "r < n_rows A" using rA by simp
+    qed
+    have rb: "r < n_rows ?B" using rA nr by simp
+    have xsb: "\<forall>k\<in>set xs. k < n_rows ?B" using Cons.prems nr by simp
+    have ih: "is_rect (foldl (\<lambda>B k. if k = r then B else add_row_mult B k r (- entry B k c)) ?B xs)"
+      using Cons.hyps [of ?B] rect2 rb xsb by simp
+    show ?thesis using False ih by simp
+  qed
+qed
+
+lemma n_cols_eliminate_fold:
+  assumes rect: "is_rect A" and r: "r < n_rows A" and ks: "\<forall>k\<in>set ks. k < n_rows A"
+  shows "n_cols (foldl (\<lambda>B k. if k = r then B else add_row_mult B k r (- entry B k c)) A ks)
+           = n_cols A"
+  using assms
+proof (induct ks arbitrary: A)
+  case Nil
+  thus ?case by simp
+next
+  case (Cons x xs)
+  have xb: "x < n_rows A" using Cons.prems by simp
+  show ?case
+  proof (cases "x = r")
+    case True
+    thus ?thesis using Cons.hyps [of A] Cons.prems by simp
+  next
+    case False
+    have rA: "r < n_rows A" using Cons.prems by simp
+    let ?B = "add_row_mult A x r (- entry A x c)"
+    have nr: "n_rows ?B = n_rows A" by simp
+    have nc1: "n_cols ?B = n_cols A"
+    proof (rule n_cols_add_row_mult)
+      show "x < n_rows A" using xb by simp
+      show "r < n_rows A" using rA by simp
+      show "is_rect A" using Cons.prems by simp
+    qed
+    have rect2: "is_rect ?B"
+    proof (rule is_rect_add_row_mult)
+      show "is_rect A" using Cons.prems by simp
+      show "x < n_rows A" using xb by simp
+      show "r < n_rows A" using rA by simp
+    qed
+    have rb: "r < n_rows ?B" using rA nr by simp
+    have xsb: "\<forall>k\<in>set xs. k < n_rows ?B" using Cons.prems nr by simp
+    have ih: "n_cols (foldl (\<lambda>B k. if k = r then B else add_row_mult B k r (- entry B k c)) ?B xs)
+                = n_cols ?B"
+      using Cons.hyps [of ?B] rect2 rb xsb by simp
+    show ?thesis using False ih nc1 by simp
+  qed
+qed
+
+lemma minors_zero_eliminate_fold:
+  assumes mz: "minors_zero A" and rect: "is_rect A" and r: "r < n_rows A"
+    and ks: "\<forall>k\<in>set ks. k < n_rows A"
+  shows "minors_zero (foldl (\<lambda>B k. if k = r then B else add_row_mult B k r (- entry B k c)) A ks)"
+  using assms
+proof (induct ks arbitrary: A)
+  case Nil
+  thus ?case by simp
+next
+  case (Cons x xs)
+  have xb: "x < n_rows A" using Cons.prems by simp
+  show ?case
+  proof (cases "x = r")
+    case True
+    thus ?thesis using Cons.hyps [of A] Cons.prems by simp
+  next
+    case False
+    have rA: "r < n_rows A" using Cons.prems by simp
+    let ?B = "add_row_mult A x r (- entry A x c)"
+    have nr: "n_rows ?B = n_rows A" by simp
+    have rect2: "is_rect ?B"
+    proof (rule is_rect_add_row_mult)
+      show "is_rect A" using Cons.prems by simp
+      show "x < n_rows A" using xb by simp
+      show "r < n_rows A" using rA by simp
+    qed
+    have mz2: "minors_zero ?B"
+    proof (rule minors_zero_add_row)
+      show "minors_zero A" using Cons.prems by simp
+      show "x < n_rows A" using xb by simp
+      show "r < n_rows A" using rA by simp
+      show "x \<noteq> r" using False by simp
+      show "is_rect A" using Cons.prems by simp
+    qed
+    have rb: "r < n_rows ?B" using rA nr by simp
+    have xsb: "\<forall>k\<in>set xs. k < n_rows ?B" using Cons.prems nr by simp
+    have ih: "minors_zero (foldl (\<lambda>B k. if k = r then B else add_row_mult B k r (- entry B k c)) ?B xs)"
+      using Cons.hyps [of ?B] mz2 rect2 rb xsb by simp
+    show ?thesis using False ih by simp
+  qed
+qed
+
+lemma is_rect_eliminate_col:
+  assumes rect: "is_rect A" and r: "r < n_rows A"
+  shows "is_rect (eliminate_col A r c)"
+  using assms by (simp add: eliminate_col_def is_rect_eliminate_fold)
+
+lemma n_cols_eliminate_col:
+  assumes rect: "is_rect A" and r: "r < n_rows A"
+  shows "n_cols (eliminate_col A r c) = n_cols A"
+  using assms by (simp add: eliminate_col_def n_cols_eliminate_fold)
+
+lemma minors_zero_eliminate_col:
+  assumes mz: "minors_zero A" and rect: "is_rect A" and r: "r < n_rows A"
+  shows "minors_zero (eliminate_col A r c)"
+  using assms by (simp add: eliminate_col_def minors_zero_eliminate_fold)
+
 end

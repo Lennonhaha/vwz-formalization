@@ -1983,4 +1983,143 @@ proof (unfold rows_in_span_def, intro allI impI)
     show ?thesis using h1 h2 by simp
   qed
 qed
+(* seg: rows-in-span-fuel-20261023 *)
+section \<open>The reduction keeps every row inside the span\<close>
+
+text \<open>Neither elimination nor the reduction itself introduces a row that was not already a
+  combination of the two vectors: elimination is a fold of row additions, and every other
+  step is either a swap, a scaling, or a recursion on the same matrix.  So
+  @{text rows_in_span} is an invariant of @{text rref_fuel} with no precondition on the
+  shape of the matrix beyond rectangularity.\<close>
+
+lemma rows_in_span_fold_elim:
+  assumes rs: "rows_in_span p q A" and rect: "is_rect A" and r: "r < n_rows A"
+    and bound: "\<forall>a\<in>set ks. a < n_rows A" and d: "distinct ks"
+  shows "rows_in_span p q
+           (foldl (\<lambda>B k. if k = r then B else add_row_mult B k r (- (entry B k c))) A ks)"
+  using rs rect r bound d
+proof (induct ks arbitrary: A)
+  case Nil
+  then show ?case by simp
+next
+  case (Cons a ks)
+  have rsA: "rows_in_span p q A" using Cons.prems(1) .
+  have rectA: "is_rect A" using Cons.prems(2) .
+  have rA: "r < n_rows A" using Cons.prems(3) .
+  have bound: "\<forall>b\<in>set ks. b < n_rows A" using Cons.prems(4) by simp
+  have dks: "distinct ks" using Cons.prems(5) by simp
+  have aA: "a < n_rows A" using Cons.prems(4) by simp
+  show ?case
+  proof (cases "a = r")
+    case True
+    then show ?thesis using Cons.hyps [OF rsA rectA rA bound dks] by simp
+  next
+    case False
+    let ?B = "add_row_mult A a r (- (entry A a c))"
+    have rectB: "is_rect ?B"
+      using is_rect_add_row_mult [OF rectA aA rA] .
+    have rsB: "rows_in_span p q ?B"
+      using rows_in_span_add_row_mult [OF rsA rectA aA rA] .
+    have rB: "r < n_rows ?B" using rA by simp
+    have boundB: "\<forall>b\<in>set ks. b < n_rows ?B" using bound by simp
+    show ?thesis
+      using Cons.hyps [OF rsB rectB rB boundB dks] False by simp
+  qed
+qed
+
+lemma rows_in_span_eliminate_col:
+  assumes rs: "rows_in_span p q A" and rect: "is_rect A" and r: "r < n_rows A"
+  shows "rows_in_span p q (eliminate_col A r c)"
+proof -
+  have bound: "\<forall>a\<in>set [0..<n_rows A]. a < n_rows A" by simp
+  have d: "distinct [0..<n_rows A]" by simp
+  note h = rows_in_span_fold_elim [OF rs rect r bound d]
+  show ?thesis using h by (simp add: eliminate_col_def)
+qed
+
+lemma is_rect_pivot_step:
+  assumes rect: "is_rect A" and r: "r < n_rows A" and i: "i < n_rows A"
+  shows "is_rect (eliminate_col (scale_row (swap_rows A r i) r
+             (invmod (entry (swap_rows A r i) r c))) r c)"
+proof -
+  have r1: "is_rect (swap_rows A r i)" using is_rect_swap_rows [OF rect r i] .
+  have rn1: "r < n_rows (swap_rows A r i)" using r by simp
+  have r2: "is_rect (scale_row (swap_rows A r i) r (invmod (entry (swap_rows A r i) r c)))"
+    using is_rect_scale_row [OF r1 rn1] .
+  have rn2: "r < n_rows (scale_row (swap_rows A r i) r (invmod (entry (swap_rows A r i) r c)))"
+    using r by simp
+  show ?thesis using is_rect_eliminate_col [OF r2 rn2] .
+qed
+
+lemma rows_in_span_pivot_step:
+  assumes rs: "rows_in_span p q A" and rect: "is_rect A" and r: "r < n_rows A"
+    and i: "i < n_rows A"
+  shows "rows_in_span p q (eliminate_col (scale_row (swap_rows A r i) r
+             (invmod (entry (swap_rows A r i) r c))) r c)"
+proof -
+  have rs1: "rows_in_span p q (swap_rows A r i)" using rows_in_span_swap [OF rs r i] .
+  have rn1: "r < n_rows (swap_rows A r i)" using r by simp
+  have rs2: "rows_in_span p q (scale_row (swap_rows A r i) r (invmod (entry (swap_rows A r i) r c)))"
+    using rows_in_span_scale_row [OF rs1 rn1] .
+  have rect1: "is_rect (swap_rows A r i)" using is_rect_swap_rows [OF rect r i] .
+  have rect2: "is_rect (scale_row (swap_rows A r i) r (invmod (entry (swap_rows A r i) r c)))"
+    using is_rect_scale_row [OF rect1 rn1] .
+  have rn2: "r < n_rows (scale_row (swap_rows A r i) r (invmod (entry (swap_rows A r i) r c)))"
+    using r by simp
+  show ?thesis using rows_in_span_eliminate_col [OF rs2 rect2 rn2] .
+qed
+
+lemma rows_in_span_rref_fuel:
+  "is_rect A \<Longrightarrow> rows_in_span p q A \<Longrightarrow> rows_in_span p q (rref_fuel f r c A)"
+proof (induct f arbitrary: r c A)
+  case 0
+  then show ?case by simp
+next
+  case (Suc f)
+  have rsA: "rows_in_span p q A" using Suc.prems(2) .
+  show ?case
+  proof (cases "r < n_rows A")
+    case False
+    then show ?thesis using rsA by (simp add: rref_fuel.simps)
+  next
+    case True
+    hence rn: "r < n_rows A" by simp
+    show ?thesis
+    proof (cases "c < n_cols A")
+      case False
+      then show ?thesis using rn rsA by (simp add: rref_fuel.simps)
+    next
+      case True
+      hence cn: "c < n_cols A" by simp
+      show ?thesis
+      proof (cases "find_pivot_fuel (n_rows A) A r c")
+        case None
+        have eq: "rref_fuel (Suc f) r c A = rref_fuel f r (c + 1) A"
+          using rn cn None by (simp add: rref_fuel.simps)
+        have ih: "rows_in_span p q (rref_fuel f r (c + 1) A)"
+          using Suc.prems by (rule Suc.hyps)
+        show ?thesis using eq ih by simp
+      next
+        case (Some i)
+        have ilt: "i < n_rows A" using Some by (rule pivot_some_lt)
+        have eq: "rref_fuel (Suc f) r c A
+               = rref_fuel f (r + 1) (c + 1) (eliminate_col (scale_row (swap_rows A r i) r
+                   (invmod (entry (swap_rows A r i) r c))) r c)"
+          using rn cn Some by (simp add: Let_def)
+        have ih: "rows_in_span p q (rref_fuel f (r + 1) (c + 1) (eliminate_col (scale_row (swap_rows A r i) r
+                   (invmod (entry (swap_rows A r i) r c))) r c))"
+        proof (rule Suc.hyps)
+          show "is_rect (eliminate_col (scale_row (swap_rows A r i) r
+                   (invmod (entry (swap_rows A r i) r c))) r c)"
+            using Suc.prems(1) rn ilt by (rule is_rect_pivot_step)
+          show "rows_in_span p q (eliminate_col (scale_row (swap_rows A r i) r
+                   (invmod (entry (swap_rows A r i) r c))) r c)"
+            using Suc.prems(2) Suc.prems(1) rn ilt by (rule rows_in_span_pivot_step)
+        qed
+        show ?thesis using eq ih by simp
+      qed
+    qed
+  qed
+qed
+
 end

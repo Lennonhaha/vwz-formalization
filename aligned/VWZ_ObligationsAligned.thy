@@ -755,29 +755,37 @@ text \<open>Both sides have bodies now: @{text mat_rank} (fuel-counted Gauss-Jor
     parallel" amounts to for a sum of two outer products;
   \<^item> the index is in range.
 
-  TODO(proof): the gap is two missing rank lemmas, and naming them is the
-  point -- neither is a defect in the statement below.
+  TODO(proof): one rank lemma is still missing, and naming it is the point --
+  it is not a defect in the statement below.
   \<^item> @{text "rank_outer_sum_le_two"}: for vectors @{text u}, @{text v},
     @{text "u'"} and @{text "v'"} of matching lengths, the rank of a sum of the
     two outer products @{text "outer u v + outer u' v'"} is at most 2.  This is
     what turns the KeyGen shape into the upper bound: every row of the sum is a
     linear combination of @{text v} and @{text "v'"}.
-  \<^item> @{text "rank_ge_two_of_nonzero_minor"}: a non-zero @{text "2 x 2"}
-    minor forces rank at least 2.  Contrapositive form: if the rank is at most 1
-    then every @{text "2 x 2"} minor vanishes.  With @{text mat_rank} defined as
-    the number of non-zero rows of the reduced form, that is a rank-nullity
-    argument, not a rewrite.
-  The contrapositive is now available for the reduced form itself:
-  @{text rank_le_one_imp_minors_vanish} in @{file VWZ_Rank.thy} proves that a
-  reduced form with at most one non-zero row has every @{text "2 x 2"} minor
-  congruent to zero, and @{text is_rect_rref} supplies the rectangularity that
-  this fact previously had to assume as a hypothesis.  What is still missing is
-  the transport back to @{text A}: invariance of minors under the three row
-  operations, and the statement for arbitrary index pairs rather than the reduced
-  form.  So this stays @{text sorry}.  The tag is TODO(defect / restatement) and
-  not TODO(proof): the sentence was false as written (see @{text T2_B7_refuted}),
-  and the version below is the repaired one, whose remaining gap is the minor
-  invariance layer plus the rank bound @{text rank_outer_sum_le_two}.\<close>
+  \<^item> @{text "rank_ge_two_of_nonzero_minor"} is no longer a gap: it is proved
+    in @{file VWZ_Rank.thy}.  @{text rank_le_one_imp_minors_vanish} gives
+    vanishing minors of the reduced form from @{text "mat_rank A \<le> 1"}, and
+    @{text minors_zero_rref_undo} carries that back to @{text A}, so the
+    contrapositive holds for the original matrix and not only for its reduced
+    form.
+
+  What is left is the upper bound @{text rank_outer_sum_le_two} alone, so this
+  obligation stays @{text sorry} and its tag stays TODO(proof): the sentence was
+  false as written (see @{text T2_B7_refuted}), and the repaired statement below
+  is the one at issue.  The separate TODO(defect / restatement) item is the
+  non-degeneracy premise, restated modulo @{text 3329} in the note above the
+  lemma: the literal integer form is not derivable from the rank theory, because
+  the reflection lemmas work at the level of @{text "3329 dvd minor2"}.\<close>
+
+text \<open>The non-degeneracy premise is stated modulo @{text 3329}, not as an
+  integer inequality.  The literal form @{text "minor2 A a b c d \<noteq> 0"} is
+  not derivable from the rank theory in this development: the reflection lemmas
+  work at the level of @{text "3329 dvd minor2"}, so a minor equal to @{text 3329}
+  -- non-zero as an integer, zero modulo @{text q} -- is consistent with
+  @{text "mat_rank A \<le> 1"}.  This restates the premise in the arithmetic the
+  development actually uses rather than weakening the claim:
+  @{text "minor2 mod 3329 \<noteq> 0"} is the reading of "the two drawn vectors are
+  not parallel" over @{text Z_q}.\<close>
 
 lemma T2_B7:
   "i < length (pk_psi pk) \<Longrightarrow>
@@ -785,8 +793,9 @@ lemma T2_B7:
    (\<exists>a b c d. a < n_rows (psi_slice pk i) \<and> b < n_rows (psi_slice pk i) \<and>
               c < n_cols (psi_slice pk i) \<and> d < n_cols (psi_slice pk i) \<and>
               a \<noteq> b \<and> c \<noteq> d \<and>
-              entry (psi_slice pk i) a c * entry (psi_slice pk i) b d -
-              entry (psi_slice pk i) a d * entry (psi_slice pk i) b c \<noteq> 0) \<Longrightarrow>
+              (entry (psi_slice pk i) a c * entry (psi_slice pk i) b d -
+               entry (psi_slice pk i) a d * entry (psi_slice pk i) b c)
+              mod 3329 \<noteq> 0) \<Longrightarrow>
    mat_rank (psi_slice pk i) = 2"
   sorry
 

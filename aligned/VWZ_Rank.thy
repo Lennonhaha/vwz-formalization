@@ -752,12 +752,14 @@ text \<open>Nothing in this file bounds the rank of a sum of two outer products,
   @{text row_zero_or_zero_of_rank_le_one} and the shape lemma @{text is_rect_rref};
   it assumes only @{text "is_rect A"} and gives vanishing minors of the reduced
   form.
-  \<^enum> @{text rank_ge_two_of_nonzero_minor} is now an assembly step:
-  @{text rank_le_one_imp_minors_vanish} gives vanishing minors of the reduced
-  form from @{text "mat_rank A \<le> 1"}, and @{text minors_zero_rref_undo} carries
-  that back to @{text A}.  @{text rank_outer_sum_le_two} still needs the
-  inner-dimension bound @{text "mat_rank (mat_mult A B) \<le> n_cols A"}, and that
-  is not what @{text mat_rank_le_n_cols} provides: instantiating the latter at
+  \<^enum> @{text rank_ge_two_of_nonzero_minor}: proved below, in the section on
+  rank from a non-zero minor.  @{text rank_le_one_imp_minors_vanish} gives
+  vanishing minors of the reduced form from @{text "mat_rank A \<le> 1"}, and
+  @{text minors_zero_rref_undo} carries that back to @{text A}; the statement is
+  in the modulo-@{text q} form, matching @{text minors_zero}.
+  \<^enum> @{text rank_outer_sum_le_two} still needs the inner-dimension bound
+  @{text "mat_rank (mat_mult A B) \<le> n_cols A"}, and that is not what
+  @{text mat_rank_le_n_cols} provides: instantiating the latter at
   @{text "mat_mult A B"} yields @{text "mat_rank (mat_mult A B) \<le> n_cols B"},
   which constrains the outer dimension instead.
 
@@ -1709,5 +1711,63 @@ proof -
     show "is_rect A" using rect .
     show "minors_zero (rref_fuel (n_rows A * n_cols A + n_rows A + 1) 0 0 A)" using h .
   qed
+qed
+section \<open>Rank from a non-zero minor\<close>
+
+text \<open>A non-zero @{text "2 x 2"} minor certifies rank at least two.  The contrapositive
+  is what the reduction gives directly: rank at most one makes every minor vanish in
+  the reduced form, and the reflection lemmas carry that back to the original matrix.
+  The conclusion is stated modulo @{text 3329} because that is the level at which the
+  reflection works -- @{text "3329 dvd minor2"} rather than integer equality.\<close>
+
+lemma rank_ge_two_of_nonzero_minor:
+  assumes rect: "is_rect A"
+    and a: "a < n_rows A" and b: "b < n_rows A" and ab: "a \<noteq> b"
+    and c: "c < n_cols A" and d: "d < n_cols A"
+    and nz: "minor2 A a b c d mod 3329 \<noteq> 0"
+  shows "2 \<le> mat_rank A"
+proof (rule ccontr)
+  assume not2: "\<not> 2 \<le> mat_rank A"
+  hence rk: "mat_rank A \<le> 1" by simp
+  have ncR: "n_cols (rref A) = n_cols A"
+  proof (cases "A = []")
+    case True
+    hence "n_rows A = 0" by (simp add: n_rows_def)
+    with a show ?thesis by simp
+  next
+    case False
+    have rl: "rect_len (n_cols A) A" using rect by (rule rect_len_is_rect)
+    have rlR: "rect_len (n_cols A) (rref A)" using rl by (rule rect_len_rref)
+    have neR: "rref A \<noteq> []"
+    proof
+      assume "rref A = []"
+      hence "n_rows (rref A) = 0" by (simp add: n_rows_def)
+      hence "n_rows A = 0" by simp
+      with a show False by simp
+    qed
+    show ?thesis using rlR neR by (rule rect_len_n_cols)
+  qed
+  have mzR: "minors_zero (rref A)"
+  proof (rule minors_zeroI)
+    fix x y u v
+    assume hx: "x < n_rows (rref A)" and hy: "y < n_rows (rref A)"
+      and hu: "u < n_cols (rref A)" and hv: "v < n_cols (rref A)"
+    have z: "minor2 (rref A) x y u v mod 3329 = 0"
+    proof (cases "x = y")
+      case True
+      then show ?thesis by (simp add: minor2_def)
+    next
+      case fls: False
+      have mzv: "(entry (rref A) x u * entry (rref A) y v
+                - entry (rref A) x v * entry (rref A) y u) mod 3329 = 0"
+        using rk rect hx hy fls hu hv by (rule rank_le_one_imp_minors_vanish)
+      then show ?thesis by (simp add: minor2_def)
+    qed
+    show "3329 dvd minor2 (rref A) x y u v" using z by (simp add: dvd_eq_mod_eq_0)
+  qed
+  have mzA: "minors_zero A" using rect mzR by (rule minors_zero_rref_undo)
+  have dvd: "3329 dvd minor2 A a b c d" using mzA a b c d by (rule minors_zeroE)
+  have z: "minor2 A a b c d mod 3329 = 0" using dvd by (simp add: dvd_eq_mod_eq_0)
+  show False using nz z by simp
 qed
 end

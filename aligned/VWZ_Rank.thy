@@ -1391,5 +1391,211 @@ proof -
   with le show ?thesis by simp
 qed
 
-end
+(* seg: rank-col-bound-shape-20261023 *)
 
+text \<open>The column pointer never waits.  A step either fails to find a pivot and
+  moves on to the next column, or finds one and advances both pointers, so every
+  step that stays inside the guard increases @{text c} by one.  A run that burns
+  its whole fuel without leaving the guard has therefore advanced the column
+  pointer by exactly the fuel, and no run can push it past @{text "n_cols A"}.
+  The invariant also records rectangularity and the preserved row and column
+  counts, which is what the final rank bound consumes.\<close>
+
+lemma rref_fuel_shape:
+  "zero_below r c A \<Longrightarrow> r \<le> c \<Longrightarrow> c \<le> n_cols A \<Longrightarrow> is_rect A \<Longrightarrow>
+     \<exists>r0 c0. r \<le> r0 \<and> r0 \<le> c0 \<and> c \<le> c0 \<and> c0 \<le> n_cols A
+       \<and> zero_below r0 c0 (rref_fuel f r c A)
+       \<and> is_rect (rref_fuel f r c A)
+       \<and> n_cols (rref_fuel f r c A) = n_cols A
+       \<and> n_rows (rref_fuel f r c A) = n_rows A
+       \<and> (n_rows A \<le> r0 \<or> n_cols A \<le> c0 \<or> c + f \<le> c0)"
+proof (induct f arbitrary: r c A)
+  case 0
+  then show ?case by (rule_tac x=r in exI, rule_tac x=c in exI, intro conjI, simp_all)
+next
+  case (Suc f)
+  have zb: "zero_below r c A" using Suc.prems by simp
+  have rc: "r \<le> c" using Suc.prems by simp
+  have cn: "c \<le> n_cols A" using Suc.prems by simp
+  have rect: "is_rect A" using Suc.prems by simp
+  show ?case
+  proof (cases "r < n_rows A \<and> c < n_cols A")
+    case False
+    have hd: "n_rows A \<le> r \<or> n_cols A \<le> c" using False by presburger
+    then show ?thesis
+      using zb rc cn rect hd
+      by (rule_tac x=r in exI, rule_tac x=c in exI, intro conjI, simp_all add: rref_fuel.simps False)
+  next
+    case True
+    have rn: "r < n_rows A" and cnlt: "c < n_cols A" using True by simp_all
+    show ?thesis
+    proof (cases "find_pivot_fuel (n_rows A) A r c")
+      case None
+      have eq: "rref_fuel (Suc f) r c A = rref_fuel f r (c + 1) A"
+        by (simp add: rref_fuel.simps None rn cnlt)
+      have zb': "zero_below r (c + 1) A"
+        using zero_below_step_skip[OF zb rect rn cnlt None] .
+      have rc': "r \<le> c + 1" using rc by simp
+      have cn': "c + 1 \<le> n_cols A" using cnlt by simp
+      have ih: "\<exists>r' c'. r \<le> r' \<and> r' \<le> c' \<and> c + 1 \<le> c' \<and> c' \<le> n_cols A
+                   \<and> zero_below r' c' (rref_fuel f r (c + 1) A)
+                   \<and> is_rect (rref_fuel f r (c + 1) A)
+                   \<and> n_cols (rref_fuel f r (c + 1) A) = n_cols A
+                   \<and> n_rows (rref_fuel f r (c + 1) A) = n_rows A
+                   \<and> (n_rows A \<le> r' \<or> n_cols A \<le> c' \<or> (c + 1) + f \<le> c')"
+        by (rule Suc.hyps[of r "c + 1" A, OF zb' rc' cn' rect])
+      then obtain r' c' where
+        rle: "r \<le> r'" and rcle: "r' \<le> c'" and cle: "c + 1 \<le> c'" and cnle: "c' \<le> n_cols A"
+        and zbR: "zero_below r' c' (rref_fuel f r (c + 1) A)"
+        and rectR: "is_rect (rref_fuel f r (c + 1) A)"
+        and ncR: "n_cols (rref_fuel f r (c + 1) A) = n_cols A"
+        and nrR: "n_rows (rref_fuel f r (c + 1) A) = n_rows A"
+        and cnd: "n_rows A \<le> r' \<or> n_cols A \<le> c' \<or> (c + 1) + f \<le> c'"
+        using ih by blast
+      have h: "r \<le> r' \<and> r' \<le> c' \<and> c \<le> c' \<and> c' \<le> n_cols A
+               \<and> zero_below r' c' (rref_fuel (Suc f) r c A)
+               \<and> is_rect (rref_fuel (Suc f) r c A)
+               \<and> n_cols (rref_fuel (Suc f) r c A) = n_cols A
+               \<and> n_rows (rref_fuel (Suc f) r c A) = n_rows A
+               \<and> (n_rows A \<le> r' \<or> n_cols A \<le> c' \<or> c + Suc f \<le> c')"
+      proof (intro conjI)
+        show "r \<le> r'" by (rule rle)
+      next
+        show "r' \<le> c'" by (rule rcle)
+      next
+        show "c \<le> c'" using cle by presburger
+      next
+        show "c' \<le> n_cols A" by (rule cnle)
+      next
+        show "zero_below r' c' (rref_fuel (Suc f) r c A)" using zbR eq by simp
+      next
+        show "is_rect (rref_fuel (Suc f) r c A)" using rectR eq by simp
+      next
+        show "n_cols (rref_fuel (Suc f) r c A) = n_cols A" using ncR eq by simp
+      next
+        show "n_rows (rref_fuel (Suc f) r c A) = n_rows A" using nrR eq by simp
+      next
+        show "n_rows A \<le> r' \<or> n_cols A \<le> c' \<or> c + Suc f \<le> c'"
+          using cnd by (elim disjE, simp_all)
+      qed
+      from h show ?thesis
+        by (rule_tac x=r' in exI, rule_tac x=c' in exI, assumption)
+    next
+      case (Some i)
+      have ib: "i < n_rows A" using Some by (rule pivot_some_lt)
+      have ri: "r \<le> i" using Some by (rule pivot_some_ge)
+      have pnz: "fq (entry A i c) \<noteq> 0" using Some by (rule pivot_some_nz)
+      define B where "B = eliminate_col (scale_row (swap_rows A r i) r (invmod (entry (swap_rows A r i) r c))) r c"
+      have eq: "rref_fuel (Suc f) r c A = rref_fuel f (r + 1) (c + 1) B"
+        by (simp add: B_def rref_fuel.simps Some Let_def rn cnlt)
+      have zbB: "zero_below (r + 1) (c + 1) B"
+        using zero_below_pivot[OF zb rect rn cnlt ib ri pnz] by (simp add: B_def)
+      have r0: "is_rect (swap_rows A r i)" using is_rect_swap_rows[OF rect rn ib] .
+      have rn0: "r < n_rows (swap_rows A r i)" using rn by simp
+      have r1: "is_rect (scale_row (swap_rows A r i) r (invmod (entry (swap_rows A r i) r c)))"
+        using is_rect_scale_row[OF r0 rn0] .
+      have rn1: "r < n_rows (scale_row (swap_rows A r i) r (invmod (entry (swap_rows A r i) r c)))"
+        using rn by simp
+      have rectB: "is_rect B" using is_rect_eliminate_col[OF r1 rn1] by (simp add: B_def)
+      have ncB: "n_cols B = n_cols A" using n_cols_pivot_step[OF rn ib rect] by (simp add: B_def)
+      have nrB: "n_rows B = n_rows A" by (simp add: B_def)
+      have rcB: "r + 1 \<le> c + 1" using rc by simp
+      have cnB: "c + 1 \<le> n_cols B" using cnlt ncB by simp
+      have ih: "\<exists>r' c'. r + 1 \<le> r' \<and> r' \<le> c' \<and> c + 1 \<le> c' \<and> c' \<le> n_cols B
+                   \<and> zero_below r' c' (rref_fuel f (r + 1) (c + 1) B)
+                   \<and> is_rect (rref_fuel f (r + 1) (c + 1) B)
+                   \<and> n_cols (rref_fuel f (r + 1) (c + 1) B) = n_cols B
+                   \<and> n_rows (rref_fuel f (r + 1) (c + 1) B) = n_rows B
+                   \<and> (n_rows B \<le> r' \<or> n_cols B \<le> c' \<or> (c + 1) + f \<le> c')"
+        by (rule Suc.hyps[of "r + 1" "c + 1" B, OF zbB rcB cnB rectB])
+      then obtain r' c' where
+        rle: "r + 1 \<le> r'" and rcle: "r' \<le> c'" and cle: "c + 1 \<le> c'" and cnle: "c' \<le> n_cols B"
+        and zbR: "zero_below r' c' (rref_fuel f (r + 1) (c + 1) B)"
+        and rectR: "is_rect (rref_fuel f (r + 1) (c + 1) B)"
+        and ncR: "n_cols (rref_fuel f (r + 1) (c + 1) B) = n_cols B"
+        and nrR: "n_rows (rref_fuel f (r + 1) (c + 1) B) = n_rows B"
+        and cnd: "n_rows B \<le> r' \<or> n_cols B \<le> c' \<or> (c + 1) + f \<le> c'"
+        using ih by blast
+      have h: "r \<le> r' \<and> r' \<le> c' \<and> c \<le> c' \<and> c' \<le> n_cols A
+               \<and> zero_below r' c' (rref_fuel (Suc f) r c A)
+               \<and> is_rect (rref_fuel (Suc f) r c A)
+               \<and> n_cols (rref_fuel (Suc f) r c A) = n_cols A
+               \<and> n_rows (rref_fuel (Suc f) r c A) = n_rows A
+               \<and> (n_rows A \<le> r' \<or> n_cols A \<le> c' \<or> c + Suc f \<le> c')"
+      proof (intro conjI)
+        show "r \<le> r'" using rle by presburger
+      next
+        show "r' \<le> c'" by (rule rcle)
+      next
+        show "c \<le> c'" using cle by presburger
+      next
+        show "c' \<le> n_cols A" using cnle ncB by simp
+      next
+        show "zero_below r' c' (rref_fuel (Suc f) r c A)" using zbR eq by simp
+      next
+        show "is_rect (rref_fuel (Suc f) r c A)" using rectR eq by simp
+      next
+        show "n_cols (rref_fuel (Suc f) r c A) = n_cols A" using ncR eq ncB by simp
+      next
+        show "n_rows (rref_fuel (Suc f) r c A) = n_rows A" using nrR eq nrB by simp
+      next
+        show "n_rows A \<le> r' \<or> n_cols A \<le> c' \<or> c + Suc f \<le> c'"
+          using cnd nrB ncB by (elim disjE, simp_all)
+      qed
+      from h show ?thesis
+        by (rule_tac x=r' in exI, rule_tac x=c' in exI, assumption)
+    qed
+  qed
+qed
+
+lemma mat_rank_le_n_cols:
+  assumes rect: "is_rect A"
+  shows "mat_rank A \<le> n_cols A"
+proof -
+  have sh: "\<exists>r' c'. 0 \<le> r' \<and> r' \<le> c' \<and> c' \<le> n_cols A
+              \<and> zero_below r' c' (rref A)
+              \<and> is_rect (rref A)
+              \<and> n_cols (rref A) = n_cols A
+              \<and> n_rows (rref A) = n_rows A
+              \<and> (n_rows A \<le> r' \<or> n_cols A \<le> c' \<or> (n_rows A * n_cols A + n_rows A + 1) \<le> c')"
+    using rref_fuel_shape[of 0 0 A "n_rows A * n_cols A + n_rows A + 1"] rect
+    by (simp add: rref_def)
+  obtain r' c' where
+    rcle: "r' \<le> c'" and cnle: "c' \<le> n_cols A"
+    and zbR: "zero_below r' c' (rref A)"
+    and rectR: "is_rect (rref A)"
+    and ncR: "n_cols (rref A) = n_cols A"
+    and nrR: "n_rows (rref A) = n_rows A"
+    and cnd: "n_rows A \<le> r' \<or> n_cols A \<le> c' \<or> (n_rows A * n_cols A + n_rows A + 1) \<le> c'"
+    using sh by blast
+  have nc_le: "n_cols A \<le> n_rows A * n_cols A"
+  proof (cases "n_cols A = 0")
+    case True
+    then show ?thesis by simp
+  next
+    case False
+    have nz: "0 < n_cols A" using False by simp
+    have nr1: "1 \<le> n_rows A"
+    proof (rule ccontr)
+      assume "\<not> 1 \<le> n_rows A"
+      hence "n_rows A = 0" by simp
+      hence "A = []" by (simp add: n_rows_def)
+      hence "n_cols A = 0" by (simp add: n_cols_def)
+      with nz show False by simp
+    qed
+    have "1 * n_cols A \<le> n_rows A * n_cols A" using nr1 by (rule mult_le_mono1)
+    thus ?thesis by simp
+  qed
+  have nN: "n_cols A < n_rows A * n_cols A + n_rows A + 1" using nc_le by linarith
+  have disj: "n_rows (rref A) \<le> r' \<or> n_cols (rref A) \<le> c'"
+  proof -
+    have nbig: "\<not> (n_rows A * n_cols A + n_rows A + 1) \<le> c'" using cnle nN by linarith
+    with cnd have "n_rows A \<le> r' \<or> n_cols A \<le> c'" by blast
+    with nrR ncR show ?thesis by simp
+  qed
+  have cnB: "c' \<le> n_cols (rref A)" using cnle ncR by simp
+  have le: "length (filter (\<lambda>r. \<not> all_zero_row r) (rref A)) \<le> n_cols A"
+    using mat_rank_le_of_zero_below[OF zbR rcle cnB ncR rectR disj] .
+  show ?thesis using le by (simp add: mat_rank_def)
+qed
+end

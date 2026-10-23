@@ -285,3 +285,117 @@ by (simp only: det3_add_row0 det3_add_row1 det3_add_row2
 
 det3 路**成立**，不再需要「停止路线 A」。下一步按原计划：②（`rref` 行仍在 span 内）+ ④ 共享的
 「列 < c 不变」引理，两者合起来做一次测量闸门。
+
+## 八、②④ 共享引理：\`probe_entry_eliminate_col_prefix\` 通过（35 行）
+
+判决：**通过（35 ≤ 45）**。构建 \`isabelle build -b -j 2 -d _tmp/aligned-probe VWZ_A3_Aligned\`
+**rc=0，会话 37 s / 墙钟 47 s**（整会话 16 理论全重建，用的是 \`aligned/\` 的一次性副本，
+\`aligned/\` 本身零改动）。
+
+### 陈述
+
+\`\`\`
+assumes is_rect A, r < n_rows A, k < n_rows A, col < n_cols A, c < n_cols A,
+        fq (entry A r col) = 0
+shows   fq (entry (eliminate_col A r c) k col) = fq (entry A k col)
+\`\`\`
+
+即：被消列左侧的项在 \`eliminate_col\` 之后**模 q 不变**（不是行不变）。\`k\` 包含 \`k < r\`
+的行 —— 这正是 ④ 的难点：\`eliminate_col\` 会 \`add_row_mult\` 到**每一行**（除 pivot 行），
+所以「前缀阶梯不受扰动」只能靠「列 < c 的项不变」，不能靠「行未动」。
+
+### 为什么只有 35 行
+
+因为 \`entry_eliminate_col\`（既有，\`VWZ_Rank.thy:1000\`）已经把 fold 归纳做完了：
+
+\`\`\`
+entry (eliminate_col A r c) k col
+  = (if k = r then entry A k col
+       else fq (entry A k col - entry A k c * entry A r col))
+\`\`\`
+
+剩下的是**模算术**：\`fq (entry A r col) = 0\` ⇒ \`y * entry A r col ≡ 0\` ⇒ \`x - y·z ≡ x\`。
+走 \`cong_q\` 三件套（\`cong_q_mult\`、\`fq_mult\`、\`cong_q_add\`），不用 \`mod\` 直接算。
+
+### 对 ②④ 的下修
+
+| 项 | 上次估计 | 本次修正 |
+|---|---|---|
+| ④（staircase 不变量，改签名） | 120–180 | **90–140** |
+| ②（rref 行仍在 span 内） | 80–130 | **50–100** |
+| 路线 A 总量 | 740–980 | **680–900** |
+
+共享引理本身 35 行，比估的 35–45 落在下限。
+
+### 两个新坑（已入 TOOLS.md）
+
+1. **JS 模板字符串会把 Isabelle 的 cartouche 打断**：反引号字符串里 \`\<open>\` 中的 \`\\<\` 被 JS
+   当成未知转义、反斜杠被吞掉，Isabelle 侧报 \`document source expected, but keyword < was found\`。
+   生成 Isabelle 文本必须用 \`String.raw\`（或双反斜杠）。
+2. **\`using <引理> [OF …] by simp\` 会留下 schematic 目标**：\`cong_q_mult [OF cong_q_refl zp]\`
+   的结论形状与目标不精确对齐时，\`simp\` 只解掉一部分，残留
+   \`(?a. cong_q (a * …) 0) ? cong_q (- …) 0\`。改成\*\*先把结论以精确形状 \`have\` 出来（用 \`.\` 收尾）\*\*再传递，
+   不要指望 \`simp\` 把元变量填掉。
+
+### 仍未测
+
+- ④ 的真实成本不在本引理，而在「\`lead\` 在 pivot 步后的值」与「pivot 步不破坏前缀」的组合（估 60–100 行）；
+- ② 的真实成本在「\`eliminate_col\` 的 fold 保持 \`rows_in_span\`」（估 25–35 行，与本节同构）。
+
+## 九、② 与 ④ 的闸门：fold 34 行通过，pivot 前缀保持 67 行
+
+两次闸门共用同一份一次性副本（`_tmp/aligned-probe`，`aligned/` 零改动），
+构建 `isabelle build -b -j 2 -d _tmp/aligned-probe VWZ_A3_Aligned` **rc=0，会话 40 s / 墙钟 52 s**，
+三个新引理全部无 sorry。
+
+### ②：`eliminate_col` 的 fold 保持 `rows_in_span` —— 34 行（判据 ≤ 35，通过）
+
+```
+probe_rows_in_span_fold_elim        34 行   对 ks 归纳，逐步用 rows_in_span_add_row_mult
+probe_rows_in_span_eliminate_col     9 行   取 ks = [0..<n_rows A]，套 eliminate_col_def
+```
+
+关键在于每一步只需搬运四个事实（`rows_in_span` / `is_rect` / `r < n_rows` / 索引上界），
+而 `n_rows_add_row_mult`、`is_rect_add_row_mult` 都是现成的 `[simp]`／伏笔引理 ——
+**与第八节 35 行的前缀引理同构**，这也是估计 25–35 行可信的原因。
+
+② 剩余成本：燃料归纳（`rref_fuel` 三步都保持 `rows_in_span`）估 **30–45 行**，
+加上把引理接到 `rref` 上的 10–20 行，② 合计 **85–110 行**。
+
+### ④：pivot 步不扰动上方行的前缀 —— 67 行
+
+```
+probe_pivot_step_preserves_prefix   67 行
+```
+
+陈述：`is_rect A`、`r < n_rows A`、`i < n_rows A`、`r ≤ i`（pivot 搜索不会上移行）、
+`k < r`、`col < c`、`zero_below r c A` ⇒
+`fq (entry (eliminate_col (scale_row (swap_rows A r i) r (invmod (entry (swap_rows A r i) r c))) r c) k col) = fq (entry A k col)`。
+
+三步各用一个现成引理（`entry_swap_rows` / `entry_scale_row_other` / 第八节的 35 行前缀引理），
+67 行里**约 30 行是搬运**：`is_rect`、`n_rows`、`n_cols` 每经过 swap、scale 都要重新 `have` 一条，
+因为 `OF` 不做重写（`r < n_rows (swap_rows A r i)` 不能当 `r < n_rows (scale_row …)` 用）。
+这一项落在估计区间（60–100）的上半段，**仍是 ④ 里最贵的一块**。
+
+④ 剩余成本：`lead` 在 pivot 步后的取值（缩放后 pivot 行在第 c 列取 1，`lead` 的前缀零来自
+`zero_below`）估 **25–35 行**，加上 `rref_fuel_shape` 改签名带来的调用点开销 20–30 行，
+④ 合计 **110–140 行**。
+
+### 路线 A 总量：720–950（第三次修正）
+
+| 项 | ① | ② | ③ | ④ | ⑤ | ⑥ | 合计 |
+|---|---|---|---|---|---|---|---|
+| 实测/估值 | 213 | 85–110 | 120–200 | 110–140 | 150–220 | 40–70 | **720–950** |
+
+与上一版 680–900 相比略微上修，原因是 ④ 的前缀保持实测 67 行（估计上半段），
+而 ② 落在下限。三次修正的轨迹：330–560（初估）→ 740–1020（只读试算）→ 680–900（共享引理）→ **720–950**。
+
+### 试错记录（供下一轮参考，不计入成本）
+
+- `n_cols_scale_row` 是**无条件**引理，`[OF …]` 会直接报 `no unifiers`；
+  `n_cols_swap_rows` 才带前提。两者容易混。
+- `zero_below_entry` 的第四个前提是 `col < c`，不是 `col < n_cols A`。
+- `entry_scale_row_other` 的前提顺序是 `is_rect` 在前、`i < n_rows` 在后（与 `entry_swap_rows` 相反）。
+- 又出现一次 schematic 残留：`show ?thesis using e zi by simp`（`e` 是等式、`zi` 是 `fq x = 0`）
+  留下带 `?entry` 的目标。正解与第八节同：先 `have f: fq (k * x) = 0`（三步 `fq_mult`），
+  再 `with e show ?thesis by simp`。

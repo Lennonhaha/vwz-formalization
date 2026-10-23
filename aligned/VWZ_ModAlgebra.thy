@@ -3608,4 +3608,365 @@ lemma minors_zero_eliminate_col:
   shows "minors_zero (eliminate_col A r c)"
   using assms by (simp add: eliminate_col_def minors_zero_eliminate_fold)
 
+section \<open>Reflecting vanishing minors back through a row operation\<close>
+
+text \<open>The lemmas above transport @{const minors_zero} forward through the three
+  elementary row operations.  Transporting a statement about @{const rref} back to
+  the matrix it was computed from needs the opposite direction, and that direction
+  cannot be phrased as an equality of matrices: @{text "scale_row (scale_row A i q) i p"}
+  agrees with @{text A} only up to @{text fq} on the touched row, two
+  @{text add_row_mult} steps behave the same way, and @{text eliminate_col} is
+  idempotent rather than invertible, so replaying it does not undo it.  The
+  reflection lemmas are therefore stated on residues: a minor of the transformed
+  matrix and the corresponding minor of the original differ by a multiple of the
+  modulus.\<close>
+
+text \<open>Two rewrites of @{text fq} that are used below.  They are proved from
+  @{text fq_add} and @{text fq_mult} with controlled rewriting only: putting those
+  two lemmas into the simplifier makes it rewrite @{text "fq (fq a * fq b)"} back to
+  itself after @{text fq_idem}, which diverges.\<close>
+
+lemma fq_add_fq: "fq (fq x + y) = fq (x + y)"
+proof -
+  have l: "fq (fq x + y) = fq (fq (fq x) + fq y)" by (rule fq_add)
+  have r: "fq (x + y) = fq (fq x + fq y)" by (rule fq_add)
+  show ?thesis using l r by (simp only: fq_idem)
+qed
+
+lemma dvd_fq_sub: "3329 dvd (fq x - x)"
+proof -
+  have h: "fq x - x = - (x - fq x)" by simp
+  have d: "3329 dvd (x - fq x)" using dvd_fq_diff [of x] .
+  have e: "3329 dvd - (x - fq x)" using d by (simp only: dvd_minus_iff)
+  show ?thesis using h e by simp
+qed
+
+lemma fq_scale_cancel:
+  assumes pq: "fq (p * q) = 1"
+  shows "fq (p * fq (q * x)) = fq x"
+proof -
+  have a1: "fq (p * fq (q * x)) = fq (fq p * fq (fq (q * x)))" by (rule fq_mult)
+  have a2: "fq (p * (q * x)) = fq (fq p * fq (q * x))" by (rule fq_mult)
+  have a: "fq (p * fq (q * x)) = fq (p * (q * x))" using a1 a2 by (simp only: fq_idem)
+  have b: "fq ((p * q) * x) = fq (fq (p * q) * fq x)" by (rule fq_mult)
+  have c: "fq (fq (p * q) * fq x) = fq x" using pq by simp
+  have d: "fq (p * (q * x)) = fq ((p * q) * x)" by (simp only: mult.assoc)
+  show ?thesis using a b c d by simp
+qed
+
+lemma fq_add_cancel_aux: "fq (fq (x + k * y) - k * y) = fq x"
+proof -
+  have h1: "fq (fq (x + k * y) - k * y) = fq ((x + k * y) - k * y)"
+    using fq_add_fq [of "x + k * y" "- (k * y)"] by simp
+  also have "\<dots> = fq x" by simp
+  finally show ?thesis .
+qed
+
+lemma fq_add_cancel: "fq (fq (x + k * y) + (- k) * y) = fq x"
+proof -
+  have h: "(- k) * y = - (k * y)" by simp
+  show ?thesis using fq_add_cancel_aux [of x k y] h by simp
+qed
+
+text \<open>Two matrices whose four entries of a @{text "2 x 2"} block agree modulo the
+  modulus have minors that agree modulo the modulus: the difference of the minors
+  is a telescoping combination of the four entry differences.\<close>
+
+lemma dvd_minor2_cong:
+  assumes ac: "3329 dvd (entry B a c - entry A a c)"
+    and bd: "3329 dvd (entry B b d - entry A b d)"
+    and ad: "3329 dvd (entry B a d - entry A a d)"
+    and bc: "3329 dvd (entry B b c - entry A b c)"
+  shows "3329 dvd (minor2 B a b c d - minor2 A a b c d)"
+proof -
+  have eq: "minor2 B a b c d - minor2 A a b c d
+      = ((entry B a c - entry A a c) * entry B b d
+          + entry A a c * (entry B b d - entry A b d))
+        - ((entry B a d - entry A a d) * entry B b c
+          + entry A a d * (entry B b c - entry A b c))"
+    by (simp add: minor2_def algebra_simps)
+  have h1: "3329 dvd ((entry B a c - entry A a c) * entry B b d
+                       + entry A a c * (entry B b d - entry A b d))"
+    using ac bd by (simp add: dvd_add dvd_mult dvd_mult2)
+  have h2: "3329 dvd ((entry B a d - entry A a d) * entry B b c
+                       + entry A a d * (entry B b c - entry A b c))"
+    using ad bc by (simp add: dvd_add dvd_mult dvd_mult2)
+  show ?thesis using eq h1 h2 by (simp add: dvd_diff)
+qed
+
+text \<open>The entry formulas of the two operations are used below at a fixed row, so the
+  instantiated forms are collected here; applying the general lemmas inside
+  @{text simp} leaves their schematic row premise open.\<close>
+
+lemma entry_scale_row_at_self:
+  assumes i: "i < n_rows A" and rect: "is_rect A" and col: "col < n_cols A"
+  shows "entry (scale_row A i k) i col = fq (k * entry A i col)"
+  using entry_scale_row [OF i rect i col] by simp
+
+lemma entry_scale_row_at_other:
+  assumes i: "i < n_rows A" and rect: "is_rect A"
+    and r: "r < n_rows A" and col: "col < n_cols A" and ri: "r \<noteq> i"
+  shows "entry (scale_row A i k) r col = entry A r col"
+  using entry_scale_row [OF i rect r col] ri by simp
+
+lemma entry_add_row_mult_at_self:
+  assumes i: "i < n_rows A" and j: "j < n_rows A" and rect: "is_rect A"
+    and col: "col < n_cols A"
+  shows "entry (add_row_mult A i j k) i col = fq (entry A i col + k * entry A j col)"
+  using entry_add_row_mult [OF i j rect i col] by simp
+
+lemma entry_add_row_mult_at_other:
+  assumes i: "i < n_rows A" and j: "j < n_rows A" and rect: "is_rect A"
+    and r: "r < n_rows A" and col: "col < n_cols A" and ri: "r \<noteq> i"
+  shows "entry (add_row_mult A i j k) r col = entry A r col"
+  using entry_add_row_mult [OF i j rect r col] ri by simp
+
+text \<open>A swap is its own inverse on rows, so the reflection is exact: the minor of
+  the original is the minor of the swapped matrix read at the permuted pair.\<close>
+
+lemma minors_zero_swap_undo:
+  assumes mz: "minors_zero (swap_rows A i j)"
+    and i: "i < n_rows A" and j: "j < n_rows A" and rect: "is_rect A"
+  shows "minors_zero A"
+proof (rule minors_zeroI)
+  fix a b c d
+  assume a: "a < n_rows A" and b: "b < n_rows A"
+    and c: "c < n_cols A" and d: "d < n_cols A"
+  have nrS: "n_rows (swap_rows A i j) = n_rows A"
+    by (simp add: swap_rows_def n_rows_def)
+  have ncS: "n_cols (swap_rows A i j) = n_cols A"
+    by (rule n_cols_swap_rows [OF i j rect])
+  have al: "swap_idx i j a < n_rows A" using i j a by (rule swap_idx_lt)
+  have bl: "swap_idx i j b < n_rows A" using i j b by (rule swap_idx_lt)
+  have alS: "swap_idx i j a < n_rows (swap_rows A i j)" using al nrS by simp
+  have blS: "swap_idx i j b < n_rows (swap_rows A i j)" using bl nrS by simp
+  have cS: "c < n_cols (swap_rows A i j)" using c ncS by simp
+  have dS: "d < n_cols (swap_rows A i j)" using d ncS by simp
+  have dv: "3329 dvd minor2 (swap_rows A i j) (swap_idx i j a) (swap_idx i j b) c d"
+    using mz alS blS cS dS by (rule minors_zeroE)
+  have eq: "minor2 (swap_rows A i j) (swap_idx i j a) (swap_idx i j b) c d
+              = minor2 A a b c d"
+  proof -
+    have "minor2 (swap_rows A i j) (swap_idx i j a) (swap_idx i j b) c d
+            = minor2 A (swap_idx i j (swap_idx i j a)) (swap_idx i j (swap_idx i j b)) c d"
+      using i j al bl by (rule minor2_swap)
+    thus ?thesis by simp
+  qed
+  show "3329 dvd minor2 A a b c d" using dv eq by simp
+qed
+
+text \<open>Scaling by @{text q} is undone by scaling by @{text p} whenever
+  @{text "p * q"} is a unit, which is what residue-level reflection needs, since the
+  composite leaves the row unchanged only modulo the modulus.\<close>
+
+lemma minors_zero_scale_row_undo:
+  assumes mz: "minors_zero (scale_row A i q)"
+    and i: "i < n_rows A" and rect: "is_rect A" and pq: "fq (p * q) = 1"
+  shows "minors_zero A"
+proof (rule minors_zeroI)
+  fix a b c d
+  assume a: "a < n_rows A" and b: "b < n_rows A"
+    and c: "c < n_cols A" and d: "d < n_cols A"
+  define B where "B = scale_row (scale_row A i q) i p"
+  have rect1: "is_rect (scale_row A i q)" using rect i by (rule is_rect_scale_row)
+  have nrB: "n_rows B = n_rows A" by (simp add: B_def)
+  have ncB: "n_cols B = n_cols A"
+  proof -
+    have h1: "n_cols (scale_row A i q) = n_cols A" by (rule n_cols_scale_row)
+    have h2: "n_cols (scale_row (scale_row A i q) i p) = n_cols (scale_row A i q)"
+      by (rule n_cols_scale_row)
+    show ?thesis using h1 h2 by (simp add: B_def)
+  qed
+  have rectB: "is_rect B"
+  proof -
+    have h: "is_rect (scale_row (scale_row A i q) i p)"
+    proof (rule is_rect_scale_row)
+      show "is_rect (scale_row A i q)" using rect1 .
+      show "i < n_rows (scale_row A i q)" using i by simp
+    qed
+    thus ?thesis by (simp add: B_def)
+  qed
+  have mzB: "minors_zero B"
+  proof -
+    have h: "minors_zero (scale_row (scale_row A i q) i p)"
+    proof (rule minors_zero_scale_row)
+      show "minors_zero (scale_row A i q)" using mz .
+      show "i < n_rows (scale_row A i q)" using i by simp
+      show "is_rect (scale_row A i q)" using rect1 .
+    qed
+    thus ?thesis by (simp add: B_def)
+  qed
+  have cong: "\<And>r col. r < n_rows A \<Longrightarrow> col < n_cols A
+                \<Longrightarrow> 3329 dvd (entry B r col - entry A r col)"
+  proof -
+    fix r col
+    assume r: "r < n_rows A" and col: "col < n_cols A"
+    show "3329 dvd (entry B r col - entry A r col)"
+    proof (cases "r = i")
+      case True
+      have e1: "entry (scale_row A i q) i col = fq (q * entry A i col)"
+        using i rect col by (simp add: entry_scale_row_at_self)
+      have m: "i < n_rows (scale_row A i q)" using i by simp
+      have c2: "col < n_cols (scale_row A i q)" using col by (simp add: n_cols_scale_row)
+      have e2: "entry B i col = fq (p * entry (scale_row A i q) i col)"
+      proof -
+        have h: "entry (scale_row (scale_row A i q) i p) i col
+                    = fq (p * entry (scale_row A i q) i col)"
+          using entry_scale_row_at_self [OF m rect1 c2] .
+        thus ?thesis by (simp add: B_def)
+      qed
+      have e3: "entry B i col = fq (entry A i col)"
+        using e1 e2 pq by (simp add: fq_scale_cancel)
+      show ?thesis using True e3 by (simp add: dvd_fq_sub)
+    next
+      case False
+      have e1: "entry (scale_row A i q) r col = entry A r col"
+        using i rect r col False by (simp add: entry_scale_row_at_other)
+      have m: "i < n_rows (scale_row A i q)" using i by simp
+      have mr: "r < n_rows (scale_row A i q)" using r by simp
+      have c2: "col < n_cols (scale_row A i q)" using col by (simp add: n_cols_scale_row)
+      have e2: "entry B r col = entry (scale_row A i q) r col"
+      proof -
+        have h: "entry (scale_row (scale_row A i q) i p) r col
+                    = entry (scale_row A i q) r col"
+          using entry_scale_row_at_other [OF m rect1 mr c2 False] .
+        thus ?thesis by (simp add: B_def)
+      qed
+      show ?thesis using e1 e2 False by simp
+    qed
+  qed
+  have aB: "a < n_rows B" using a nrB by simp
+  have bB: "b < n_rows B" using b nrB by simp
+  have cB: "c < n_cols B" using c ncB by simp
+  have dB: "d < n_cols B" using d ncB by simp
+  have dvB: "3329 dvd minor2 B a b c d"
+    using mzB aB bB cB dB by (rule minors_zeroE)
+  have h1: "3329 dvd (entry B a c - entry A a c)" using cong [OF a c] .
+  have h2: "3329 dvd (entry B b d - entry A b d)" using cong [OF b d] .
+  have h3: "3329 dvd (entry B a d - entry A a d)" using cong [OF a d] .
+  have h4: "3329 dvd (entry B b c - entry A b c)" using cong [OF b c] .
+  have dcong: "3329 dvd (minor2 B a b c d - minor2 A a b c d)"
+    using dvd_minor2_cong [OF h1 h2 h3 h4] .
+  have "3329 dvd (minor2 B a b c d - (minor2 B a b c d - minor2 A a b c d))"
+    using dvB dcong by (rule dvd_diff)
+  thus "3329 dvd minor2 A a b c d" by simp
+qed
+
+text \<open>Adding @{text "k"} times row @{text j} to row @{text i} is undone by adding
+  @{text "- k"} times the same row; again the composite is the identity only modulo
+  the modulus, so this reflection also lives on residues.\<close>
+
+lemma minors_zero_add_row_undo:
+  assumes mz: "minors_zero (add_row_mult A i j k)"
+    and i: "i < n_rows A" and j: "j < n_rows A" and ij: "i \<noteq> j"
+    and rect: "is_rect A"
+  shows "minors_zero A"
+proof (rule minors_zeroI)
+  fix a b c d
+  assume a: "a < n_rows A" and b: "b < n_rows A"
+    and c: "c < n_cols A" and d: "d < n_cols A"
+  define M where "M = add_row_mult A i j k"
+  define B where "B = add_row_mult M i j (- k)"
+  have rectM: "is_rect M"
+  proof -
+    have h: "is_rect (add_row_mult A i j k)" using rect i j by (rule is_rect_add_row_mult)
+    thus ?thesis by (simp add: M_def)
+  qed
+  have nrM: "n_rows M = n_rows A" by (simp add: M_def)
+  have nrB: "n_rows B = n_rows A" by (simp add: B_def M_def)
+  have ncB: "n_cols B = n_cols A"
+  proof -
+    have h1: "n_cols (add_row_mult A i j k) = n_cols A"
+      by (rule n_cols_add_row_mult [OF i j rect])
+    have h2: "n_cols (add_row_mult M i j (- k)) = n_cols M"
+    proof (rule n_cols_add_row_mult)
+      show "i < n_rows M" using i by (simp add: nrM)
+      show "j < n_rows M" using j by (simp add: nrM)
+      show "is_rect M" using rectM .
+    qed
+    show ?thesis using h1 h2 by (simp add: B_def M_def)
+  qed
+  have mzB: "minors_zero B"
+  proof -
+    have h: "minors_zero (add_row_mult M i j (- k))"
+    proof (rule minors_zero_add_row)
+      show "minors_zero M" using mz by (simp add: M_def)
+      show "i < n_rows M" using i by (simp add: nrM)
+      show "j < n_rows M" using j by (simp add: nrM)
+      show "i \<noteq> j" using ij .
+      show "is_rect M" using rectM .
+    qed
+    thus ?thesis by (simp add: B_def)
+  qed
+  have ncM: "n_cols M = n_cols A"
+  proof -
+    have h: "n_cols (add_row_mult A i j k) = n_cols A"
+      by (rule n_cols_add_row_mult [OF i j rect])
+    thus ?thesis by (simp add: M_def)
+  qed
+  have cong: "\<And>r col. r < n_rows A \<Longrightarrow> col < n_cols A
+                \<Longrightarrow> 3329 dvd (entry B r col - entry A r col)"
+  proof -
+    fix r col
+    assume r: "r < n_rows A" and col: "col < n_cols A"
+    have cM: "col < n_cols M" using ncM col by simp
+    show "3329 dvd (entry B r col - entry A r col)"
+    proof (cases "r = i")
+      case True
+      have e1: "entry M i col = fq (entry A i col + k * entry A j col)"
+        using i j rect col by (simp add: M_def entry_add_row_mult_at_self)
+      have m: "i < n_rows M" using i by (simp add: nrM)
+      have mj: "j < n_rows M" using j by (simp add: nrM)
+      have e2: "entry B i col = fq (entry M i col + (- k) * entry M j col)"
+      proof -
+        have h: "entry (add_row_mult M i j (- k)) i col
+                    = fq (entry M i col + (- k) * entry M j col)"
+          using entry_add_row_mult_at_self [OF m mj rectM cM] .
+        thus ?thesis by (simp add: B_def)
+      qed
+      have ji: "j \<noteq> i" using ij by simp
+      have e3: "entry M j col = entry A j col"
+        using i j rect col ji by (simp add: M_def entry_add_row_mult_at_other)
+      have key: "entry B i col
+              = fq (fq (entry A i col + k * entry A j col)
+                    + (- k) * entry A j col)"
+        using e1 e2 e3 by simp
+      have cancel: "fq (fq (entry A i col + k * entry A j col)
+                    + (- k) * entry A j col) = fq (entry A i col)"
+        by (simp add: fq_add_cancel_aux)
+      have "entry B i col = fq (entry A i col)" using key cancel by simp
+      thus ?thesis using True by (simp add: dvd_fq_sub)
+    next
+      case False
+      have e1: "entry M r col = entry A r col"
+        using i j rect r col False by (simp add: M_def entry_add_row_mult_at_other)
+      have m: "i < n_rows M" using i by (simp add: nrM)
+      have mj: "j < n_rows M" using j by (simp add: nrM)
+      have mr: "r < n_rows M" using r by (simp add: nrM)
+      have e2: "entry B r col = entry M r col"
+      proof -
+        have h: "entry (add_row_mult M i j (- k)) r col = entry M r col"
+          using entry_add_row_mult_at_other [OF m mj rectM mr cM False] .
+        thus ?thesis by (simp add: B_def)
+      qed
+      show ?thesis using e1 e2 False by simp
+    qed
+  qed
+  have aB: "a < n_rows B" using a nrB by simp
+  have bB: "b < n_rows B" using b nrB by simp
+  have cB: "c < n_cols B" using c ncB by simp
+  have dB: "d < n_cols B" using d ncB by simp
+  have dvB: "3329 dvd minor2 B a b c d"
+    using mzB aB bB cB dB by (rule minors_zeroE)
+  have h1: "3329 dvd (entry B a c - entry A a c)" using cong [OF a c] .
+  have h2: "3329 dvd (entry B b d - entry A b d)" using cong [OF b d] .
+  have h3: "3329 dvd (entry B a d - entry A a d)" using cong [OF a d] .
+  have h4: "3329 dvd (entry B b c - entry A b c)" using cong [OF b c] .
+  have dcong: "3329 dvd (minor2 B a b c d - minor2 A a b c d)"
+    using dvd_minor2_cong [OF h1 h2 h3 h4] .
+  have "3329 dvd (minor2 B a b c d - (minor2 B a b c d - minor2 A a b c d))"
+    using dvB dcong by (rule dvd_diff)
+  thus "3329 dvd minor2 A a b c d" by simp
+qed
+
 end

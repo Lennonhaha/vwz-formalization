@@ -2556,5 +2556,82 @@ proof -
   show ?thesis using le by (simp add: mat_rank_def)
 qed
 
+section \<open>The determinant under entrywise fq-equality\<close>
+
+text \<open>Comparing two 3x3 matrices modulo 3329 row by row calls for more than
+  congruence of the entries one at a time: the determinant has six monomials, three
+  of them subtracted.  @{text fq_cong_add} and @{text fq_cong_mult} compose, but the
+  subtraction needs help, because @{text "- x"} is not a product and the
+  multiplication rule cannot match it.  @{text fq_cong_neg} supplies the missing step
+  once, and then the six-term sum is one nested application.
+
+  The shape was settled outside the tree first; the point of this section is that the
+  congruence costs nothing beyond bookkeeping.\<close>
+
+lemma fq_cong_neg:
+  assumes "fq x = fq y"
+  shows "fq (- x) = fq (- y)"
+proof -
+  have "fq ((- 1) * x) = fq ((- 1) * y)"
+    by (rule fq_cong_mult [OF _ assms]) simp
+  then show ?thesis by simp
+qed
+
+lemma fq_det3_cong:
+  assumes h: "\<forall>i < 3. \<forall>j < 3. fq (entry B i j) = fq (entry A i j)"
+  shows "fq (det3 B) = fq (det3 A)"
+proof -
+  have h00: "fq (entry B 0 0) = fq (entry A 0 0)" using h by simp
+  have h01: "fq (entry B 0 1) = fq (entry A 0 1)" using h by simp
+  have h02: "fq (entry B 0 2) = fq (entry A 0 2)" using h by simp
+  have h10: "fq (entry B 1 0) = fq (entry A 1 0)" using h by simp
+  have h11: "fq (entry B 1 1) = fq (entry A 1 1)" using h by simp
+  have h12: "fq (entry B 1 2) = fq (entry A 1 2)" using h by simp
+  have h20: "fq (entry B 2 0) = fq (entry A 2 0)" using h by simp
+  have h21: "fq (entry B 2 1) = fq (entry A 2 1)" using h by simp
+  have h22: "fq (entry B 2 2) = fq (entry A 2 2)" using h by simp
+  have m1: "fq (entry B 0 0 * entry B 1 1 * entry B 2 2)
+          = fq (entry A 0 0 * entry A 1 1 * entry A 2 2)"
+    by (rule fq_cong_mult [OF fq_cong_mult [OF h00 h11] h22])
+  have m2: "fq (entry B 0 1 * entry B 1 2 * entry B 2 0)
+          = fq (entry A 0 1 * entry A 1 2 * entry A 2 0)"
+    by (rule fq_cong_mult [OF fq_cong_mult [OF h01 h12] h20])
+  have m3: "fq (entry B 0 2 * entry B 1 0 * entry B 2 1)
+          = fq (entry A 0 2 * entry A 1 0 * entry A 2 1)"
+    by (rule fq_cong_mult [OF fq_cong_mult [OF h02 h10] h21])
+  have m4: "fq (entry B 0 2 * entry B 1 1 * entry B 2 0)
+          = fq (entry A 0 2 * entry A 1 1 * entry A 2 0)"
+    by (rule fq_cong_mult [OF fq_cong_mult [OF h02 h11] h20])
+  have m5: "fq (entry B 0 1 * entry B 1 0 * entry B 2 2)
+          = fq (entry A 0 1 * entry A 1 0 * entry A 2 2)"
+    by (rule fq_cong_mult [OF fq_cong_mult [OF h01 h10] h22])
+  have m6: "fq (entry B 0 0 * entry B 1 2 * entry B 2 1)
+          = fq (entry A 0 0 * entry A 1 2 * entry A 2 1)"
+    by (rule fq_cong_mult [OF fq_cong_mult [OF h00 h12] h21])
+  have n4: "fq (- (entry B 0 2 * entry B 1 1 * entry B 2 0))
+          = fq (- (entry A 0 2 * entry A 1 1 * entry A 2 0))"
+    by (rule fq_cong_neg [OF m4])
+  have n5: "fq (- (entry B 0 1 * entry B 1 0 * entry B 2 2))
+          = fq (- (entry A 0 1 * entry A 1 0 * entry A 2 2))"
+    by (rule fq_cong_neg [OF m5])
+  have n6: "fq (- (entry B 0 0 * entry B 1 2 * entry B 2 1))
+          = fq (- (entry A 0 0 * entry A 1 2 * entry A 2 1))"
+    by (rule fq_cong_neg [OF m6])
+  have s: "fq (entry B 0 0 * entry B 1 1 * entry B 2 2
+                + entry B 0 1 * entry B 1 2 * entry B 2 0
+                + entry B 0 2 * entry B 1 0 * entry B 2 1
+                + (- (entry B 0 2 * entry B 1 1 * entry B 2 0))
+                + (- (entry B 0 1 * entry B 1 0 * entry B 2 2))
+                + (- (entry B 0 0 * entry B 1 2 * entry B 2 1)))
+         = fq (entry A 0 0 * entry A 1 1 * entry A 2 2
+                + entry A 0 1 * entry A 1 2 * entry A 2 0
+                + entry A 0 2 * entry A 1 0 * entry A 2 1
+                + (- (entry A 0 2 * entry A 1 1 * entry A 2 0))
+                + (- (entry A 0 1 * entry A 1 0 * entry A 2 2))
+                + (- (entry A 0 0 * entry A 1 2 * entry A 2 1)))"
+    by (rule fq_cong_add [OF fq_cong_add [OF fq_cong_add [OF fq_cong_add [OF fq_cong_add [OF m1 m2] m3] n4] n5] n6])
+  show ?thesis using s by (simp add: det3_def algebra_simps)
+qed
+
 
 end

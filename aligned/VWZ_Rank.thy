@@ -782,15 +782,14 @@ text \<open>Nothing in this file bounds the rank of a sum of two outer products,
    predicate through the whole reduction; and rref_fuel_shape, which now takes and
    returns the staircase invariant, so the reduced form arrives as a staircase.
 
-   What is missing: the det3 route.  Three nonzero rows of a staircase have three
-   distinct leading columns, so the square submatrix at those rows and columns is
-   upper triangular with nonzero diagonal, hence its determinant is nonzero mod
-   3329; rowwise congruence then transfers that to the matrix whose rows lie in the
-   span of p and q, where the same determinant vanishes because every row is a
-   combination of two vectors.  The congruence step (det3_cong) has no proof in the
-   tree yet, but its shape is settled: pointwise fq-equality of the nine entries
-   gives fq (det3 B) = fq (det3 A), through fq_cong_add and fq_cong_mult, with one
-   sign helper for the three subtracted monomials -- about 64 lines in total.
+   What is missing: the det3 route.  Three nonzero rows of a staircase, taken in index
+   order, have increasing leading columns because the invariant now carries that order
+   as its fifth conjunct, so the square submatrix at those rows and columns is upper
+   triangular with nonzero diagonal, hence its determinant is nonzero mod 3329;
+   rowwise congruence then transfers that to the matrix whose rows lie in the span of
+   p and q, where the same determinant vanishes because every row is a combination of
+   two vectors.  The congruence step is now in place as fq_det3_cong above; the
+   determinant facts live in VWZ_Matrix.
 
    Consumers once proved: rank_outer_sum_le_two, and through it T2_B7, whose own
    statement is still the defective one recorded in VWZ_ObligationsAligned.thy.
@@ -1946,15 +1945,102 @@ qed
 (* seg: staircase-def-20261023 *)
 section \<open>The staircase invariant\<close>
 
+text \<open>The leading column has to increase from one row to the next.  The bound above,
+  @{text "\<forall>k < r. lead (A ! k) < c"}, only says that every leading column is left of
+  the frontier, and a matrix such as @{text "[[1,1],[1,1]]"} satisfies the rest of the
+  invariant while both of its leads are equal.  Without the order there is no square
+  submatrix to take: three nonzero rows need three columns in a fixed order before the
+  restricted matrix is upper triangular.\<close>
+
+definition mono_leads :: "nat \<Rightarrow> mat \<Rightarrow> bool" where
+  "mono_leads r A = (\<forall>k. k + 1 < r \<longrightarrow> lead (A ! k) < lead (A ! (k + 1)))"
+
+lemma mono_leadsE:
+  assumes m: "mono_leads r A" and k: "k + 1 < r"
+  shows "lead (A ! k) < lead (A ! (k + 1))"
+  using m k by (simp add: mono_leads_def)
+
+text \<open>One pivot step keeps the order.  The step rewrites row @{text r} and the rows below it,
+  the leads above @{text r} survive unchanged, and the lead of the new row @{text r} is exactly
+  @{text c}, so the only pair that has to be checked afresh is @{text "r - 1, r"}, whose strict
+  inequality is already available from the frontier bound.\<close>
+
+lemma mono_leads_step:
+  assumes mono: "mono_leads r A"
+    and above: "\<forall>k < r. lead (A ! k) < c"
+    and step: "\<forall>k < r. lead (B ! k) = lead (A ! k)"
+    and newrow: "lead (B ! r) = c"
+  shows "mono_leads (r + 1) B"
+  unfolding mono_leads_def
+proof (intro allI impI)
+  fix k
+  assume k: "k + 1 < r + 1"
+  have cases: "k + 1 < r \<or> k + 1 = r" using k by presburger
+  from cases show "lead (B ! k) < lead (B ! (k + 1))"
+  proof
+    assume inside: "k + 1 < r"
+    have kk: "k < r" using inside by simp
+    have m: "lead (A ! k) < lead (A ! (k + 1))"
+      using mono_leadsE [OF mono inside] .
+    have b1: "lead (B ! k) = lead (A ! k)" using step kk by simp
+    have b2: "lead (B ! (k + 1)) = lead (A ! (k + 1))" using step inside by simp
+    show ?thesis using m b1 b2 by simp
+  next
+    assume edge: "k + 1 = r"
+    have kk: "k < r" using edge by simp
+    have b1: "lead (B ! k) = lead (A ! k)" using step kk by simp
+    have b2: "lead (B ! (k + 1)) = lead (B ! r)" using edge by simp
+    have lt: "lead (A ! k) < c" using above kk by simp
+    show ?thesis using b1 b2 newrow lt by simp
+  qed
+qed
+
+lemma mono_leads_weaken:
+  assumes m: "mono_leads r A" and le: "r' \<le> r"
+  shows "mono_leads r' A"
+  using m le by (auto simp add: mono_leads_def)
+
+lemma mono_leads_lt:
+  assumes m: "mono_leads r A"
+  shows "i < j \<Longrightarrow> j < r \<Longrightarrow> lead (A ! i) < lead (A ! j)"
+proof (induct j)
+  case 0
+  thus ?case by simp
+next
+  case (Suc j)
+  show ?case
+  proof (cases "i = j")
+    case True
+    have jr: "j + 1 < r" using Suc.prems by simp
+    have nx: "lead (A ! j) < lead (A ! (j + 1))"
+      using mono_leadsE [OF m, of j] jr by auto
+    show ?thesis using True nx by simp
+  next
+    case False
+    have ij: "i < j" using Suc.prems False by simp
+    have jr: "j < r" using Suc.prems by simp
+    have jr2: "j + 1 < r" using Suc.prems by simp
+    have ih: "lead (A ! i) < lead (A ! j)" using Suc.hyps ij jr by simp
+    have nx: "lead (A ! j) < lead (A ! (j + 1))"
+      using mono_leadsE [OF m, of j] jr2 by auto
+    show ?thesis using ih nx by simp
+  qed
+qed
+
+
 text \<open>The invariant the reduction is supposed to reach: the rows from @{text r} down have zeros
-  in every column left of @{text c}, and every row above @{text r} has already found its leading
-  entry, strictly left of @{text c}.  The row pointer is bounded as well -- without that bound a
-  pointer past the last row would make the quantifier vacuous and the invariant would say nothing
-  about the matrix at all.\<close>
+  in every column left of @{text c}, every row above @{text r} has already found its leading entry
+  strictly left of @{text c}, and those leading entries increase from one row to the next.  The row
+  pointer is bounded as well -- without that bound a pointer past the last row would make the
+  quantifier vacuous and the invariant would say nothing about the matrix at all.
+
+  The order conjunct is not decoration: a matrix whose rows all start with the same leading column
+  satisfies the other four conjuncts but yields no square submatrix, so the det3 route below has no
+  upper triangular case to work with unless the order is part of the contract.\<close>
 
 definition staircase :: "nat \<Rightarrow> nat \<Rightarrow> mat \<Rightarrow> bool" where
   "staircase r c A = (r \<le> n_rows A \<and> is_rect A \<and> zero_below r c A
-                        \<and> (\<forall>k < r. lead (A ! k) < c))"
+                        \<and> (\<forall>k < r. lead (A ! k) < c) \<and> mono_leads r A)"
 
 text \<open>The two projection lemmas below are the interface the fuel induction uses: the decomposition
   turns the invariant into facts a proof can consume, and the introduction rule rebuilds it from
@@ -1972,11 +2058,14 @@ lemma staircase_zero_below: "staircase r c A \<Longrightarrow> zero_below r c A"
 lemma staircase_leads: "staircase r c A \<Longrightarrow> \<forall>k < r. lead (A ! k) < c"
   by (simp add: staircase_def)
 
+lemma staircase_mono_leads: "staircase r c A \<Longrightarrow> mono_leads r A"
+  by (simp add: staircase_def)
+
 lemma staircaseI:
   assumes rn: "r \<le> n_rows A" and rect: "is_rect A" and zb: "zero_below r c A"
-    and above: "\<forall>k < r. lead (A ! k) < c"
+    and above: "\<forall>k < r. lead (A ! k) < c" and mono: "mono_leads r A"
   shows "staircase r c A"
-  using rn rect zb above by (simp add: staircase_def)
+  using rn rect zb above mono by (simp add: staircase_def)
 
 lemma staircase_leads_weaken:
   assumes h: "staircase r c A"
@@ -2390,7 +2479,8 @@ next
         using zero_below_step_skip[OF zb rect rn cnlt None] .
       have lw: "\<forall>k < r. lead (A ! k) < c + 1"
         using staircase_leads_weaken [where d=1, OF st] .
-      have st': "staircase r (c + 1) A" using staircaseI [OF rle rect zb' lw] .
+      have monoA: "mono_leads r A" using staircase_mono_leads [OF st] .
+      have st': "staircase r (c + 1) A" using staircaseI [OF rle rect zb' lw monoA] .
       have rc': "r \<le> c + 1" using rc by simp
       have cn': "c + 1 \<le> n_cols A" using cnlt by simp
       have ih: "\<exists>r' c'. r \<le> r' \<and> r' \<le> c' \<and> c + 1 \<le> c' \<and> c' \<le> n_cols A
@@ -2455,7 +2545,14 @@ next
       have cnB: "c + 1 \<le> n_cols B" using cnlt ncB by simp
       have lB: "\<forall>k < r + 1. lead (B ! k) < c + 1"
         using leads_pivot_step[OF zb rect rn cnlt ib ri pnz above] by (simp add: B_def)
-      have stB: "staircase (r + 1) (c + 1) B" using staircaseI [OF rnB rectB zbB lB] .
+      have monoA: "mono_leads r A" using staircase_mono_leads [OF st] .
+      have stepL: "\<forall>k < r. lead (B ! k) = lead (A ! k)"
+        using pivot_step_preserves_leads [OF rect rn ib ri cnlt zb above] by (simp add: B_def)
+      have newL: "lead (B ! r) = c"
+        using lead_pivot_step [OF zb rect rn cnlt ib ri pnz] by (simp add: B_def)
+      have monoB: "mono_leads (r + 1) B"
+        using mono_leads_step [OF monoA above stepL newL] .
+      have stB: "staircase (r + 1) (c + 1) B" using staircaseI [OF rnB rectB zbB lB monoB] .
       have ih: "\<exists>r' c'. r + 1 \<le> r' \<and> r' \<le> c' \<and> c + 1 \<le> c' \<and> c' \<le> n_cols B
                    \<and> staircase r' c' (rref_fuel f (r + 1) (c + 1) B)
                    \<and> n_cols (rref_fuel f (r + 1) (c + 1) B) = n_cols B
@@ -2508,6 +2605,7 @@ proof -
     show "is_rect A" by (rule rect)
     show "zero_below 0 0 A" by (simp add: zero_below_def)
     show "\<forall>k < 0. lead (A ! k) < 0" by simp
+    show "mono_leads 0 A" by (simp add: mono_leads_def)
   qed
   have sh: "\<exists>r' c'. 0 \<le> r' \<and> r' \<le> c' \<and> c' \<le> n_cols A
               \<and> staircase r' c' (rref A)

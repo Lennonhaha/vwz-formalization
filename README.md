@@ -263,6 +263,18 @@ rediscovered:
   lemma uses it.
 - All four defects and their evidence are collected in `VWZ_DEFECTS.md`.
 
+## Citation
+
+The machine-checked artefact is versioned by tag; the write-up is archived with a DOI.
+
+- Version DOI (v1.0.0): [`10.5281/zenodo.23622178`](https://doi.org/10.5281/zenodo.23622178)
+- Concept DOI (all versions): [`10.5281/zenodo.23622177`](https://doi.org/10.5281/zenodo.23622177)
+- Record: <https://zenodo.org/records/23622178>
+- Object version for every number quoted in the write-up: `d984b77`
+
+The deposit holds a `git archive` snapshot of tag `v1.0.0`
+(`vwz-formalization-1.0.0.zip`, 713,177 bytes).
+
 ## License
 
 Apache-2.0. See `LICENSE`.

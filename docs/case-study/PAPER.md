@@ -5,6 +5,8 @@
 Object version: `vwz-formalization@d984b77` (2026-10-24) · Isabelle2025-2 · 20 theories ·
 56 ledger obligations, 6 registered `sorry`, 0 outside the ledger
 
+Archived: tag `v1.0.0` · DOI [10.5281/zenodo.23622178](https://doi.org/10.5281/zenodo.23622178)
+
 ---
 
 ## Abstract

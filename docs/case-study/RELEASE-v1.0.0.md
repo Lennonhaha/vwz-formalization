@@ -1,7 +1,7 @@
-# v1.0.0 — release notes (DRAFT, not published)
+# v1.0.0 — release notes
 
-> **Status: draft for review. No tag has been created, no deposit has been made.**
-> Publishing is a separate, irreversible step that needs an explicit go-ahead.
+> **Status: published 2026-10-24.** Tag `v1.0.0` = `4f81346`; archived at DOI
+> [`10.5281/zenodo.23622178`](https://doi.org/10.5281/zenodo.23622178) (concept DOI `10.5281/zenodo.23622177`).
 
 ## Summary
 
@@ -34,7 +34,7 @@ implementation is correct.
 | `docs/case-study/README.md` | short version: object, ledger, two headline results, boundaries, reproduction |
 | `docs/case-study/PAPER.md` | long version: method, proofs, limits, engineering notes, provenance table |
 | `docs/case-study/RELEASE-v1.0.0.md` | this file |
-| `docs/case-study/zenodo-deposit.DRAFT.json` | Zenodo metadata, prepared but not submitted |
+| `docs/case-study/zenodo-deposit.DRAFT.json` | Zenodo metadata as submitted for the deposit (frozen; Zenodo returns the legacy id `gpl-3.0`) |
 
 ## Headline result A — `T2_B7`: a missing premise
 
@@ -115,9 +115,13 @@ its abstract as current.
 
 ## Publication checklist (for the person who says go)
 
-1. Confirm the release commit and re-run the three commands above at that commit.
-2. `git tag -s v1.0.0 <commit>` and push the tag.
-3. Submit `zenodo-deposit.DRAFT.json` **after** the tag exists — the `related_identifiers`
-   URL points at `/tree/v1.0.0`.
-4. Only after Zenodo mints the DOI: add the DOI to the README, then (optionally) to the
-   paper draft in the same edit that fixes its two stale numbers.
+Every step below was completed; the list is kept as the record of what the release required.
+
+1. The three commands were re-run at `4f81346`: build `RC=0` (37 s), ledger 56/6/0,
+   encoding gate 36 files OK.
+2. `git tag -a v1.0.0 4f81346` (annotated, not signed: the build machine has no signing
+   key), pushed, tag object `4f9fb06`.
+3. Metadata submitted from `zenodo-deposit.DRAFT.json`; deposition `23622178` published
+   2026-10-24 as DOI `10.5281/zenodo.23622178`, concept DOI `10.5281/zenodo.23622177`.
+4. DOI added to `README.md`, `docs/case-study/README.md` and this file. The paper draft
+   is still untouched: its two stale numbers must be fixed before it is published.

@@ -163,7 +163,7 @@ Dependency-chain check with `quick_and_dirty` off (the method used for `T2_B7`):
 
 ## 9. Versioning and citation
 
-No DOI yet. If this write-up is released, it will be tagged (`v1.0.0`) and archived with
-a DOI; until then, cite the repository plus the object version `d984b77`. The
-machine-checked artefact is the git tree, so a tag is the only meaningful version
-identifier — a rendered PDF is a convenience copy.
+Archived at DOI [`10.5281/zenodo.23622178`](https://doi.org/10.5281/zenodo.23622178) (tag `v1.0.0`,
+concept DOI `10.5281/zenodo.23622177`, record <https://zenodo.org/records/23622178>). The machine-checked
+artefact is the git tree, so the tag is the meaningful version identifier; the archived
+zip is a `git archive` snapshot of it, and a rendered PDF is a convenience copy.

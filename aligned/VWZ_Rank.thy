@@ -3084,4 +3084,119 @@ proof -
   show ?thesis using rankeq r0le2 by simp
 qed
 
+section \<open>The rank-2 slice: rows lie in a two-vector span\<close>
+
+text \<open>@{text psi_slice_of} at @{file VWZ_KeyGen.thy} scales the sum of two
+  outer-product factors by @{text x0}.  Every row is therefore a combination of the
+  two factor vectors, with the scalar absorbed into the coefficients; the per-entry
+  reduction modulo 3329 is invisible at the level of @{text fq}.  This is the
+  structural half of @{text T2_B7}: the slice never needs more than two spanning
+  directions, whatever the key says.\<close>
+
+lemma n_rows_psi_slice_of [simp]:
+  "n_rows (psi_slice_of x0 ua va ub vb) = min (length ua) (length ub)"
+  by (simp add: n_rows_def psi_slice_of_def)
+
+lemma n_cols_psi_slice_of [simp]:
+  "psi_slice_of x0 ua va ub vb \<noteq> [] \<Longrightarrow>
+   n_cols (psi_slice_of x0 ua va ub vb) = min (length va) (length vb)"
+  by (simp add: n_cols_def psi_slice_of_def)
+
+lemma is_rect_psi_slice_of [simp]:
+  "is_rect (psi_slice_of x0 ua va ub vb)"
+proof (cases "psi_slice_of x0 ua va ub vb = []")
+  case True
+  then show ?thesis by (simp add: is_rect_def)
+next
+  case False
+  have nc: "n_cols (psi_slice_of x0 ua va ub vb) = min (length va) (length vb)"
+    using False by simp
+  have rl: "\<And>r. r \<in> set (psi_slice_of x0 ua va ub vb) \<Longrightarrow>
+              length r = min (length va) (length vb)"
+    by (auto simp add: psi_slice_of_def)
+  with nc show ?thesis by (auto simp add: is_rect_def)
+qed
+
+lemma length_map2 [simp]:
+  "length (map2 f xs ys :: 'c list) = min (length xs) (length ys)"
+  by simp
+
+lemma nth_map2 [simp]:
+  "i < min (length xs) (length ys) \<Longrightarrow> (map2 f xs ys :: 'c list) ! i = f (xs ! i) (ys ! i)"
+proof -
+  assume i: "i < min (length xs) (length ys)"
+  have i1: "i < length (zip xs ys)" using i by simp
+  show "(map2 f xs ys :: 'c list) ! i = f (xs ! i) (ys ! i)"
+    using i i1 by (simp add: nth_zip)
+qed
+
+lemma psi_slice_of_row:
+  "i < min (length ua) (length ub) \<Longrightarrow>
+   psi_slice_of x0 ua va ub vb ! i
+     = map2 (\<lambda>c d. (x0 * (ua ! i * c + ub ! i * d)) mod 3329) va vb"
+proof -
+  assume i: "i < min (length ua) (length ub)"
+  have iz: "i < length (zip ua ub)" using i by (simp add: length_zip)
+  show ?thesis using i iz by (simp add: psi_slice_of_def nth_zip)
+qed
+
+lemma rows_in_span_psi_slice_of:
+  "rows_in_span (take (min (length va) (length vb)) va)
+     (take (min (length va) (length vb)) vb)
+     (psi_slice_of x0 ua va ub vb)"
+proof (unfold rows_in_span_def, intro allI impI)
+  fix i
+  let ?k = "min (length va) (length vb)"
+  assume i: "i < n_rows (psi_slice_of x0 ua va ub vb)"
+  have imin: "i < min (length ua) (length ub)"
+    using i by (simp add: n_rows_def psi_slice_of_def)
+  have row: "psi_slice_of x0 ua va ub vb ! i
+      = map2 (\<lambda>c d. (x0 * (ua ! i * c + ub ! i * d)) mod 3329) va vb"
+    using imin by (rule psi_slice_of_row)
+  have lrow: "length (psi_slice_of x0 ua va ub vb ! i) = ?k"
+  proof -
+    have "length (map2 (\<lambda>c d. (x0 * (ua ! i * c + ub ! i * d)) mod 3329) va vb) = ?k"
+      by (simp add: length_map2)
+    with row show ?thesis by simp
+  qed
+  show "in_span2 (take ?k va) (take ?k vb) (psi_slice_of x0 ua va ub vb ! i)"
+  proof (unfold in_span2_def, intro conjI)
+    show "length (psi_slice_of x0 ua va ub vb ! i) = length (take ?k va)"
+      using lrow by simp
+    show "length (psi_slice_of x0 ua va ub vb ! i) = length (take ?k vb)"
+      using lrow by simp
+    show "\<exists>a b. \<forall>j. j < length (take ?k va) \<longrightarrow>
+            fq ((psi_slice_of x0 ua va ub vb ! i) ! j)
+              = fq (a * (take ?k va ! j) + b * (take ?k vb ! j))"
+    proof (intro exI allI impI)
+      fix j
+      assume j: "j < length (take ?k va)"
+      have jk: "j < ?k" using j by simp
+      have jmin: "j < min (length va) (length vb)" using jk by simp
+      have tv: "take ?k va ! j = va ! j" using jk by simp
+      have tw: "take ?k vb ! j = vb ! j" using jk by simp
+      have e: "(psi_slice_of x0 ua va ub vb ! i) ! j
+              = (x0 * (ua ! i * va ! j + ub ! i * vb ! j)) mod 3329"
+      proof -
+        have rj: "(map2 (\<lambda>c d. (x0 * (ua ! i * c + ub ! i * d)) mod 3329) va vb) ! j
+                = (x0 * (ua ! i * va ! j + ub ! i * vb ! j)) mod 3329"
+          using jmin by (rule nth_map2)
+        show ?thesis using row rj by simp
+      qed
+      have "fq ((psi_slice_of x0 ua va ub vb ! i) ! j)
+          = fq (x0 * (ua ! i * va ! j + ub ! i * vb ! j))"
+        using e by (simp add: fq_def)
+      also have "\<dots> = fq ((x0 * ua ! i) * va ! j + (x0 * ub ! i) * vb ! j)"
+        by (simp add: algebra_simps)
+      also have "\<dots> = fq ((x0 * ua ! i) * (take ?k va ! j) + (x0 * ub ! i) * (take ?k vb ! j))"
+        using tv tw by simp
+      finally show "fq ((psi_slice_of x0 ua va ub vb ! i) ! j)
+          = fq ((x0 * ua ! i) * (take ?k va ! j) + (x0 * ub ! i) * (take ?k vb ! j))" .
+    qed
+  qed
+qed
+
+lemma mat_rank_psi_slice_of_le_two:
+  "mat_rank (psi_slice_of x0 ua va ub vb) \<le> 2"
+  by (rule mat_rank_le_two_of_rows_in_span[OF _ rows_in_span_psi_slice_of]) simp
 end

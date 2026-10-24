@@ -19,7 +19,7 @@ implementation is correct.
 
 ## Artefact and provenance
 
-- Repository: `Lennonhaha/vwz-formalization`, default branch `main`, GPL-3.0.
+- Repository: `Lennonhaha/vwz-formalization`, default branch `main`, Apache-2.0.
 - **Object version for every number in this release: `d984b77`** (2026-10-24,
   `docs: settle T2_D5 and retire the rank work list (#25)`).
 - `aligned/` — 20 theory files, 582 lemmas in the repository, **56 ledger obligations
@@ -34,7 +34,7 @@ implementation is correct.
 | `docs/case-study/README.md` | short version: object, ledger, two headline results, boundaries, reproduction |
 | `docs/case-study/PAPER.md` | long version: method, proofs, limits, engineering notes, provenance table |
 | `docs/case-study/RELEASE-v1.0.0.md` | this file |
-| `docs/case-study/zenodo-deposit.DRAFT.json` | Zenodo metadata as submitted for the deposit (frozen; Zenodo returns the legacy id `gpl-3.0`) |
+| `docs/case-study/zenodo-deposit.DRAFT.json` | Zenodo metadata as submitted, then corrected on 2026-10-25 (licence → Apache-2.0; Zenodo stores the legacy id `apache2.0`, DOI unchanged) |
 
 ## Headline result A — `T2_B7`: a missing premise
 

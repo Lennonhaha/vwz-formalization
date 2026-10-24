@@ -25,7 +25,7 @@
 *)
 theory VWZ_ObligationsAligned
   imports VWZ_Fq3329 VWZ_Target VWZ_KeyGen VWZ_Matrix VWZ_Protocol VWZ_Aux VWZ_RREF VWZ_Solver VWZ_Transpose
-    VWZ_ModAlgebra VWZ_Rows3
+    VWZ_ModAlgebra VWZ_Rows3 VWZ_Rank
 begin
 
 section \<open>T0 -- purely formal rewriting (target: 0 sorry)\<close>
@@ -797,7 +797,52 @@ lemma T2_B7:
                entry (psi_slice pk i) a d * entry (psi_slice pk i) b c)
               mod 3329 \<noteq> 0) \<Longrightarrow>
    mat_rank (psi_slice pk i) = 2"
-  sorry
+proof -
+  assume i: "i < length (pk_psi pk)"
+  assume kg: "\<exists>kk sd. pk = fst (KeyGen kk sd)"
+  assume minor: "\<exists>a b c d. a < n_rows (psi_slice pk i) \<and> b < n_rows (psi_slice pk i) \<and>
+               c < n_cols (psi_slice pk i) \<and> d < n_cols (psi_slice pk i) \<and>
+               a \<noteq> b \<and> c \<noteq> d \<and>
+               (entry (psi_slice pk i) a c * entry (psi_slice pk i) b d -
+                entry (psi_slice pk i) a d * entry (psi_slice pk i) b c)
+               mod 3329 \<noteq> 0"
+  obtain kk sd where pk: "pk = fst (KeyGen kk sd)" using kg by blast
+  let ?n = "par_n kk"
+  let ?m = "par_m kk"
+  obtain la lb lc s1 where H1: "lams_of ?n (lcg_init sd) = (la, lb, lc, s1)"
+    by (cases "lams_of ?n (lcg_init sd)", auto)
+  obtain X2a X2b X3a X3b s2 where H2: "mats_of ?m s1 = (X2a, X2b, X3a, X3b, s2)"
+    by (cases "mats_of ?m s1", auto)
+  obtain x1 s3 where H3: "draw_x1 ?n s2 = (x1, s3)"
+    by (cases "draw_x1 ?n s2", auto)
+  have len_psi: "psi_slice pk i = psi_of ?n ?m la lb lc X2a X2b X3a X3b x1 ! i"
+    using pk H1 H2 H3 by (simp add: KeyGen_def psi_slice_def Let_def)
+  have lpk: "length (pk_psi pk) = ?n"
+    using pk H1 H2 H3 by (simp add: KeyGen_def psi_of_def Let_def)
+  have sin: "i < ?n" using i lpk by simp
+  have slice: "psi_slice pk i
+      = psi_slice_of (x1 ! i)
+          (matvec (transpose X2a) (vand (la ! i) ?m))
+          (matvec (transpose X3a) (vand (lc ! i) ?m))
+          (matvec (transpose X2b) (vand (lb ! i) ?m))
+          (matvec (transpose X3b) (vand (lc ! i) ?m))"
+    using len_psi sin by (simp add: psi_of_def)
+  have le2: "mat_rank (psi_slice pk i) \<le> 2"
+    using slice mat_rank_psi_slice_of_le_two by simp
+  obtain a b c d where
+    fa: "a < n_rows (psi_slice pk i)" and fb: "b < n_rows (psi_slice pk i)"
+    and fc: "c < n_cols (psi_slice pk i)" and fd: "d < n_cols (psi_slice pk i)"
+    and fab: "a \<noteq> b" and fcd: "c \<noteq> d"
+    and nz: "(entry (psi_slice pk i) a c * entry (psi_slice pk i) b d -
+              entry (psi_slice pk i) a d * entry (psi_slice pk i) b c) mod 3329 \<noteq> 0"
+    using minor by blast
+  have rect: "is_rect (psi_slice pk i)" using slice by simp
+  have nz2: "minor2 (psi_slice pk i) a b c d mod 3329 \<noteq> 0"
+    using nz by (simp add: minor2_def)
+  have ge2: "2 \<le> mat_rank (psi_slice pk i)"
+    using rect fa fb fab fc fd nz2 by (rule rank_ge_two_of_nonzero_minor)
+  with le2 show ?thesis by simp
+qed
 
 text \<open>Machine-checked refutation of the statement as it stands lives in
   @{file VWZ_Refutations.thy}: the key is the right shape, the index is in

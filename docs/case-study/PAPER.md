@@ -86,8 +86,9 @@ constants — i.e. they are blocked on modelling, not on mathematics.
 
 - **Build gate**: `isabelle build -b -c -D aligned` → RC=0, 33-41 s on the author's
   machine (range across rounds; a single round is not a benchmark).
-- **Encoding gate**: `tools/check-encoding.cjs` over tracked text files — no BOM, no
-  NUL, no U+FFFD.
+- **Encoding gate**: `.github/scripts/check-encoding.cjs` over tracked text files — no BOM, no
+  NUL, no U+FFFD, no private-use characters. It also refuses to report a pass when it
+  scanned nothing, so a wrong working directory cannot look green.
 - **Ledger gate**: the count above, run after every change, plus a CI workflow that
   compares the totals literally.
 
@@ -227,8 +228,9 @@ These are unglamorous and were decisive:
   literally — so a change in the `sorry` count cannot silently pass.
 - **Refutations outside the ledger**, so "this statement is false" never counts as
   "proof debt paid".
-- **Encoding gate** on every tracked text file (no BOM, no NUL, no U+FFFD), because
-  mojibake in comments has repeatedly produced silently wrong tooling elsewhere.
+- **Encoding gate** on every tracked text file (no BOM, no NUL, no U+FFFD, no
+  private-use characters), because mojibake in comments has repeatedly produced
+  silently wrong tooling elsewhere.
 - **No global `declare`** and a short blacklist of rewrite rules kept out of `simp`
   (`mod_add_eq`, `mod_mult_eq` reverse-rewrite against `fq_idem` and hang the simplifier;
   letting `min` into the simp set normalises it to `if`, which breaks the `zip`/`map`
@@ -241,7 +243,7 @@ These are unglamorous and were decisive:
 ```bash
 isabelle build -b -c -D aligned        # RC=0, 33-41 s
 node tools/count-obligations.cjs       # 56 lemmas, 6 sorry, outside 0
-node tools/check-encoding.cjs          # tracked text files clean
+node .github/scripts/check-encoding.cjs          # tracked text files clean
 ```
 
 Dependency chain with the option off: copy `aligned/` outside the repo, drop

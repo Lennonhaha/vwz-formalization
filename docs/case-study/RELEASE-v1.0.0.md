@@ -89,7 +89,7 @@ implementation is correct.
 ```bash
 isabelle build -b -c -D aligned        # RC=0, 33-41 s
 node tools/count-obligations.cjs       # 56 lemmas, 6 sorry, outside 0
-node tools/check-encoding.cjs          # tracked text files: no BOM, no NUL, no U+FFFD
+node .github/scripts/check-encoding.cjs          # tracked text files: no BOM, no NUL, no U+FFFD, no PUA
 ```
 
 `quick_and_dirty` off (chain check used for `T2_B7`): copy `aligned/` outside the repo,

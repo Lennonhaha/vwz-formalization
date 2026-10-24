@@ -132,8 +132,8 @@ isabelle build -b -c -D aligned          # RC=0, 33-41 s on the author's machine
 # obligation ledger: expect 56 lemmas / 6 sorry / outside 0
 node tools/count-obligations.cjs
 
-# encoding gate (tracked text files: no BOM, no NUL, no U+FFFD)
-node tools/check-encoding.cjs
+# encoding gate (tracked text files: no BOM, no NUL, no U+FFFD, no private-use chars)
+node .github/scripts/check-encoding.cjs
 ```
 
 Dependency-chain check with `quick_and_dirty` off (the method used for `T2_B7`):

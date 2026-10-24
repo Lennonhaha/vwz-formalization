@@ -26,8 +26,8 @@ jobs:
           set -euo pipefail
           out="$(node tools/count-obligations.cjs)"
           printf '%s\n' "$out"
-          printf '%s\n' "$out" | grep -q 'TOTAL                                                    56 lemmas,  7 sorry' \
-            || { echo 'FAIL: ledger total drifted from 56 lemmas / 7 sorry'; exit 1; }
+          printf '%s\n' "$out" | grep -q 'TOTAL                                                    56 lemmas,  6 sorry' \
+            || { echo 'FAIL: ledger total drifted from 56 lemmas / 6 sorry'; exit 1; }
           printf '%s\n' "$out" | grep -q 'outside: 0' \
             || { echo 'FAIL: a sorry proof step sits outside the obligation ledger'; exit 1; }
           printf '%s\n' "$out" | grep -q 'OK: every sorry proof step is an obligation in the ledger.' \

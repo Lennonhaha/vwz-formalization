@@ -163,7 +163,10 @@ Dependency-chain check with `quick_and_dirty` off (the method used for `T2_B7`):
 
 ## 9. Versioning and citation
 
-Archived at DOI [`10.5281/zenodo.23622178`](https://doi.org/10.5281/zenodo.23622178) (tag `v1.0.0`,
-concept DOI `10.5281/zenodo.23622177`, record <https://zenodo.org/records/23622178>). The machine-checked
+Archived at DOI [`10.5281/zenodo.23622795`](https://doi.org/10.5281/zenodo.23622795) (tag `v1.0.1`,
+concept DOI `10.5281/zenodo.23622177`, record <https://zenodo.org/records/23622795>). The
+earlier version, tag `v1.0.0`, stays citable at `10.5281/zenodo.23622178`; the two differ only
+in `LICENSE` (v1.0.0 archived the GPLv3 text, v1.0.1 the Apache-2.0 text that the sources and
+README declare). The machine-checked
 artefact is the git tree, so the tag is the meaningful version identifier; the archived
 zip is a `git archive` snapshot of it, and a rendered PDF is a convenience copy.

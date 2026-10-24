@@ -2,6 +2,11 @@
 
 > **Status: published 2026-10-24.** Tag `v1.0.0` = `4f81346`; archived at DOI
 > [`10.5281/zenodo.23622178`](https://doi.org/10.5281/zenodo.23622178) (concept DOI `10.5281/zenodo.23622177`).
+>
+> **Superseded by [`v1.0.1`](RELEASE-v1.0.1.md)** (DOI `10.5281/zenodo.23622795`), which replaces the
+> archived `LICENSE` with the Apache-2.0 text. The GPLv3 file in this version was contradicted by
+> the README and by every Isabelle source header; no theory or code differs between the versions.
+> This record stays as published and remains citable.
 
 ## Summary
 

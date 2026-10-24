@@ -19,7 +19,7 @@ a defect never improves the ledger — it can only shrink it by making a stateme
 provable.
 
 Build: `isabelle build -D aligned` with Isabelle2025-2, session `VWZ_A3_Aligned`.
-Current state: **56 lemmas, 7 `sorry`, 0 `sorry` outside the ledger.**
+Current state: **56 lemmas, 6 `sorry`, 0 `sorry` outside the ledger.**
 
 ---
 
@@ -117,22 +117,38 @@ something the original silently assumed:
    are not parallel" amounts to;
 3. the index is in range.
 
-**Status: open, and honestly so.** The repaired statement is true but not yet
-proved: it needs a rank theory that this development does not have.
-`aligned/VWZ_Rank.thy` supplies the first layer (outer-product shapes, entry
-formulas, and `mat_rank (zero_mat m n) = 0` proved through `rref`), and the
-closing note of that file lists the four missing pieces:
+**Status: closed (2026-10-24).** The repaired statement is proved, and not by
+the route the closing note of `aligned/VWZ_Rank.thy` anticipated.  The rank
+theory ended up needing no row-operation or minor-invariance development at all:
 
-- `rref_step`: each row operation is left multiplication by an invertible matrix;
-- `minors_invariant_under_row_ops`: "every `2 x 2` minor vanishes" is preserved
-  by row swaps, unit row scalings and row additions;
-- `rank_le_one_imp_minors_vanish`: reduced form with at most one non-zero row
-  has no non-zero minor;
-- `mat_rank (mat_mult A B) ≤ n_cols A`, i.e. rank ≤ number of pivot columns,
-  which is what bounds the rank of a sum of two outer products.
+- **upper half.** A slice entry is `(x0 * (ua!i2 * va!i3 + ub!i2 * vb!i3)) mod
+  3329`, so row `i2` of the slice is the combination `(x0 * ua!i2) * va +
+  (x0 * ub!i2) * vb`.  `rows_in_span_psi_slice_of` records that the rows lie in
+  the span of two vectors and `mat_rank_psi_slice_of_le_two` feeds it to
+  `mat_rank_le_two_of_rows_in_span` (the staircase/`rref` argument of
+  `VWZ_Rank.thy`), giving `mat_rank ≤ 2`.  Because `map2` truncates, the
+  spanning vectors are prefixes of length `min |va| |vb|`, so no length
+  hypothesis on the factors is needed;
+- **lower half.** The minor premise of the repaired statement *is* `minor2` of
+  the slice modulo 3329, so `rank_ge_two_of_nonzero_minor` gives `2 ≤ mat_rank`
+  once `is_rect` is known (now hypothesis-free);
+- the two halves sandwich the rank, and `T2_B7` is `mat_rank = 2`.
+
+The four items the file used to list were resolved in a different shape than the
+note expected, and none of them is needed for this obligation:
+`rref_step` was replaced by the residue-form undo lemmas,
+`minors_invariant_under_row_ops` was proved forward in `VWZ_ModAlgebra.thy` and
+backward through `minors_zero_rref_undo`, `rank_le_one_imp_minors_vanish` and
+`rank_ge_two_of_nonzero_minor` were proved in `VWZ_Rank.thy`, and the product
+bound `mat_rank (mat_mult A B) ≤ n_cols A` was replaced by the span argument
+above, with `rank_outer_sum_le_two` as the one-line corollary.  The unrepaired
+statement stays false (`T2_B7_refuted`), which is why the ledger statement keeps
+the non-zero-minor premise.
 
 **Lesson.** "The slice is rank 2" is a statement about the sampler, not about
-the record shape.  The well-formedness hypothesis was missing from the prose.
+the record shape.  The well-formedness hypothesis was missing from the prose —
+and the repair that worked was the structural one (rows lie in a two-vector
+span), not the most general rank theory.
 
 ---
 
@@ -170,7 +186,8 @@ T2_D5_forces_target_independence:
 ```
 
 The proof instantiates the obligation twice at `Eval [] [] []` and chains the
-two equations.  No hypothesis about `digest` is used, so this is a defect in the
+two equations.  The derivation itself uses no hypothesis about `digest`; the
+contradiction is with the body of `hash_target`, so this is a defect in the
 wording, not a cryptographic difficulty.
 
 **What the statement is missing.**
@@ -182,9 +199,27 @@ wording, not a cryptographic difficulty.
 3. an `Eval` that consumes the digest — otherwise no argument can make the
    evaluation depend on the target.
 
-**Status: open (blocked).** `T2_D5` keeps its `sorry` and is tagged as a defect
-in the statement.  Modelling `Sign` is a protocol-semantics decision that changes
-the security argument, so it is deliberately not invented here.
+**Status: open (blocked), and it does not sit on the main line.** `T2_D5` keeps
+its `sorry` and is tagged as a defect in the statement.  Two things are worth
+stating precisely.
+
+First, no *computational* counterexample can exist while the statement is
+written against the uninterpreted constant: `Eval` is declared with `consts` in
+`aligned/VWZ_Fq3329.thy` and has no body, while the protocol's real evaluation
+is the separate definition `eval :: pkey ⇒ int list ⇒ int list ⇒ int list` in
+`aligned/VWZ_Protocol.thy`.  So the evidence is necessarily the conditional
+derivation above, and its conclusion is a statement about `hash_target`, which
+*does* have a body (`aligned/VWZ_Fq3329.thy`) and derives its support from
+`digest k msg`.  A target that is a function of the message cannot be
+message-independent at a shared support index, so the obligation is false as
+written.
+
+Second, nothing else depends on it: outside `aligned/VWZ_Refutations.thy` no
+lemma uses `T2_D5`, so discharging or restating it cannot move any other
+obligation.  It is one of the six registered `sorry`s, counted by the ledger,
+and it will stay that way until `Sign` has a body and the linkage premises can
+be written down — a protocol-semantics decision that changes the security
+argument, so it is deliberately not invented here.
 
 **Lesson.** A correctness statement whose left-hand side does not mention the
 message cannot say anything about a message-dependent target.  Formalisation
@@ -198,19 +233,21 @@ found this in one type signature.
 |---|---|---|---|
 | `T2_B3` | stated over `Z`, implementation is over `F_q` | `probe_mult`, `probe_rowop` (`VWZ_Probe.thy`) | closed after restatement over `F_q` |
 | `T2_D4` | row nullity used for a non-square system | arithmetic: `k+2-rank ≥ k-1` needs `rank ≤ 3` | closed after switching to column nullity |
-| `T2_B7` | rank-2 claim without a well-formedness premise | `T2_B7_counterexample`, `T2_B7_refuted` | restated; open pending rank theory |
-| `T2_D5` | target bit forced independent of the message | `T2_D5_forces_target_independence` | open; blocked on `Sign` semantics |
+| `T2_B7` | rank-2 claim without a well-formedness premise | `T2_B7_counterexample`, `T2_B7_refuted` | closed: restated with a non-zero-minor premise, then proved via the two-vector span (`#23`, `#24`) |
+| `T2_D5` | target bit forced independent of the message | `T2_D5_forces_target_independence` | open, blocked on `Sign` semantics; no other lemma uses it |
 
-Two of the four are closed because the corrected statement is provable with the
-machinery already present.  The other two are open for two different reasons —
-one needs mathematics (a rank theory), one needs a modelling decision
-(`Sign`) — and in neither case is the gap papered over.
+Three of the four are closed.  Of the closed ones, two were closed by restating
+into a domain where the machinery already existed (`T2_B3` over `F_q`, `T2_D4`
+in the column reading) and one by finding the right structural argument rather
+than the most general theory (`T2_B7`).  The remaining one needs a modelling
+decision (`Sign`) and is isolated: nothing consumes it, so the gap cannot hide
+inside another proof.
 
 ## Reproducing
 
 ```
-isabelle build -D aligned -o document=false     # RC=0, ~15 s
-node tools/count-obligations.cjs                # 56 lemmas, 7 sorry, outside 0
+isabelle build -D aligned -o document=false     # RC=0, ~35 s on this machine
+node tools/count-obligations.cjs                # 56 lemmas, 6 sorry, outside 0
 ```
 
 `VWZ_Refutations.thy` is built as part of the session, so every refutation quoted

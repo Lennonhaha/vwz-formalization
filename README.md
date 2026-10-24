@@ -103,26 +103,29 @@ distinct positions in range, and that the indicator of such a support has Hammin
 weight equal to its length. It keeps the hypothesis that the digest supplies
 `k + 1` words, without which the claim is simply false.
 
-### Two obligations are defects in the specification, not proof debt
+### One obligation is still a defect in the specification, not proof debt
 
-`T2_B7` and `T2_D5` are marked **TODO(defect / restatement)**, and neither is a
-gap in a proof: both are statements that are false as written, and both were
-refuted by machine before anything was restated.
+`T2_D5` is marked **TODO(defect / restatement)**.  It is not a gap in a proof: it
+is a statement that is false as written, and it was refuted by machine before
+anything was restated.  `T2_B7` was in the same class and is now closed.
 
 - `T2_B7` (`VWZ_Refutations.thy`, `T2_B7_counterexample` and `T2_B7_refuted`):
   `mat_rank (psi_slice pk i) = 2` needs the key to be in the image of `KeyGen` and
   the slice to have a non-zero `2 x 2` minor. A key of the right shape with a zero
-  slice has rank 0. The repaired statement is in the ledger and is true; it is
-  still open because it needs a rank theory (`VWZ_Rank.thy` holds the first layer
-  and the work list).
+  slice has rank 0. The repaired statement is in the ledger and is **proved**: rows
+  of a slice lie in the span of two vectors (`rows_in_span_psi_slice_of`), which
+  bounds the rank by 2, and the minor premise supplies the other inequality.
 - `T2_D5` (`VWZ_Refutations.thy`, `T2_D5_forces_target_independence`): `Eval` is
   typed so that it never receives `k` or `msg`, while `pk`, `w2` and `w3` are
   free. The obligation therefore forces the target bit at a support index to be
-  the same for every message. It stays open until `Sign` has a body and the
-  linkage premises can be written down.
+  the same for every message, while `hash_target` derives its support from
+  `digest k msg`. It stays open until `Sign` has a body and the linkage premises
+  can be written down. Nothing else in the development uses it, so it cannot
+  hide an error inside another proof.
 
 `VWZ_DEFECTS.md` collects all four specification defects found this way
-(`T2_B3`, `T2_D4`, `T2_B7`, `T2_D5`) with their machine evidence and status.
+(`T2_B3`, `T2_D4`, `T2_B7`, `T2_D5`) with their machine evidence and status;
+three of the four are now closed.
 
 ### Key generation now has a body
 
@@ -239,22 +242,25 @@ rediscovered:
 - A definitional unfolding is not an obligation and is not counted as one; such
   lemmas live outside the ledger file, which is why the ledger count did not
   move when `mat_rank` got a body.
-- `T2_B7` is recorded with a defect in its *statement*, not just a missing
+- `T2_B7` was recorded with a defect in its *statement*, not just a missing
   proof: `pk` ranges over every `pkey`, so once `psi_slice` is defined the
   claim is false for a slice that happens to be zero. A well-formedness
-  hypothesis is missing and is noted rather than silently added on the
-  obligation's behalf.
+  hypothesis was missing and was noted rather than silently added on the
+  obligation's behalf; with the non-zero-minor premise the statement is now
+  proved (`#23`, `#24`).
 - That is not a matter of opinion: `VWZ_Refutations.thy` proves the negation of
   the repaired statement, with a key of the right shape, an index in range, and
   rank 0. Refutations live outside the ledger file so they are not counted as
   obligations.
 - Two obligations are explicitly **not** counted as provable: one is empirical
   (`T3_D8`), one is declared unprovable in the specification (`T3_E3b`).
-- `T2_D5` is recorded the same way as `T2_B7`: a defect in the statement.
-  `VWZ_Refutations.thy` proves that the obligation forces the target bit at a
-  support index to be message-independent, because `Eval` receives neither `k`
-  nor `msg` while `pk`, `w2` and `w3` stay free. Restating it needs a body for
-  `Sign` and the linkage premises, so the `sorry` stays and is tagged as a defect.
+- `T2_D5` is still recorded as a defect in the statement, and it is the only one
+  left open. `VWZ_Refutations.thy` proves that the obligation forces the target
+  bit at a support index to be message-independent, because `Eval` receives
+  neither `k` nor `msg` while `pk`, `w2` and `w3` stay free — and `hash_target`
+  does depend on `digest k msg`. Restating it needs a body for `Sign` and the
+  linkage premises, so the `sorry` stays and is tagged as a defect. No other
+  lemma uses it.
 - All four defects and their evidence are collected in `VWZ_DEFECTS.md`.
 
 ## License

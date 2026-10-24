@@ -757,39 +757,40 @@ text \<open>Nothing in this file bounds the rank of a sum of two outer products,
   vanishing minors of the reduced form from @{text "mat_rank A \<le> 1"}, and
   @{text minors_zero_rref_undo} carries that back to @{text A}; the statement is
   in the modulo-@{text q} form, matching @{text minors_zero}.
-  \<^enum> @{text rank_outer_sum_le_two} still needs the inner-dimension bound
+  \<^enum> @{text rank_outer_sum_le_two} needs the inner-dimension bound
   @{text "mat_rank (mat_mult A B) \<le> n_cols A"}, and that is not what
   @{text mat_rank_le_n_cols} provides: instantiating the latter at
   @{text "mat_mult A B"} yields @{text "mat_rank (mat_mult A B) \<le> n_cols B"},
-  which constrains the outer dimension instead.
+  which constrains the outer dimension instead.  That bound is supplied by
+  @{text mat_rank_le_two_of_rows_in_span}, proved at the end of this theory.
 
-  Writing the remaining headers down without proofs would put @{text sorry}s
-  outside the obligation ledger, so they stay a work list: the ledger in
+  Writing a header down without a proof would put a @{text sorry} outside the
+  obligation ledger, so items on this list stayed comments until their proof
+  existed.  Nothing on the list is outstanding now: the ledger in
   @{file VWZ_ObligationsAligned.thy} keeps its 7 @{text sorry}, and the lemmas
   added alongside carry no @{text sorry} at all.\<close>
 
-(* TODO(proof): the inner-dimension bound, the one piece route A still owes.
+(* RESOLVED 2026-10-24: the inner-dimension bound, the last piece route A owed.
 
    lemma mat_rank_le_two_of_rows_in_span:
      "length p = length q \<Longrightarrow> rows_in_span p q M \<Longrightarrow> mat_rank M \<le> 2"
 
-   Not a header on purpose: a stub proof would put a sorry outside the obligation
-   ledger, and the ledger gate counts every sorry in the tree.  So the statement
-   stays a comment until the proof exists.
+   The proof is at the end of this theory, after @{text fq_det3_cong}, together with
+   the facts it builds on: @{text rect_of_rows_in_span} (the matrix is rectangular),
+   @{text n_cols_lt_fuel} (the fuel bound rules out the third disjunct of the shape
+   lemma), @{text det3_rank2_zero} (a determinant of three span combinations is zero)
+   and @{text det3_nz_of_span_upper} (a determinant that is upper triangular modulo
+   3329 is nonzero).  No sorry is added anywhere: the obligation ledger keeps its 7,
+   and the lemmas added alongside carry none.
 
-   What is already in place for it: rows_in_span and its closure under swap, scale,
-   add_row_mult and eliminate_col; rows_in_span_rref_fuel, which carries the
-   predicate through the whole reduction; and rref_fuel_shape, which now takes and
-   returns the staircase invariant, so the reduced form arrives as a staircase.
-
-   What is missing: the det3 route.  Three nonzero rows of a staircase, taken in index
-   order, have increasing leading columns because the invariant now carries that order
-   as its fifth conjunct, so the square submatrix at those rows and columns is upper
-   triangular with nonzero diagonal, hence its determinant is nonzero mod 3329;
-   rowwise congruence then transfers that to the matrix whose rows lie in the span of
-   p and q, where the same determinant vanishes because every row is a combination of
-   two vectors.  The congruence step is now in place as fq_det3_cong above; the
-   determinant facts live in VWZ_Matrix.
+   Shape of the argument: @{text rref_fuel_shape} delivers the reduced form as a
+   staircase with row pointer @{text r0} and frontier @{text c0}; @{text filter_take_eq}
+   plus the frontier property turns @{text "mat_rank M"} into @{text r0}.  If @{text r0}
+   were at least 3, the first three rows have strictly increasing leading columns, so the
+   square submatrix at those rows and columns is upper triangular with nonzero diagonal,
+   hence its determinant is nonzero mod 3329; but the same rows lie in the span of
+   @{text p} and @{text q}, so the corresponding determinant vanishes, and
+   @{text fq_det3_cong} transfers the vanishing back.  Hence @{text "r0 \<le> 2"}.
 
    Consumers once proved: rank_outer_sum_le_two, and through it T2_B7, whose own
    statement is still the defective one recorded in VWZ_ObligationsAligned.thy.
@@ -2731,5 +2732,356 @@ proof -
   show ?thesis using s by (simp add: det3_def algebra_simps)
 qed
 
+
+lemma det3_rank2_zero:
+  fixes a0 b0 a1 b1 a2 b2 u0 u1 u2 v0 v1 v2 :: int
+  shows "det3 [[a0 * u0 + b0 * v0, a0 * u1 + b0 * v1, a0 * u2 + b0 * v2],
+               [a1 * u0 + b1 * v0, a1 * u1 + b1 * v1, a1 * u2 + b1 * v2],
+               [a2 * u0 + b2 * v0, a2 * u1 + b2 * v1, a2 * u2 + b2 * v2]] = 0"
+  by (simp add: det3_def entry_def algebra_simps)
+
+text \<open>Rows that live in the span of two fixed vectors all have the same length,
+  so the matrix is rectangular.  This is where the side condition of the fuel
+  induction comes from: it is not assumed, it is read off the hypothesis.\<close>
+
+lemma rect_of_rows_in_span:
+  assumes rs: "rows_in_span p q M"
+  shows "is_rect M"
+proof (cases "M = []")
+  case True
+  then show ?thesis by (simp add: is_rect_def)
+next
+  case False
+  hence nr: "0 < n_rows M" by (simp add: n_rows_def)
+  have h0: "in_span2 p q (M ! 0)" using rs nr by (simp add: rows_in_span_def)
+  have l0: "length (M ! 0) = length p" using h0 by (simp add: in_span2_def)
+  have nc: "n_cols M = length p" using False l0 by (simp add: n_cols_def)
+  show ?thesis
+  proof (unfold is_rect_def, intro ballI)
+    fix r
+    assume rm: "r \<in> set M"
+    obtain i where i: "i < n_rows M" and r: "r = M ! i"
+      using rm by (auto simp add: in_set_conv_nth n_rows_def)
+    have "in_span2 p q (M ! i)" using rs i by (simp add: rows_in_span_def)
+    hence "length (M ! i) = length p" by (simp add: in_span2_def)
+    thus "length r = n_cols M" using r nc by simp
+  qed
+qed
+
+text \<open>The fuel bound is larger than the column count, which is what rules out the
+  third disjunct of the shape lemma.  Arithmetic, not simplification: expanding
+  @{text n_cols} here would only produce a case split on @{text "M = []"}.\<close>
+
+lemma n_cols_lt_fuel: "n_cols M < n_rows M * n_cols M + n_rows M + 1"
+proof (cases "n_cols M = 0")
+  case True
+  then show ?thesis by simp
+next
+  case False
+  hence nz: "0 < n_cols M" by simp
+  have nr1: "1 \<le> n_rows M"
+  proof (rule ccontr)
+    assume "\<not> 1 \<le> n_rows M"
+    hence "n_rows M = 0" by simp
+    hence "M = []" by (simp add: n_rows_def)
+    hence "n_cols M = 0" by (simp add: n_cols_def)
+    with nz show False by simp
+  qed
+  have "1 * n_cols M \<le> n_rows M * n_cols M" using nr1 by (rule mult_le_mono1)
+  hence "n_cols M \<le> n_rows M * n_cols M" by simp
+  then show ?thesis by linarith
+qed
+
+text \<open>A matrix that is upper triangular up to the modular value of its entries has a
+  determinant that is nonzero mod 3329.  This is the form the span argument produces:
+  the lower left corner is not literally zero, only congruent to zero.
+  @{text fq_det3_cong} bridges the two shapes in one step.\<close>
+
+lemma det3_nz_of_span_upper:
+  fixes a0 b0 a1 b1 a2 b2 u0 u1 u2 v0 v1 v2 :: int
+  assumes d0: "fq (a0 * u0 + b0 * v0) \<noteq> 0"
+    and d1: "fq (a1 * u1 + b1 * v1) \<noteq> 0"
+    and d2: "fq (a2 * u2 + b2 * v2) \<noteq> 0"
+    and z10: "fq (a1 * u0 + b1 * v0) = 0"
+    and z20: "fq (a2 * u0 + b2 * v0) = 0"
+    and z21: "fq (a2 * u1 + b2 * v1) = 0"
+  shows "fq (det3 [[a0 * u0 + b0 * v0, a0 * u1 + b0 * v1, a0 * u2 + b0 * v2],
+                     [a1 * u0 + b1 * v0, a1 * u1 + b1 * v1, a1 * u2 + b1 * v2],
+                     [a2 * u0 + b2 * v0, a2 * u1 + b2 * v1, a2 * u2 + b2 * v2]]) \<noteq> 0"
+proof -
+  let ?T = "[[a0 * u0 + b0 * v0, a0 * u1 + b0 * v1, a0 * u2 + b0 * v2],
+              [a1 * u0 + b1 * v0, a1 * u1 + b1 * v1, a1 * u2 + b1 * v2],
+              [a2 * u0 + b2 * v0, a2 * u1 + b2 * v1, a2 * u2 + b2 * v2]]"
+  let ?U = "[[a0 * u0 + b0 * v0, a0 * u1 + b0 * v1, a0 * u2 + b0 * v2],
+              [0, a1 * u1 + b1 * v1, a1 * u2 + b1 * v2],
+              [0, 0, a2 * u2 + b2 * v2]]"
+  have cong: "\<forall>i < 3. \<forall>j < 3. fq (entry ?T i j) = fq (entry ?U i j)"
+  proof (intro allI impI)
+    fix i j :: nat
+    assume i3: "i < 3" and j3: "j < 3"
+    have di: "i = 0 \<or> i = 1 \<or> i = 2" using i3 by presburger
+    have dj: "j = 0 \<or> j = 1 \<or> j = 2" using j3 by presburger
+    show "fq (entry ?T i j) = fq (entry ?U i j)"
+      using di dj z10 z20 z21 by (elim disjE, elim disjE, simp_all add: entry_def)
+  qed
+  have eq: "fq (det3 ?T) = fq (det3 ?U)" by (rule fq_det3_cong[OF cong])
+  have m0: "(a0 * u0 + b0 * v0) mod 3329 \<noteq> 0" using d0 by (simp add: fq_def)
+  have m1: "(a1 * u1 + b1 * v1) mod 3329 \<noteq> 0" using d1 by (simp add: fq_def)
+  have m2: "(a2 * u2 + b2 * v2) mod 3329 \<noteq> 0" using d2 by (simp add: fq_def)
+  have nz: "det3 ?U mod 3329 \<noteq> 0" using det3_triangular_nz_mod[OF m0 m1 m2] .
+  have "fq (det3 ?U) = det3 ?U mod 3329" by (simp add: fq_def)
+  with eq nz show ?thesis by simp
+qed
+
+text \<open>The number of nonzero rows of the reduced form is the row pointer of the
+  staircase: the rows from @{text r0} on are zero because the staircase has zeroed
+  every column below its frontier, and the rows above @{text r0} are nonzero because
+  each of them still has a leading entry left of the frontier.  The bound
+  @{text "mat_rank M \<le> 2"} then comes from a determinant argument: three nonzero rows
+  would give a nonzero minor mod 3329, which three rows lying in the span of two fixed
+  vectors cannot have.\<close>
+
+lemma mat_rank_le_two_of_rows_in_span:
+  assumes len: "length p = length q" and rs: "rows_in_span p q M"
+  shows "mat_rank M \<le> 2"
+proof -
+  have rectM: "is_rect M" using rs by (rule rect_of_rows_in_span)
+  have st0: "staircase 0 0 M"
+  proof (rule staircaseI)
+    show "0 \<le> n_rows M" by simp
+    show "is_rect M" by (rule rectM)
+    show "zero_below 0 0 M" by (simp add: zero_below_def)
+    show "\<forall>k < 0. lead (M ! k) < 0" by simp
+    show "mono_leads 0 M" by (simp add: mono_leads_def)
+  qed
+  have sh: "\<exists>r0 c0. 0 \<le> r0 \<and> r0 \<le> c0 \<and> 0 \<le> c0 \<and> c0 \<le> n_cols M
+              \<and> staircase r0 c0 (rref M)
+              \<and> n_cols (rref M) = n_cols M
+              \<and> n_rows (rref M) = n_rows M
+              \<and> (n_rows M \<le> r0 \<or> n_cols M \<le> c0
+                 \<or> 0 + (n_rows M * n_cols M + n_rows M + 1) \<le> c0)"
+    using rref_fuel_shape[of 0 0 M "n_rows M * n_cols M + n_rows M + 1"] st0
+    by (simp add: rref_def)
+  obtain r0 c0 where
+    rle: "r0 \<le> c0" and c0n: "c0 \<le> n_cols M"
+    and stR: "staircase r0 c0 (rref M)"
+    and ncR: "n_cols (rref M) = n_cols M"
+    and nrR: "n_rows (rref M) = n_rows M"
+    and cnd: "n_rows M \<le> r0 \<or> n_cols M \<le> c0
+              \<or> 0 + (n_rows M * n_cols M + n_rows M + 1) \<le> c0"
+    using sh by blast
+  have fueln: "n_cols M < n_rows M * n_cols M + n_rows M + 1"
+    by (rule n_cols_lt_fuel)
+  have disj: "n_rows M \<le> r0 \<or> n_cols M \<le> c0"
+  proof -
+    have "\<not> (0 + (n_rows M * n_cols M + n_rows M + 1) \<le> c0)"
+      using c0n fueln by simp
+    with cnd show ?thesis by blast
+  qed
+  let ?R = "rref M"
+  have zbR: "zero_below r0 c0 ?R" using stR by (rule staircase_zero_below)
+  have rectR: "is_rect ?R" using stR by (rule staircase_rect)
+  have leadsR: "\<forall>k < r0. lead (?R ! k) < c0" using stR by (rule staircase_leads)
+  have monoR: "mono_leads r0 ?R" using stR by (rule staircase_mono_leads)
+  have r0n: "r0 \<le> n_rows ?R" using stR by (rule staircase_row_bound)
+  have cnR: "c0 \<le> n_cols ?R" using c0n ncR by simp
+  have tailz: "\<forall>x \<in> set (drop r0 ?R). all_zero_row x"
+  proof (intro ballI)
+    fix x
+    assume xm: "x \<in> set (drop r0 ?R)"
+    obtain j where j: "j < length (drop r0 ?R)" and x: "(drop r0 ?R) ! j = x"
+      using xm by (auto simp add: in_set_conv_nth)
+    have idx: "r0 + j < n_rows ?R"
+    proof -
+      have "length (drop r0 ?R) = length ?R - r0" by simp
+      hence "j < length ?R - r0" using j by simp
+      hence "r0 + j < length ?R" by (simp add: less_diff_conv add.commute)
+      thus ?thesis by (simp add: n_rows_def)
+    qed
+    have xe: "x = ?R ! (r0 + j)" using x j by (simp add: nth_drop)
+    show "all_zero_row x"
+    proof (cases "n_cols M \<le> c0")
+      case True
+      have ncl: "n_cols ?R \<le> c0" using True ncR by simp
+      have az: "all_zero_row (?R ! (r0 + j))"
+      proof (unfold all_zero_row_def, intro ballI)
+        fix y
+        assume ym: "y \<in> set (?R ! (r0 + j))"
+        obtain col where col: "col < length (?R ! (r0 + j))" and y: "y = (?R ! (r0 + j)) ! col"
+          using ym by (auto simp add: in_set_conv_nth)
+        have lenj: "length (?R ! (r0 + j)) = n_cols ?R" using is_rect_rows[OF rectR idx] .
+        have colc: "col < c0" using col lenj ncl by linarith
+        have ge: "r0 \<le> r0 + j" by simp
+        have ze: "fq (entry ?R (r0 + j) col) = 0"
+          using zero_below_entry[OF zbR ge idx colc] .
+        show "fq y = 0" using y ze by (simp add: entry_def)
+      qed
+      show ?thesis using xe az by simp
+    next
+      case False
+      with disj have nr: "n_rows M \<le> r0" by simp
+      show ?thesis using idx nrR nr by linarith
+    qed
+  qed
+  have frontnz: "\<forall>i < r0. \<not> all_zero_row (?R ! i)"
+  proof (intro allI impI)
+    fix i
+    assume i: "i < r0"
+    have ir: "i < n_rows ?R" using i r0n by linarith
+    have leni: "length (?R ! i) = n_cols ?R" using rectR ir by (rule is_rect_rows)
+    have lc: "lead (?R ! i) < c0" using leadsR i by simp
+    have cl: "c0 \<le> length (?R ! i)" using cnR leni by linarith
+    have llen: "lead (?R ! i) < length (?R ! i)" using lc cl by linarith
+    have nz: "fq ((?R ! i) ! lead (?R ! i)) \<noteq> 0"
+      using llen by (rule lead_nth_nonzero)
+    show "\<not> all_zero_row (?R ! i)"
+    proof
+      assume az: "all_zero_row (?R ! i)"
+      have z: "fq ((?R ! i) ! lead (?R ! i)) = 0"
+        using az llen by (rule all_zero_row_entry)
+      with nz show False by simp
+    qed
+  qed
+  have r0lelen: "r0 \<le> length ?R" using r0n by (simp add: n_rows_def)
+  have take_len: "length (take r0 ?R) = r0" using r0lelen by (simp add: min_def)
+  have fid: "filter (\<lambda>r. \<not> all_zero_row r) (take r0 ?R) = take r0 ?R"
+  proof (rule filter_id_conv[THEN iffD2])
+    show "\<forall>x \<in> set (take r0 ?R). \<not> all_zero_row x"
+    proof (intro ballI)
+      fix x
+      assume xm: "x \<in> set (take r0 ?R)"
+      obtain i where i: "i < length (take r0 ?R)" and ix: "(take r0 ?R) ! i = x"
+        using xm by (auto simp add: in_set_conv_nth)
+      have i0: "i < r0" using i take_len by simp
+      have ri: "?R ! i = x" using i ix i0 by (simp add: nth_take)
+      have nx: "\<not> all_zero_row (?R ! i)" using frontnz i0 by blast
+      show "\<not> all_zero_row x" using nx ri by metis
+    qed
+  qed
+  have tailz2: "\<forall>x \<in> set (drop r0 ?R). \<not> (\<lambda>r. \<not> all_zero_row r) x"
+    using tailz by simp
+  have e1: "filter (\<lambda>r. \<not> all_zero_row r) ?R
+          = filter (\<lambda>r. \<not> all_zero_row r) (take r0 ?R)"
+    using tailz2 by (rule filter_take_eq)
+  have rankeq: "mat_rank M = r0"
+  proof -
+    have a1: "mat_rank M = length (filter (\<lambda>r. \<not> all_zero_row r) ?R)"
+      by (simp add: mat_rank_def)
+    have a2: "length (filter (\<lambda>r. \<not> all_zero_row r) ?R)
+            = length (filter (\<lambda>r. \<not> all_zero_row r) (take r0 ?R))" using e1 by simp
+    have a3: "length (filter (\<lambda>r. \<not> all_zero_row r) (take r0 ?R))
+            = length (take r0 ?R)" using fid by simp
+    have a4: "length (take r0 ?R) = r0" using take_len .
+    show ?thesis using a1 a2 a3 a4 by simp
+  qed
+  have r0le2: "r0 \<le> 2"
+  proof (rule ccontr)
+    assume nle: "\<not> r0 \<le> 2"
+    hence h3: "3 \<le> r0" by simp
+    have h0: "0 < n_rows ?R" using h3 r0n by linarith
+    have h1: "1 < n_rows ?R" using h3 r0n by linarith
+    have h2: "2 < n_rows ?R" using h3 r0n by linarith
+    let ?L0 = "lead (?R ! 0)"
+    let ?L1 = "lead (?R ! 1)"
+    let ?L2 = "lead (?R ! 2)"
+    have i0r: "0 < r0" using h3 by linarith
+    have i1r: "1 < r0" using h3 by linarith
+    have i2r: "2 < r0" using h3 by linarith
+    have l0c: "?L0 < c0" using leadsR i0r by blast
+    have l1c: "?L1 < c0" using leadsR i1r by blast
+    have l2c: "?L2 < c0" using leadsR i2r by blast
+    have v0: "?L0 < n_cols ?R" using l0c cnR by linarith
+    have v1: "?L1 < n_cols ?R" using l1c cnR by linarith
+    have v2: "?L2 < n_cols ?R" using l2c cnR by linarith
+    have len0: "length (?R ! 0) = n_cols ?R" using is_rect_rows[OF rectR h0] .
+    have len1: "length (?R ! 1) = n_cols ?R" using is_rect_rows[OF rectR h1] .
+    have len2: "length (?R ! 2) = n_cols ?R" using is_rect_rows[OF rectR h2] .
+    have ll0: "?L0 < length (?R ! 0)" using v0 len0 by linarith
+    have ll1: "?L1 < length (?R ! 1)" using v1 len1 by linarith
+    have ll2: "?L2 < length (?R ! 2)" using v2 len2 by linarith
+    have d0e: "fq (entry ?R 0 ?L0) \<noteq> 0" using lead_nth_nonzero[OF ll0] by (simp add: entry_def)
+    have d1e: "fq (entry ?R 1 ?L1) \<noteq> 0" using lead_nth_nonzero[OF ll1] by (simp add: entry_def)
+    have d2e: "fq (entry ?R 2 ?L2) \<noteq> 0" using lead_nth_nonzero[OF ll2] by (simp add: entry_def)
+    have l01: "?L0 < ?L1"
+    proof -
+      have z1: "(0::nat) < 1" by simp
+      have z2: "1 < r0" using h3 by linarith
+      show ?thesis using mono_leads_lt[OF monoR, of 0 1] z1 z2 by blast
+    qed
+    have l12: "?L1 < ?L2"
+    proof -
+      have z1: "(1::nat) < 2" by simp
+      have z2: "2 < r0" using h3 by linarith
+      show ?thesis using mono_leads_lt[OF monoR, of 1 2] z1 z2 by blast
+    qed
+    have l02: "?L0 < ?L2" using l01 l12 by linarith
+    have z10e: "fq (entry ?R 1 ?L0) = 0" using lead_nth_zero[OF l01] by (simp add: entry_def)
+    have z20e: "fq (entry ?R 2 ?L0) = 0" using lead_nth_zero[OF l02] by (simp add: entry_def)
+    have z21e: "fq (entry ?R 2 ?L1) = 0" using lead_nth_zero[OF l12] by (simp add: entry_def)
+    have rsR: "rows_in_span p q ?R"
+      using rows_in_span_rref_fuel[OF rectM rs, of "n_rows M * n_cols M + n_rows M + 1" 0 0]
+      by (simp add: rref_def)
+    have in0: "in_span2 p q (?R ! 0)" using rsR h0 by (simp add: rows_in_span_def)
+    have in1: "in_span2 p q (?R ! 1)" using rsR h1 by (simp add: rows_in_span_def)
+    have in2: "in_span2 p q (?R ! 2)" using rsR h2 by (simp add: rows_in_span_def)
+    have lp0: "length (?R ! 0) = length p" using in0 by (simp add: in_span2_def)
+    have lp1: "length (?R ! 1) = length p" using in1 by (simp add: in_span2_def)
+    have lp2: "length (?R ! 2) = length p" using in2 by (simp add: in_span2_def)
+    obtain a0 b0 where ab0: "\<forall>j. j < length p \<longrightarrow> fq ((?R ! 0) ! j) = fq (a0 * (p ! j) + b0 * (q ! j))"
+      using in0 by (auto simp add: in_span2_def)
+    obtain a1 b1 where ab1: "\<forall>j. j < length p \<longrightarrow> fq ((?R ! 1) ! j) = fq (a1 * (p ! j) + b1 * (q ! j))"
+      using in1 by (auto simp add: in_span2_def)
+    obtain a2 b2 where ab2: "\<forall>j. j < length p \<longrightarrow> fq ((?R ! 2) ! j) = fq (a2 * (p ! j) + b2 * (q ! j))"
+      using in2 by (auto simp add: in_span2_def)
+    have p0: "?L0 < length p" using v0 len0 lp0 by linarith
+    have p1: "?L1 < length p" using v1 len1 lp1 by linarith
+    have p2: "?L2 < length p" using v2 len2 lp2 by linarith
+    let ?T = "[[a0 * (p ! ?L0) + b0 * (q ! ?L0), a0 * (p ! ?L1) + b0 * (q ! ?L1), a0 * (p ! ?L2) + b0 * (q ! ?L2)],
+               [a1 * (p ! ?L0) + b1 * (q ! ?L0), a1 * (p ! ?L1) + b1 * (q ! ?L1), a1 * (p ! ?L2) + b1 * (q ! ?L2)],
+               [a2 * (p ! ?L0) + b2 * (q ! ?L0), a2 * (p ! ?L1) + b2 * (q ! ?L1), a2 * (p ! ?L2) + b2 * (q ! ?L2)]]"
+    have dT: "det3 ?T = 0" by (rule det3_rank2_zero)
+    have fT: "fq (det3 ?T) = 0" using dT by (simp add: fq_def)
+    have D0: "fq (a0 * (p ! ?L0) + b0 * (q ! ?L0)) \<noteq> 0"
+    proof -
+      have "fq (entry ?R 0 ?L0) = fq (a0 * (p ! ?L0) + b0 * (q ! ?L0))"
+        using ab0 p0 by (simp add: entry_def)
+      with d0e show ?thesis by metis
+    qed
+    have D1: "fq (a1 * (p ! ?L1) + b1 * (q ! ?L1)) \<noteq> 0"
+    proof -
+      have "fq (entry ?R 1 ?L1) = fq (a1 * (p ! ?L1) + b1 * (q ! ?L1))"
+        using ab1 p1 by (simp add: entry_def)
+      with d1e show ?thesis by metis
+    qed
+    have D2: "fq (a2 * (p ! ?L2) + b2 * (q ! ?L2)) \<noteq> 0"
+    proof -
+      have "fq (entry ?R 2 ?L2) = fq (a2 * (p ! ?L2) + b2 * (q ! ?L2))"
+        using ab2 p2 by (simp add: entry_def)
+      with d2e show ?thesis by metis
+    qed
+    have Z10: "fq (a1 * (p ! ?L0) + b1 * (q ! ?L0)) = 0"
+    proof -
+      have "fq (entry ?R 1 ?L0) = fq (a1 * (p ! ?L0) + b1 * (q ! ?L0))"
+        using ab1 p0 by (simp add: entry_def)
+      with z10e show ?thesis by metis
+    qed
+    have Z20: "fq (a2 * (p ! ?L0) + b2 * (q ! ?L0)) = 0"
+    proof -
+      have "fq (entry ?R 2 ?L0) = fq (a2 * (p ! ?L0) + b2 * (q ! ?L0))"
+        using ab2 p0 by (simp add: entry_def)
+      with z20e show ?thesis by metis
+    qed
+    have Z21: "fq (a2 * (p ! ?L1) + b2 * (q ! ?L1)) = 0"
+    proof -
+      have "fq (entry ?R 2 ?L1) = fq (a2 * (p ! ?L1) + b2 * (q ! ?L1))"
+        using ab2 p1 by (simp add: entry_def)
+      with z21e show ?thesis by metis
+    qed
+    have nzT: "fq (det3 ?T) \<noteq> 0"
+      using det3_nz_of_span_upper[OF D0 D1 D2 Z10 Z20 Z21] .
+    with fT show False by simp
+  qed
+  show ?thesis using rankeq r0le2 by simp
+qed
 
 end

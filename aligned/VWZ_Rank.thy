@@ -718,7 +718,7 @@ proof -
   qed
 qed
 
-section \<open>What is still missing for T2_B7\<close>
+section \<open>Status of the ingredients behind the T2_B7 rank bound\<close>
 
 text \<open>Nothing in this file bounds the rank of a sum of two outer products, and
   that is deliberate rather than an oversight.  @{text mat_rank} counts the nonzero
@@ -766,8 +766,8 @@ text \<open>Nothing in this file bounds the rank of a sum of two outer products,
 
   Writing a header down without a proof would put a @{text sorry} outside the
   obligation ledger, so items on this list stayed comments until their proof
-  existed.  Nothing on the list is outstanding now: the ledger in
-  @{file VWZ_ObligationsAligned.thy} keeps its 7 @{text sorry}, and the lemmas
+  existed.  Nothing on the list is outstanding now, and T2_B7 itself is proved: the ledger in
+  @{file VWZ_ObligationsAligned.thy} keeps 6 @{text sorry}, and the lemmas
   added alongside carry no @{text sorry} at all.\<close>
 
 (* RESOLVED 2026-10-24: the inner-dimension bound, the last piece route A owed.
@@ -780,7 +780,7 @@ text \<open>Nothing in this file bounds the rank of a sum of two outer products,
    @{text n_cols_lt_fuel} (the fuel bound rules out the third disjunct of the shape
    lemma), @{text det3_rank2_zero} (a determinant of three span combinations is zero)
    and @{text det3_nz_of_span_upper} (a determinant that is upper triangular modulo
-   3329 is nonzero).  No sorry is added anywhere: the obligation ledger keeps its 7,
+   3329 is nonzero).  No sorry is added anywhere: the obligation ledger keeps 6,
    and the lemmas added alongside carry none.
 
    Shape of the argument: @{text rref_fuel_shape} delivers the reduced form as a
@@ -792,8 +792,8 @@ text \<open>Nothing in this file bounds the rank of a sum of two outer products,
    @{text p} and @{text q}, so the corresponding determinant vanishes, and
    @{text fq_det3_cong} transfers the vanishing back.  Hence @{text "r0 \<le> 2"}.
 
-   Consumers once proved: rank_outer_sum_le_two, and through it T2_B7, whose own
-   statement is still the defective one recorded in VWZ_ObligationsAligned.thy.
+   Consumers: rank_outer_sum_le_two (proved just above the psi_slice section) and
+   T2_B7, whose repaired statement is no longer a defect: it is proved.
 *)
 
 (* seg: rank-lead-invmod-20261023 *)
@@ -3082,6 +3082,40 @@ proof -
     with fT show False by simp
   qed
   show ?thesis using rankeq r0le2 by simp
+qed
+
+lemma rank_outer_sum_le_two:
+  assumes lv: "length v = length v'"
+  shows "mat_rank (outer_sum2 u v u' v') \<le> 2"
+proof -
+  have rs: "rows_in_span v v' (outer_sum2 u v u' v')"
+  proof (unfold rows_in_span_def, intro allI impI)
+    fix i
+    assume i: "i < n_rows (outer_sum2 u v u' v')"
+    have iu: "i < length u" using i by simp
+    show "in_span2 v v' (outer_sum2 u v u' v' ! i)"
+    proof (unfold in_span2_def, intro conjI)
+      show "length (outer_sum2 u v u' v' ! i) = length v"
+        using iu by (simp add: outer_sum2_def)
+      show "length (outer_sum2 u v u' v' ! i) = length v'"
+        using iu lv by (simp add: outer_sum2_def)
+      show "\<exists>a b. \<forall>j. j < length v \<longrightarrow>
+              fq ((outer_sum2 u v u' v' ! i) ! j) = fq (a * v ! j + b * v' ! j)"
+      proof (intro exI allI impI)
+        fix j
+        assume j: "j < length v"
+        have rowt: "outer_sum2 u v u' v' ! i
+            = map (\<lambda>k. u ! i * v ! k + u' ! i * v' ! k) [0..<length v]"
+          using iu by (simp add: outer_sum2_def)
+        have e: "(outer_sum2 u v u' v' ! i) ! j = u ! i * v ! j + u' ! i * v' ! j"
+          using rowt j by simp
+        show "fq ((outer_sum2 u v u' v' ! i) ! j)
+                = fq (u ! i * v ! j + u' ! i * v' ! j)"
+          using e by simp
+      qed
+    qed
+  qed
+  from mat_rank_le_two_of_rows_in_span[OF lv rs] show ?thesis .
 qed
 
 section \<open>The rank-2 slice: rows lie in a two-vector span\<close>

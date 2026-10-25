@@ -39,9 +39,10 @@
 并坚持一条纪律：先按原文形式化，机器否证后才允许改述。
 依此在规范中发现四处缺陷：算术域错配（\code{T2\_B3}）、零化度口径错配（\code{T2\_D4}），
 以及两处前提缺失致陈述为假（\code{T2\_B7} 缺秩前提、\code{T2\_D5} 迫使目标位与消息无关）。
-前两处给出改述与闭合证明；后两处给出三行以内的机器反证，
-并区分两类不可证原因：缺数学、缺建模决策。
-系统含 20 个理论文件、56 条义务引理（余 7 个未闭合，账本外零个 \code{sorry}），构建约 16 秒。
+前两处给出改述与闭合证明，第三处（\code{T2\_B7}）补上秩前提后同样闭合；
+最后一处（\code{T2\_D5}）给出三行以内的机器反证，并定性为签名语义缺位导致的规范冲突，
+而非密码学困难。两类不同的不可证原因由此区分开来：缺数学、缺建模决策。
+系统含 20 个理论文件、56 条义务引理（余 6 个未闭合，账本外零个 \code{sorry}），构建约 15 秒（预热）。
 本文的贡献在于：形式化能在实现之前把"看起来对"的句子变成"机器判定为假"的句子。
 
 \vspace{0.6em}
@@ -74,7 +75,7 @@ Jasmin 的经过验证的编译器与常量时间检查\cite{jasmin}、HACL* 的
 \begin{enumerate}
   \item 在一个真实的后量子构造（VWZ）上建立了可复跑的形式化骨架：
         20 个理论文件、56 条分层义务引理、账本外零个 \code{sorry}。
-  \item 发现并机器否证了四处规范缺陷，其中两处给出了可证的改述并已闭合。
+  \item 发现并机器否证了四处规范缺陷，其中三处经改述后给出闭合证明。
   \item 提出并实践了"形式化—否证—改述"四步法（第 \ref{sec:method} 节），
         把"改述"从一种可以随手进行的便利，变成必须有机器证据才能执行的动作。
   \item 给出完整的复现路径：一条构建命令、一条账本统计命令，全部缺陷均可被第三方重跑。
@@ -206,18 +207,14 @@ $\code{mat\_rank (psi\_slice pk i)} = 2$。
 \code{T2\_B7\_}\allowbreak\code{counterexample}（秩为 $0$），并以 \code{T2\_B7\_refuted} 证明
 "对任意公钥与下标，切片秩恒为 2"的否定。
 
-\textbf{改述与状态。} 补三条前提：(1) 公钥属于 \code{KeyGen} 的像；
+\textbf{改述与状态（已闭合）。} 补三条前提：(1) 公钥属于 \code{KeyGen} 的像；
 (2) 切片存在非零 $2\times 2$ 子式（对两个外积之和而言，即两个抽取向量不平行）；
-(3) 下标在范围内。改述后的陈述为真且已入账，但\textbf{尚未证明}：
-它需要一套本系统尚无的行空间秩理论。已完成的首层（\code{VWZ\_Rank.thy}）给出
-外积与其和的形状、入口公式，以及"零矩阵的秩为零"——后者是经由 \code{rref} 证明的真命题，
-而非定义展开。尚缺四块：
-\begin{enumerate}
-  \item \code{rref\_step}：交换行、行乘单位、行加倍数各自是左乘一个可逆矩阵；
-  \item \code{minors\_invariant\_under\_row\_ops}：行操作保持"所有 $2\times2$ 子式为零"；
-  \item \code{rank\_le\_one\_imp\_minors\_vanish}：至多一个非零行的化简形不含非零子式；
-  \item $\code{mat\_rank (mat\_mult A B)} \le \code{n\_cols A}$，即秩不超过主元列数。
-\end{enumerate}
+(3) 下标在范围内。改述后的陈述获得机器证明，路线分两侧：
+上界由 \code{rows\_in\_span\_psi\_slice\_of} 把每一行写成两个向量的线性组合，
+再由 \code{mat\_rank\_le\_two\_of\_rows\_in\_span} 得 $\code{mat\_rank}\le 2$；
+下界由 \code{is\_rect\_psi\_slice\_of} 给出矩阵形状，配合非零子式与
+\code{rank\_ge\_two\_of\_nonzero\_minor} 得 $\code{mat\_rank}\ge 2$；两侧夹逼即得秩为 $2$。
+支撑引理共 8 条，全部位于 \code{VWZ\_Rank.thy}，随主会话一起构建。
 
 \subsection{目标独立性冲突（\code{T2\_D5}）}
 \textbf{原文陈述。} 若 $i$ 落在目标支撑集内，则
@@ -272,22 +269,22 @@ Isabelle2025-2；构建会话 \code{VWZ\_A3\_Aligned}（父会话 \code{HOL-Numb
 指标 & 数值 \\
 \midrule
 理论文件数 & 20 \\
-仓库内引理总数 & 373 \\
+仓库内引理总数 & 582 \\
 账本内义务引理 & 56 \\
-账本内未闭合证明（\code{sorry}） & 7 \\
+账本内未闭合证明（\code{sorry}） & 6 \\
 账本外未闭合证明 & 0 \\
-全量构建耗时 & 约 16 秒 \\
-已闭合缺陷 & 2（\code{T2\_B3}、\code{T2\_D4}）\\
-已机器否证、待改述闭合的缺陷 & 2（\code{T2\_B7}、\code{T2\_D5}）\\
+全量构建耗时 & 约 15 秒（预热）；35--52 秒（全量重建）\\
+已闭合缺陷 & 3（\code{T2\_B3}、\code{T2\_D4}、\code{T2\_B7}）\\
+已机器否证、待建模决策的缺陷 & 1（\code{T2\_D5}）\\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \subsection{复现指南}
 \begin{verbatim}
-isabelle build -D aligned -o document=false   # 期望 RC=0，约 16 秒
+isabelle build -D aligned -o document=false   # 期望 RC=0，约 15 秒
 node tools/count-obligations.cjs
-# 期望输出：56 lemmas, 7 sorry, outside 0
+# 期望输出：56 lemmas, 6 sorry, outside 0
 \end{verbatim}
 反例文件 \code{VWZ\_Refutations.thy} 参与同一会话构建，
 因此本文引用的每一条否证都在每次构建时被重新检查，不存在"当年跑过一次"的证据。
@@ -299,20 +296,23 @@ node tools/count-obligations.cjs
 一旦给出函数体，就必须同时固定协议语义与安全性假设，而这会改变本文的论断范围。
 本文选择先把可判定的部分判定完，再把不可判定的部分明确标注出来。
 
-\subsection{缺失的秩理论层}
-\code{T2\_B7} 的改述已为真，但其证明依赖行空间理论（第 \ref{sec:defects} 节 4.4）。
-预计需要两到三个工作周期完成。在此之前，本文不声称该条已证。
+\subsection{未建立通用秩理论}
+\code{T2\_B7} 的闭合没有走通用秩理论，而是利用"切片恰是两个外积之和"这一结构：
+上界只需行落在二维 span 内，下界只需一个非零 $2\times2$ 子式。
+原先预估需要的行化简不变性、子式不变性等四项通用引理因此不再必要。
+代价是结论只覆盖本构造的切片，不外推到任意矩阵——这既是局限，也是刻意的范围控制。
 
 \subsection{下一步工作}
-其一，补全秩理论并闭合 \code{T2\_B7}；
-其二，建立签名语义后改述并检查 \code{T2\_D5}；
-其三，把"形式化—否证—改述"流程沉淀为可复用的检查清单，
-使其可迁移到其他后量子构造的规范评审中。
+其一，建立签名语义后改述并检查 \code{T2\_D5}；
+其二，把"形式化—否证—改述"流程沉淀为可复用的检查清单，
+使其可迁移到其他后量子构造的规范评审中；
+其三，若需覆盖任意矩阵的秩界，再补通用秩理论——当前构造不需要它。
 
 \section{结论}
 本文在一个真实的后量子构造上证明了形式化验证的一种具体价值：
 它不仅能证明对的陈述，还能在实现之前把错的陈述判为假。
-四处规范缺陷中，两处经改述后可证并已闭合，两处被三行以内的机器反证击穿。
+四处规范缺陷中，三处经改述后可证并已闭合；剩下一处被三行以内的机器反证击穿，
+并被定性为规范冲突而非密码学困难。
 系统规模不大（56 条义务引理），但每一条都可复跑、可审查、可追溯。
 比起引理数量，本文更看重的是那条纪律：
 \emph{没有机器证据，就不许改述。}
@@ -377,8 +377,9 @@ node tools/count-obligations.cjs
 算术：$k+2-\code{rank}\ge k-1$ 需 $\code{rank}\le 3$ &
 改述后已闭合 \\
 \code{T2\_B7} & 秩为 2 的断言缺良构前提 &
-\code{T2\_B7\_counterexample}、\code{T2\_B7\_refuted} &
-已改述，待秩理论 \\
+\code{T2\_B7\_counterexample}、\code{T2\_B7\_refuted}；
+闭合：\code{mat\_rank\_le\_two\_of\_rows\_}\newline\code{in\_span} &
+改述后已闭合 \\
 \code{T2\_D5} & 目标位被强制与消息无关 &
 \code{T2\_D5\_forces\_}\newline\code{target\_independence} &
 待签名语义 \\

@@ -267,11 +267,23 @@ rediscovered:
 
 The machine-checked artefact is versioned by tag; the write-up is archived with a DOI.
 
+Software (the Isabelle development):
+
 - Version DOI (v1.0.1): [`10.5281/zenodo.23622795`](https://doi.org/10.5281/zenodo.23622795)
 - Previous version (v1.0.0): [`10.5281/zenodo.23622178`](https://doi.org/10.5281/zenodo.23622178)
 - Concept DOI (all versions): [`10.5281/zenodo.23622177`](https://doi.org/10.5281/zenodo.23622177)
 - Records: <https://zenodo.org/records/23622795> (v1.0.1) and <https://zenodo.org/records/23622178> (v1.0.0)
 - Object version for every number quoted in the write-up: `d984b77`
+
+Write-up (technical note, Chinese):
+
+- DOI: [`10.5281/zenodo.23632173`](https://doi.org/10.5281/zenodo.23632173)
+- Concept DOI: [`10.5281/zenodo.23632172`](https://doi.org/10.5281/zenodo.23632172)
+- Record: <https://zenodo.org/records/23632173>
+- Source: `docs/papers/engineering-verification-pqc/main-zh.tex`; the deposit carries both the
+  compiled PDF and that LaTeX source. The note states the full Isabelle route for the closed
+  obligations (including the two-dimensional span bound behind `T2_B7`) and the analysis of
+  `T2_D5`. It is a separate work with its own concept DOI, not a version of the software deposit.
 
 Each deposit holds a `git archive` snapshot of its tag: `vwz-formalization-1.0.1.zip`
 (705,989 bytes) and `vwz-formalization-1.0.0.zip` (713,177 bytes). The two versions differ

@@ -170,3 +170,9 @@ in `LICENSE` (v1.0.0 archived the GPLv3 text, v1.0.1 the Apache-2.0 text that th
 README declare). The machine-checked
 artefact is the git tree, so the tag is the meaningful version identifier; the archived
 zip is a `git archive` snapshot of it, and a rendered PDF is a convenience copy.
+
+A technical note in Chinese, *基于 Isabelle/HOL 的 VWZ 后量子密码协议形式化验证与规范缺陷分析*,
+expands on this case study: DOI [`10.5281/zenodo.23632173`](https://doi.org/10.5281/zenodo.23632173),
+concept DOI `10.5281/zenodo.23632172`, record <https://zenodo.org/records/23632173>. It gives the
+full Isabelle route for the closed obligations and the analysis of `T2_D5`; this directory stays
+the shorter, self-contained version.

@@ -107,7 +107,12 @@ constants — i.e. they are blocked on modelling, not on mathematics.
 ### 3.2 Gates
 
 - **Build gate**: `isabelle build -b -c -D aligned` → RC=0, 33-41 s on the author's
-  machine (range across rounds; a single round is not a benchmark).
+  machine (range across rounds; a single round is not a benchmark). This gate runs with
+  `quick_and_dirty` enabled, so RC=0 means "the theories are accepted", not "the chain is
+  `sorry`-free". `aligned/ROOT.strict` is the same session file with that one option
+  removed — `cp aligned/ROOT.strict aligned/ROOT` and build to run the strict variant.
+  With six registered `sorry`s outstanding it is expected to fail; that failure is the
+  signal, and it is why the strict variant is not the default here.
 - **Encoding gate**: `.github/scripts/check-encoding.cjs` over tracked text files — no BOM, no
   NUL, no U+FFFD, no private-use characters. It also refuses to report a pass when it
   scanned nothing, so a wrong working directory cannot look green.
@@ -118,7 +123,7 @@ constants — i.e. they are blocked on modelling, not on mathematics.
 
 `quick_and_dirty` lets `sorry` through and is convenient during development; a green
 build under it proves almost nothing. For the `T2_B7` work we ran a dependency-chain
-check with the option **off**:
+check with the option **off** (`aligned/ROOT.strict` is the versioned form of step 2):
 
 1. copy `aligned/` outside the repository;
 2. remove `quick_and_dirty` from `ROOT`;

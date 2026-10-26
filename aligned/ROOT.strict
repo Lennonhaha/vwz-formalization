@@ -1,0 +1,18 @@
+session VWZ_A3_Aligned = "HOL-Number_Theory" +
+  theories
+    VWZ_Fq3329
+    VWZ_Target
+    VWZ_KeyGen
+    VWZ_Matrix
+    VWZ_Protocol
+    VWZ_Aux
+    VWZ_MatAlgebra
+    VWZ_Probe
+    VWZ_RREF
+    VWZ_Rank
+    VWZ_Solver
+    VWZ_Transpose
+    VWZ_ModAlgebra
+    VWZ_Rows3
+    VWZ_ObligationsAligned
+    VWZ_Refutations

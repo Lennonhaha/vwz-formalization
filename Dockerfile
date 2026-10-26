@@ -8,11 +8,16 @@
 #   docker build -t vwz .
 #   docker run --rm -v "$PWD:/workspace" -w /workspace vwz build -b -c -D aligned
 #
-# The entry point is inherited from the base image: it already points at the Isabelle
-# tool wrapper, and it uses an absolute path (an exec-form `ENTRYPOINT ["isabelle"]`
-# fails with "executable file not found in $PATH" because that lookup does not use the
-# image's PATH at container start).
+# Two details are deliberate:
+#
+# * No WORKDIR. The base image's entry point is a *relative* path (`Isabelle/bin/isabelle`),
+#   so it resolves against its own working directory. Setting WORKDIR here breaks the
+#   inherited entry point ("exec: Isabelle/bin/isabelle: no such file or directory"),
+#   and an absolute `ENTRYPOINT ["isabelle"]` does not work either, because that lookup
+#   does not use the image's PATH at container start. Keep the working directory the base
+#   image chose, and pass `-w /workspace` at run time.
+# * No credentials, no build tooling: the container is for reproducing a build, not for
+#   developing inside.
 FROM makarius/isabelle:Isabelle2025-2
 
-WORKDIR /workspace
 COPY . /workspace

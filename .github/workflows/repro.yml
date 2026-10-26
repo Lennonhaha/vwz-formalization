@@ -31,10 +31,11 @@ jobs:
       - name: Build the image
         run: docker build -t vwz-repro .
 
-      - name: What the base image actually contains (diagnostic, never fails)
+      - name: What the base image actually gives us (diagnostic, never fails)
         continue-on-error: true
         run: |
-          docker run --rm --entrypoint /bin/sh vwz-repro -c 'echo PATH=$PATH; ls /opt; find /opt -maxdepth 3 -name isabelle 2>/dev/null | head'
+          docker image inspect vwz-repro --format 'entrypoint={{json .Config.Entrypoint}} cmd={{json .Config.Cmd}} workdir={{json .Config.WorkingDir}}'
+          docker run --rm --entrypoint /bin/sh vwz-repro -c 'ls /; find / -maxdepth 4 -name isabelle -type f 2>/dev/null | head'
 
       - name: The image is the pinned Isabelle release
         run: |

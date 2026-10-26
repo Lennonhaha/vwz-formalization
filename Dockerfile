@@ -8,16 +8,20 @@
 #   docker build -t vwz .
 #   docker run --rm -v "$PWD:/workspace" -w /workspace vwz build -b -c -D aligned
 #
-# Two details are deliberate:
+# The entry point is spelled out as an absolute path on purpose. The base image declares
+#   Entrypoint: ["Isabelle/bin/isabelle"]   WorkingDir: /home/isabelle
+# i.e. a *relative* path that resolves against its own working directory. Inheriting it
+# while changing the working directory gives "exec: Isabelle/bin/isabelle: no such file
+# or directory", and plain `ENTRYPOINT ["isabelle"]` fails too, because an exec-form
+# entry point is not looked up in the image's PATH (isabelle is not on it).
 #
-# * No WORKDIR. The base image's entry point is a *relative* path (`Isabelle/bin/isabelle`),
-#   so it resolves against its own working directory. Setting WORKDIR here breaks the
-#   inherited entry point ("exec: Isabelle/bin/isabelle: no such file or directory"),
-#   and an absolute `ENTRYPOINT ["isabelle"]` does not work either, because that lookup
-#   does not use the image's PATH at container start. Keep the working directory the base
-#   image chose, and pass `-w /workspace` at run time.
-# * No credentials, no build tooling: the container is for reproducing a build, not for
-#   developing inside.
+# The RUN line below is the guard: if the base image ever moves the distribution, the
+# image stops building, loudly, instead of failing at run time with a confusing error.
 FROM makarius/isabelle:Isabelle2025-2
 
+RUN /home/isabelle/Isabelle/bin/isabelle version
+
+ENTRYPOINT ["/home/isabelle/Isabelle/bin/isabelle"]
+
+WORKDIR /workspace
 COPY . /workspace

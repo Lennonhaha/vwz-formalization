@@ -84,7 +84,7 @@ jobs:
       - name: Count drift gate (fails if the ledger changes)
         run: |
           node tools/count-obligations.cjs | tee /tmp/count.log
-          for want in '56 lemmas,  6 sorry' 'outside: 0' 'OK: every sorry proof step is an obligation in the ledger.'; do
+          for want in '56 lemmas,  6 sorry' 'ledger: 6, scaffolding: 37, outside: 0' 'OK: every sorry proof step is an obligation in the ledger or declared scaffolding.'; do
             grep -qF "$want" /tmp/count.log || {
               echo "::error::count output lost: $want"
               exit 1

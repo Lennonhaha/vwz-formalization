@@ -18,19 +18,19 @@ the machine decides is false, before anyone builds on it.**
   (`aligned/*.thy`), not a PDF or a published reference implementation. Statements are
   transcribed as written first; restatement is allowed only after the machine rejects
   the original (see §4).
-- 20 theory files, 565,865 bytes, 582 lemmas in the repository (of which 56 are ledger
+- 20 theory files, 565,865 bytes, 581 lemmas in the repository (of which 56 are ledger
   obligations — the rest is supporting infrastructure).
 
 ## 2. The obligation ledger
 
 `tools/count-obligations.cjs` classifies every obligation and asserts that **no
-proof-position `sorry` exists outside the ledger within the `VWZ_A3_Aligned` session**.
-A proof step here means a line whose trimmed content is exactly `sorry`, optionally with
-a trailing comment: the word in prose, or a one-line `lemma … sorry`, is not counted, and
-the raw token count is printed separately so the two numbers cannot be confused.
-Scaffolding and control sessions (`skeleton/`, `neg/`, `smoke/`) are outside the claim —
-`skeleton/VWZ_A3_Skeleton.thy` alone holds 37 deliberate one-line `lemma … sorry`
-placeholders, and none of those files is presented as proved.
+proof-position `sorry` exists outside the ledger and the declared scaffolding directory**.
+A proof step is a `sorry` token in code position — on a line of its own, or ending a
+statement (`lemma x: "P" sorry`); the word in prose, in a comment, in a string or in a
+`\<open> ... \<close>` cartouche is not counted, and the raw token count is printed
+separately so the two numbers cannot be confused. The output names all three places:
+`ledger: 6`, `scaffolding: 37` (`skeleton/VWZ_A3_Skeleton.thy`, deliberately unproved),
+`outside: 0`. A non-zero `outside` fails the build.
 
 | Section | Scope | Lemmas | `sorry` |
 |---|---|---:|---:|
@@ -55,15 +55,15 @@ Verification gate output at `d984b77`, verbatim:
 === repository totals ===
   theory files          20
   bytes                 565865
-  lemmas                582
+  lemmas                581
   theorems              1
-  sorry proof steps     6  (ledger: 6, outside: 0)
+  sorry proof steps     43  (ledger: 6, scaffolding: 37, outside: 0)
   raw "sorry" tokens    67  (includes prose and comments)
 
-note: repository lemmas (582) differ from ledger lemmas (56); the difference is supporting infrastructure (auxiliary library,
+note: repository lemmas (581) differ from ledger lemmas (56); the difference is supporting infrastructure (auxiliary library,
       field definitions, elementary row operations, smoke and negative sessions).
 
-OK: every sorry proof step is an obligation in the ledger.
+OK: every sorry proof step is an obligation in the ledger or declared scaffolding.
 ```
 
 The last two lines are the point: the raw token count is reported next to the proof-step

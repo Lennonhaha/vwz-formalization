@@ -80,26 +80,28 @@ Obligations are grouped by what they depend on, not by file:
 
 `tools/count-obligations.cjs` counts every `lemma` in the obligations file and asserts
 that **every `sorry` proof step is registered**; at `d984b77` it reports
-`6 (ledger: 6, outside: 0)`. The repository contains 582 lemmas in total; the difference
+`6 (ledger: 6, scaffolding: 37, outside: 0)`. The repository contains 581 lemmas in total; the difference
 is supporting infrastructure, and is reported rather than hidden.
 
 The figure rests on two rules, both stated here because anyone recomputing it will
 otherwise get a different number:
 
-- **Proof position only.** A `sorry` step is a line whose trimmed content is exactly
-  `sorry`, optionally followed by a trailing comment. The word inside prose, inside a
-  `(* … *)` comment, or at the end of a one-line `lemma … sorry` is not a proof step and
-  is not counted. The counter prints the raw token count separately — 67 for the
-  repository, 21 for the obligations file — so the two cannot be confused. Of those 21
-  occurrences in `VWZ_ObligationsAligned.thy`, six are proof steps (lines 439, 446, 905,
-  1002, 1089, 1150).
-- **Session scope.** “Outside 0” is a statement about `aligned/`, i.e. the
-  `VWZ_A3_Aligned` session. The scaffolding and control sessions are outside the claim:
-  `skeleton/VWZ_A3_Skeleton.thy` contains 37 deliberate one-line `lemma … sorry`
-  placeholders, `neg/` holds negative controls, and `smoke/` is a build smoke test. None
-  of them is presented as proved, and none is counted. A grep over the whole repository
-  therefore finds `sorry` in those files; that is not a contradiction of the ledger, it
-  is why the scope is written down.
+- **Proof position only.** A `sorry` step is a `sorry` token in *code* position, whether
+  it stands on a line of its own or ends a statement (`lemma x: "P" sorry`). The word
+  inside prose, inside a `(* ... *)` comment (nested comments included), inside a string,
+  or inside a `\<open> ... \<close>` cartouche is not a proof step and is not counted.
+  The counter prints the raw token count separately — 67 for the repository, 21 for the
+  obligations file — so the two cannot be confused. Of those 21 occurrences in
+  `VWZ_ObligationsAligned.thy`, six are proof steps (lines 439, 446, 905, 1002, 1089,
+  1150).
+- **Declared scope.** The counter reports three places separately: the ledger (6), the
+  declared scaffolding directory (`skeleton/`, 37), and everywhere else (0, which fails
+  the build). `skeleton/VWZ_A3_Skeleton.thy` holds 37 deliberate `lemma ... sorry`
+  placeholders; `neg/` holds negative controls and `smoke/` a build smoke test. None is
+  presented as proved. A grep over the whole repository therefore finds `sorry` in those
+  files; that is not a contradiction of the ledger, it is why the scope is written down
+  and printed.
+
 
 Two of the six open obligations are in T3, on subjects that are still uninterpreted
 constants — i.e. they are blocked on modelling, not on mathematics.
@@ -292,7 +294,7 @@ at the ledger lines.
 |---|---|---|
 | object version | `d984b77` | `git rev-parse HEAD` |
 | theory files | 20 | `count-obligations.cjs` |
-| repository lemmas | 582 | `count-obligations.cjs` |
+| repository lemmas | 581 | `count-obligations.cjs` |
 | ledger | 56 lemmas / 6 `sorry` / 0 outside (`VWZ_A3_Aligned` session) | `count-obligations.cjs` |
 | build | RC=0, 33-41 s (36 s re-measured 2026-10-26) | `isabelle build -b -c -D aligned` |
 | strict build, registered `sorry`s in place | RC=1, 6 reports at the ledger lines | `cp aligned/ROOT.strict aligned/ROOT` in a copy outside the repo |

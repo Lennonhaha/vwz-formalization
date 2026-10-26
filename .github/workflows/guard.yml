@@ -28,10 +28,13 @@ jobs:
           printf '%s\n' "$out"
           printf '%s\n' "$out" | grep -q 'TOTAL                                                    56 lemmas,  6 sorry' \
             || { echo 'FAIL: ledger total drifted from 56 lemmas / 6 sorry'; exit 1; }
-          printf '%s\n' "$out" | grep -q 'outside: 0' \
-            || { echo 'FAIL: a sorry proof step sits outside the obligation ledger'; exit 1; }
-          printf '%s\n' "$out" | grep -q 'OK: every sorry proof step is an obligation in the ledger.' \
+          printf '%s\n' "$out" | grep -q 'ledger: 6, scaffolding: 37, outside: 0' \
+            || { echo 'FAIL: proof-step counts drifted from 6 ledger / 37 scaffolding / 0 outside'; exit 1; }
+          printf '%s\n' "$out" | grep -q 'OK: every sorry proof step is an obligation in the ledger or declared scaffolding.' \
             || { echo 'FAIL: ledger checker did not report OK'; exit 1; }
+
+      - name: Counter regression tests
+        run: node tools/test-count-obligations.cjs
 
       - name: Paper and release assets present
         run: |

@@ -10,24 +10,50 @@
 //   * repository totals across every .thy file (lemmas, theorems, sorry steps,
 //     file count and bytes).
 //
+// What counts as a `sorry` proof step
+//   A `sorry` token in *code* position, whether it is a line of its own or sits at
+//   the end of a statement (`lemma x: "P" sorry`).  Occurrences inside comments
+//   (`(* ... *)`, nested), inside strings, or inside cartouches (`\<open> ... \<close>`,
+//   which is how `text` and `\<comment>` carry prose) are not proof steps; the raw
+//   token count is reported separately so the two numbers cannot be confused.
+//
+// Three places a proof step can be, and they are not the same thing:
+//   ledger        aligned/VWZ_ObligationsAligned.thy -- the obligations the paper counts
+//   scaffolding   skeleton/ -- deliberately unproved statements used as a toolchain smoke test
+//   outside       everywhere else -- an error
+//
 // Exit status
-//   0  no `sorry` outside the ledger
-//   1  a `sorry` proof step was found outside the ledger
+//   0  no `sorry` outside the ledger and the declared scaffolding directory
+//   1  a `sorry` proof step was found outside them
 //   2  the ledger file is missing
 //
-// A `sorry` step is a line whose trimmed content is exactly `sorry`, optionally
-// followed by a trailing `(* ... *)` comment.  Occurrences of the word inside
-// prose or inside comments are NOT counted: the raw token count is reported
-// separately so that the two numbers cannot be confused.
+// Usage: node tools/count-obligations.cjs [--root <dir>] [--list-scaffolding]
 
 'use strict';
 
 const fs = require('fs');
 const path = require('path');
 
-const ROOT = path.resolve(__dirname, '..');
+const ROOT = (() => {
+  const at = process.argv.indexOf('--root');
+  if (at !== -1) {
+    const v = process.argv[at + 1];
+    if (!v) {
+      console.error('--root needs a directory');
+      process.exit(2);
+    }
+    return path.resolve(v);
+  }
+  return path.resolve(__dirname, '..');
+})();
+
+// The per-line scaffolding dump is opt-in: the summary already names the count, and 37
+// lines of noise would bury the ledger when the output is pasted into a document.
+const LIST_SCAFFOLDING = process.argv.includes('--list-scaffolding');
+
 const LEDGER = path.join(ROOT, 'aligned', 'VWZ_ObligationsAligned.thy');
 const SKIP_DIRS = new Set(['.git', 'heaps', 'node_modules']);
+const SCAFFOLDING_DIRS = new Set(['skeleton']);
 
 if (!fs.existsSync(LEDGER)) {
   console.error('ledger not found: ' + LEDGER);
@@ -44,20 +70,92 @@ function theoryFiles(dir, acc = []) {
   return acc;
 }
 
-const isSorryStep = (line) => /^sorry\s*(\(\*.*\*\))?\s*$/.test(line.trim());
+// Replace everything that is not code with spaces, preserving line breaks and the
+// exact byte offsets, so that a match position still maps to the original line.
+function maskNonCode(text) {
+  const out = [];
+  const n = text.length;
+  let i = 0;
+  let commentDepth = 0;
+  let cartoucheDepth = 0;
+  let inString = false;
+
+  const blank = (ch) => out.push(ch === '\n' || ch === '\r' ? ch : ' ');
+  const open = '\\<open>';
+  const close = '\\<close>';
+
+  while (i < n) {
+    const ch = text[i];
+    const two = text.slice(i, i + 2);
+
+    if (commentDepth > 0) {
+      if (two === '(*') { commentDepth++; blank(ch); blank(text[i + 1]); i += 2; continue; }
+      if (two === '*)') { commentDepth--; blank(ch); blank(text[i + 1]); i += 2; continue; }
+      blank(ch); i++; continue;
+    }
+
+    if (inString) {
+      if (ch === '\\' && i + 1 < n) { blank(ch); blank(text[i + 1]); i += 2; continue; }
+      if (ch === '"') { inString = false; blank(ch); i++; continue; }
+      blank(ch); i++; continue;
+    }
+
+    if (cartoucheDepth > 0) {
+      if (text.startsWith(open, i)) {
+        cartoucheDepth++;
+        for (let k = 0; k < open.length; k++) blank(text[i + k]);
+        i += open.length;
+        continue;
+      }
+      if (text.startsWith(close, i)) {
+        cartoucheDepth--;
+        for (let k = 0; k < close.length; k++) blank(text[i + k]);
+        i += close.length;
+        continue;
+      }
+      blank(ch); i++; continue;
+    }
+
+    if (two === '(*') { commentDepth = 1; blank(ch); blank(text[i + 1]); i += 2; continue; }
+    if (ch === '"') { inString = true; blank(ch); i++; continue; }
+    if (text.startsWith(open, i)) {
+      cartoucheDepth = 1;
+      for (let k = 0; k < open.length; k++) blank(text[i + k]);
+      i += open.length;
+      continue;
+    }
+    out.push(ch); i++;
+  }
+
+  return out.join('');
+}
+
 const isLemma = (line) => /^lemma\s/.test(line.trim());
 const isTheorem = (line) => /^theorem\s/.test(line.trim());
+const sorryTokens = (line) => line.match(/\bsorry\b/g) || [];
+
+const categoryOf = (file) => {
+  const rel = path.relative(ROOT, file).replace(/\\/g, '/');
+  if (path.resolve(file) === path.resolve(LEDGER)) return 'ledger';
+  const top = rel.split('/')[0];
+  if (SCAFFOLDING_DIRS.has(top)) return 'scaffolding';
+  return 'outside';
+};
 
 // ---- ledger, tier by tier -------------------------------------------------
 const ledgerText = fs.readFileSync(LEDGER, 'utf8');
+const ledgerMasked = maskNonCode(ledgerText);
 const tiers = {};
 let current = '[prelude]';
-for (const line of ledgerText.split(/\r?\n/)) {
-  const m = line.match(/^section \\<open>([^\\]*)/);
+const ledgerLines = ledgerMasked.split(/\r?\n/);
+const rawLedgerLines = ledgerText.split(/\r?\n/);
+for (let i = 0; i < ledgerLines.length; i++) {
+  const line = ledgerLines[i];
+  const m = rawLedgerLines[i].match(/^section \\<open>([^\\]*)/);
   if (m) current = m[1].trim();
   tiers[current] = tiers[current] || { lemmas: 0, sorry: 0 };
   if (isLemma(line)) tiers[current].lemmas++;
-  if (isSorryStep(line)) tiers[current].sorry++;
+  tiers[current].sorry += sorryTokens(line).length;
 }
 
 let ledgerLemmas = 0;
@@ -68,27 +166,35 @@ for (const k of Object.keys(tiers)) {
 }
 
 // ---- repository totals ----------------------------------------------------
-let files = 0, bytes = 0, lemmas = 0, theorems = 0, sorry = 0, rawSorry = 0;
-let sorryOutside = [];
+let files = 0, bytes = 0, lemmas = 0, theorems = 0, rawSorry = 0;
+const proofSteps = { ledger: 0, scaffolding: 0, outside: 0 };
+const detail = { scaffolding: [], outside: [] };
 
 for (const f of theoryFiles(ROOT).sort()) {
   const text = fs.readFileSync(f, 'utf8');
   files++;
   bytes += Buffer.byteLength(text);
   rawSorry += (text.match(/\bsorry\b/g) || []).length;
-  let lineNo = 0;
-  for (const line of text.split(/\r?\n/)) {
-    lineNo++;
+
+  const category = categoryOf(f);
+  const rel = path.relative(ROOT, f).replace(/\\/g, '/');
+  const lines = maskNonCode(text).split(/\r?\n/);
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
     if (isLemma(line)) lemmas++;
     if (isTheorem(line)) theorems++;
-    if (isSorryStep(line)) {
-      sorry++;
-      if (path.resolve(f) !== path.resolve(LEDGER)) {
-        sorryOutside.push(path.relative(ROOT, f).replace(/\\/g, '/') + ':' + lineNo);
-      }
+    const hits = sorryTokens(line).length;
+    if (!hits) continue;
+    proofSteps[category] += hits;
+    if (category === 'outside' || category === 'scaffolding') {
+      const rest = line.replace(/\bsorry\b/g, '').trim();
+      const where = rel + ':' + (i + 1) + (rest ? '  (inline)' : '');
+      detail[category].push(where + (hits > 1 ? '  x' + hits : ''));
     }
   }
 }
+
+const totalSteps = proofSteps.ledger + proofSteps.scaffolding + proofSteps.outside;
 
 // ---- report ---------------------------------------------------------------
 console.log('=== obligation ledger ===');
@@ -105,13 +211,19 @@ console.log('  theory files          ' + files);
 console.log('  bytes                 ' + bytes);
 console.log('  lemmas                ' + lemmas);
 console.log('  theorems              ' + theorems);
-console.log('  sorry proof steps     ' + sorry + '  (ledger: ' + ledgerSorry + ', outside: ' + sorryOutside.length + ')');
+console.log('  sorry proof steps     ' + totalSteps + '  (ledger: ' + proofSteps.ledger
+  + ', scaffolding: ' + proofSteps.scaffolding + ', outside: ' + proofSteps.outside + ')');
 console.log('  raw "sorry" tokens    ' + rawSorry + '  (includes prose and comments)');
 
-if (sorryOutside.length) {
+if (proofSteps.scaffolding && LIST_SCAFFOLDING) {
+  console.log('\n=== declared scaffolding (not a failure) ===');
+  for (const s of detail.scaffolding) console.log('  ' + s);
+}
+
+if (proofSteps.outside) {
   console.log('\n=== sorry outside the ledger ===');
-  for (const s of sorryOutside) console.log('  ' + s);
-  console.log('\nFAIL: a proof step is sorry outside the obligation ledger.');
+  for (const s of detail.outside) console.log('  ' + s);
+  console.log('\nFAIL: a proof step is sorry outside the obligation ledger and the scaffolding directory.');
   process.exit(1);
 }
 
@@ -121,4 +233,4 @@ if (lemmas !== ledgerLemmas) {
   console.log('      field definitions, elementary row operations, smoke and negative sessions).');
 }
 
-console.log('\nOK: every sorry proof step is an obligation in the ledger.');
+console.log('\nOK: every sorry proof step is an obligation in the ledger or declared scaffolding.');

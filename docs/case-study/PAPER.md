@@ -112,7 +112,14 @@ constants — i.e. they are blocked on modelling, not on mathematics.
   `sorry`-free". `aligned/ROOT.strict` is the same session file with that one option
   removed — `cp aligned/ROOT.strict aligned/ROOT` and build to run the strict variant.
   With six registered `sorry`s outstanding it is expected to fail; that failure is the
-  signal, and it is why the strict variant is not the default here.
+  signal, and it is why the strict variant is not the default here. Measured on
+  2026-10-26 (Isabelle2025-2): the permissive build finished in 0:00:36 (RC=0), inside the
+  stated range, and the strict variant failed (RC=1) on exactly six
+  `*** Cheating requires quick_and_dirty mode!` reports at lines 439, 446, 905, 1002,
+  1089 and 1150 — the same six positions the ledger lists. One trap is worth
+  recording: `-o quick_and_dirty=false` on the command line does **not** work, because the
+  session `options` in `ROOT` take precedence; that route returns RC=0 and yields a gate
+  that looks green without checking anything.
 - **Encoding gate**: `.github/scripts/check-encoding.cjs` over tracked text files — no BOM, no
   NUL, no U+FFFD, no private-use characters. It also refuses to report a pass when it
   scanned nothing, so a wrong working directory cannot look green.
@@ -275,7 +282,9 @@ node .github/scripts/check-encoding.cjs          # tracked text files clean
 
 Dependency chain with the option off: copy `aligned/` outside the repo, drop
 `quick_and_dirty` from `ROOT`, replace registered `sorry`s with `oops`, build → RC=0
-(~35 s).
+(~35 s). Running the same copy *with* the six registered `sorry`s still in place is the
+opposite control: `cp aligned/ROOT.strict aligned/ROOT` and build → RC=1, six reports
+at the ledger lines.
 
 ## 10. Provenance of the numbers in this document
 
@@ -285,8 +294,9 @@ Dependency chain with the option off: copy `aligned/` outside the repo, drop
 | theory files | 20 | `count-obligations.cjs` |
 | repository lemmas | 582 | `count-obligations.cjs` |
 | ledger | 56 lemmas / 6 `sorry` / 0 outside (`VWZ_A3_Aligned` session) | `count-obligations.cjs` |
-| build | RC=0, 33-41 s | `isabelle build -b -c -D aligned` |
-| chain check, `quick_and_dirty` off | RC=0, ~35 s | copy of `aligned/` outside the repo |
+| build | RC=0, 33-41 s (36 s re-measured 2026-10-26) | `isabelle build -b -c -D aligned` |
+| strict build, registered `sorry`s in place | RC=1, 6 reports at the ledger lines | `cp aligned/ROOT.strict aligned/ROOT` in a copy outside the repo |
+| chain check, `quick_and_dirty` off, `sorry`s replaced by `oops` | RC=0, ~35 s | copy of `aligned/` outside the repo |
 
 If you are reading this at a later commit, re-run the three commands before quoting any
 of it.

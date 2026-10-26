@@ -1,0 +1,87 @@
+name: repro
+
+# Reproduces the two builds the case study describes, in a container, on a machine
+# that is not the author's:
+#
+#   permissive (aligned/ROOT as shipped)      -> must pass
+#   strict     (aligned/ROOT.strict as ROOT)  -> must fail, with exactly the six
+#                                                ledger items and their line numbers
+#
+# The second half is the point. A CI job that only runs the permissive build cannot
+# tell "sorry-free" from "sorry accepted", which is the failure mode described in
+# docs/engineering-guidelines.md (see also #33).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  docker:
+    name: container build and count
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the image
+        run: docker build -t vwz-repro .
+
+      - name: The image is the pinned Isabelle release
+        run: |
+          out=$(docker run --rm vwz-repro version)
+          echo "$out"
+          echo "$out" | grep -q 'Isabelle2025-2'
+
+      - name: Permissive build (expected to pass)
+        run: |
+          docker run --rm -v "$PWD:/workspace" -w /workspace vwz-repro \
+            build -b -c -D aligned 2>&1 | tee /tmp/lenient.log
+          grep -q 'Finished VWZ_A3_Aligned' /tmp/lenient.log
+          echo "permissive build finished, as documented"
+
+      - name: Strict build (expected to fail, on exactly the six ledger items)
+        run: |
+          cp aligned/ROOT.strict aligned/ROOT
+          set +e
+          docker run --rm -v "$PWD:/workspace" -w /workspace vwz-repro \
+            build -b -c -D aligned > /tmp/strict.log 2>&1
+          rc=$?
+          set -e
+          tail -20 /tmp/strict.log
+          echo "exit code: $rc"
+
+          if [ "$rc" -eq 0 ]; then
+            echo "::error::the strict build passed - the gate is not strict"
+            exit 1
+          fi
+
+          n=$(grep -c 'Cheating requires quick_and_dirty mode' /tmp/strict.log || true)
+          echo "cheating reports: $n"
+          if [ "$n" -ne 6 ]; then
+            echo "::error::expected 6 cheating reports, got $n"
+            exit 1
+          fi
+
+          for ln in 439 446 905 1002 1089 1150; do
+            grep -q "line $ln of" /tmp/strict.log || {
+              echo "::error::no report for line $ln"
+              exit 1
+            }
+          done
+          echo "strict gate reports exactly the six ledger positions"
+
+      - name: Count drift gate (fails if the ledger changes)
+        run: |
+          node tools/count-obligations.cjs | tee /tmp/count.log
+          for want in '56 lemmas,  6 sorry' 'outside: 0' 'OK: every sorry proof step is an obligation in the ledger.'; do
+            grep -qF "$want" /tmp/count.log || {
+              echo "::error::count output lost: $want"
+              exit 1
+            }
+          done
+          echo "count agrees with the ledger"

@@ -31,6 +31,11 @@ jobs:
       - name: Build the image
         run: docker build -t vwz-repro .
 
+      - name: What the base image actually contains (diagnostic, never fails)
+        continue-on-error: true
+        run: |
+          docker run --rm --entrypoint /bin/sh vwz-repro -c 'echo PATH=$PATH; ls /opt; find /opt -maxdepth 3 -name isabelle 2>/dev/null | head'
+
       - name: The image is the pinned Isabelle release
         run: |
           out=$(docker run --rm vwz-repro version)

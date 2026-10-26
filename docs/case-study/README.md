@@ -23,8 +23,14 @@ the machine decides is false, before anyone builds on it.**
 
 ## 2. The obligation ledger
 
-`tools/count-obligations.cjs` classifies every obligation and asserts that **no `sorry`
-exists outside the ledger**:
+`tools/count-obligations.cjs` classifies every obligation and asserts that **no
+proof-position `sorry` exists outside the ledger within the `VWZ_A3_Aligned` session**.
+A proof step here means a line whose trimmed content is exactly `sorry`, optionally with
+a trailing comment: the word in prose, or a one-line `lemma … sorry`, is not counted, and
+the raw token count is printed separately so the two numbers cannot be confused.
+Scaffolding and control sessions (`skeleton/`, `neg/`, `smoke/`) are outside the claim —
+`skeleton/VWZ_A3_Skeleton.thy` alone holds 37 deliberate one-line `lemma … sorry`
+placeholders, and none of those files is presented as proved.
 
 | Section | Scope | Lemmas | `sorry` |
 |---|---|---:|---:|
@@ -35,13 +41,34 @@ exists outside the ledger**:
 | T3 | security / probabilistic / parser (`TODO(define)` subjects) | 8 | 2 |
 | **Total** | | **56** | **6** |
 
-Verification gate output at `d984b77`:
+Verification gate output at `d984b77`, verbatim:
 
 ```
-TOTAL                56 lemmas, 6 sorry
-sorry proof steps     6  (ledger: 6, outside: 0)
+=== obligation ledger ===
+  T0 -- purely formal rewriting (target: 0 sorry)          17 lemmas,  0 sorry
+  T1-A -- algebraic axioms (16 lemmas / 0 sorry)           16 lemmas,  0 sorry
+  T1-D -- definition-dependent obligations (5 lemmas / 2 sorry)  5 lemmas,  2 sorry
+  T2 -- linear algebra / matrices (anchored on VWZ_Matrix) 10 lemmas,  2 sorry
+  T3 -- security / probabilistic / parser (subjects TODO(define))  8 lemmas,  2 sorry
+  TOTAL                                                    56 lemmas,  6 sorry
+
+=== repository totals ===
+  theory files          20
+  bytes                 565865
+  lemmas                582
+  theorems              1
+  sorry proof steps     6  (ledger: 6, outside: 0)
+  raw "sorry" tokens    67  (includes prose and comments)
+
+note: repository lemmas (582) differ from ledger lemmas (56); the difference is supporting infrastructure (auxiliary library,
+      field definitions, elementary row operations, smoke and negative sessions).
+
 OK: every sorry proof step is an obligation in the ledger.
 ```
+
+The last two lines are the point: the raw token count is reported next to the proof-step
+count rather than instead of it, so "outside 0" cannot be read as "the repository
+contains no `sorry`".
 
 The six remaining `sorry`s are **registered debt with a documented reason**, not
 accidents. Two of them sit in T3 on subjects that are still uninterpreted constants.

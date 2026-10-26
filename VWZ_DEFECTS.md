@@ -19,7 +19,7 @@ a defect never improves the ledger — it can only shrink it by making a stateme
 provable.
 
 Build: `isabelle build -D aligned` with Isabelle2025-2, session `VWZ_A3_Aligned`.
-Current state: **56 lemmas, 6 `sorry`, 0 `sorry` outside the ledger.**
+Current state: **56 lemmas, 6 `sorry`, 0 proof-position `sorry` outside the ledger in the `VWZ_A3_Aligned` session.** Scaffolding and control sessions (`skeleton/`, `neg/`, `smoke/`) are excluded by design and are not claimed as proved — `skeleton/VWZ_A3_Skeleton.thy` alone holds 37 one-line `lemma … sorry` placeholders. The counting rule is stated in `docs/case-study/PAPER.md` §3.1.
 
 ---
 

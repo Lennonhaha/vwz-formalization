@@ -1,0 +1,5 @@
+# Keep the build context small; the build only needs the theory sources and ROOT files.
+.git
+.github
+**/output
+*.pdf

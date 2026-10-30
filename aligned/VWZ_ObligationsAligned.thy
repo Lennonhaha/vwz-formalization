@@ -4,11 +4,13 @@
     VWZ A3 -- the 37 proof obligations, decomposed by tier and rewritten
     against the aligned definition layer (VWZ_Fq3329).
 
-    Authoritative count = 37 over the v0 formalization-plan table:
+    Authoritative count = 37 over the v0 formalization-plan table.  The
+    per-tier figures below are a snapshot; where they disagree with
+    tools/count-obligations.cjs, the script output is authoritative:
       T0   ( 8)  purely formal rewriting            -- 17 lemmas, 0 sorry
       T1-A       algebraic axioms + closed ser. id. -- 16 lemmas, 0 sorry
       T1-D       definition-dependent (TODO bodies) --  5 lemmas, 2 sorry
-      T2   ( 8)  linear algebra / matrices          -- 10 lemmas, 3 sorry
+      T2   ( 8)  linear algebra / matrices          -- 10 lemmas, 2 sorry
       T3   ( 8)  security / probabilistic / parser  --  8 lemmas, 2 sorry
     (T1-A / T1-D split the former single T1 bucket at the lemma level; the 37
      is an obligation count, the figures above are Isabelle-lemma counts.  See

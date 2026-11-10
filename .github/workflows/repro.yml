@@ -4,8 +4,9 @@ name: repro
 # that is not the author's:
 #
 #   permissive (aligned/ROOT as shipped)      -> must pass
-#   strict     (aligned/ROOT.strict as ROOT)  -> must fail, with exactly the six
-#                                                ledger items and their line numbers
+#   strict     (aligned/ROOT.strict as ROOT)  -> must fail, with exactly the
+#                                                remaining ledger items and their
+#                                                line numbers (four as of v1.1.0)
 #
 # The second half is the point. A CI job that only runs the permissive build cannot
 # tell "sorry-free" from "sorry accepted", which is the failure mode described in
@@ -50,7 +51,7 @@ jobs:
           grep -q 'Finished VWZ_A3_Aligned' /tmp/lenient.log
           echo "permissive build finished, as documented"
 
-      - name: Strict build (expected to fail, on exactly the six ledger items)
+      - name: Strict build (expected to fail, on exactly the remaining ledger items)
         run: |
           cp aligned/ROOT.strict aligned/ROOT
           set +e

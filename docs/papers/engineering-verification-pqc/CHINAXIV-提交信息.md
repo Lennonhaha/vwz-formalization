@@ -37,7 +37,7 @@ Isabelle/HOL 对后量子构造（VWZ）的代数骨架与协议对象建模，�
 - **构建**：
   ```
   isabelle build -D aligned -o document=false     # 期望 RC=0，约 16 秒
-  node tools/count-obligations.cjs                # 56 lemmas, 6 sorry, outside 0
+  node tools/count-obligations.cjs                # 56 lemmas, 4 sorry, outside 0
   ```
 - **缺陷证据文件**：`aligned/VWZ_Refutations.thy`（参与同一会话构建，每次编译重新检查）
 

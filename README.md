@@ -5,7 +5,7 @@ field `F_3329`), developed in **Isabelle/HOL**.
 
 > 📄 **Paper:** [VWZ 形式化验证与规范缺陷分析 (v1.0.0-paper)](https://github.com/Lennonhaha/vwz-formalization/releases/tag/v1.0.0-paper)
 > — nine-page Chinese manuscript: four specification defects found by machine, and the
-> obligation ledger (56 lemmas, 6 unresolved proofs, 0 outside the ledger).
+> obligation ledger (56 lemmas, 4 unresolved proofs, 0 outside the ledger).
 > Source: [`docs/papers/engineering-verification-pqc/`](docs/papers/engineering-verification-pqc/).
 
 This repository is deliberately separate from the FIBEMATE business
@@ -22,7 +22,7 @@ tiers; the counts below are generated, not asserted.
 
 | Session | Content | Lemmas | `sorry` |
 |---|---|---|---|
-| `VWZ_A3_Aligned` | Definition layers + obligation inventory | 56 | 6 |
+| `VWZ_A3_Aligned` | Definition layers + obligation inventory | 56 | 4 |
 
 Rank, nullity and inversion are no longer uninterpreted. `VWZ_RREF.thy` defines
 a fuel-parameterised Gauss-Jordan reduction and derives

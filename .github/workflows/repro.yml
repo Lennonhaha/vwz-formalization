@@ -68,18 +68,18 @@ jobs:
 
           n=$(grep -c 'Cheating requires quick_and_dirty mode' /tmp/strict.log || true)
           echo "cheating reports: $n"
-          if [ "$n" -ne 6 ]; then
-            echo "::error::expected 6 cheating reports, got $n"
+          if [ "$n" -ne 4 ]; then
+            echo "::error::expected 4 cheating reports, got $n"
             exit 1
           fi
 
-          for ln in 439 446 905 1002 1089 1150; do
+          for ln in 956 1053 1140 1201; do
             grep -q "line $ln of" /tmp/strict.log || {
               echo "::error::no report for line $ln"
               exit 1
             }
           done
-          echo "strict gate reports exactly the six ledger positions"
+          echo "strict gate reports exactly the four ledger positions"
 
       - name: Count drift gate (fails if the ledger changes)
         run: |

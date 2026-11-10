@@ -7,7 +7,7 @@
     Authoritative count = 37 over the v0 formalization-plan table; where a figure below disagrees with the counter, the counter wins:
       T0   ( 8)  purely formal rewriting            -- 17 lemmas, 0 sorry
       T1-A       algebraic axioms + closed ser. id. -- 16 lemmas, 0 sorry
-      T1-D       definition-dependent (TODO bodies) --  5 lemmas, 2 sorry
+      T1-D       definition-dependent (TODO bodies) --  5 lemmas, 1 sorry
       T2   ( 8)  linear algebra / matrices          -- 10 lemmas, 2 sorry
       T3   ( 8)  security / probabilistic / parser  --  8 lemmas, 2 sorry
     (T1-A / T1-D split the former single T1 bucket at the lemma level; the 37
@@ -414,11 +414,11 @@ lemma T1_F3_u16le:
   "u16le x = [x mod 256, (x div 256) mod 256]"
   by (simp add: u16le_def)
 
-section \<open>T1-D -- definition-dependent obligations (5 lemmas / 2 sorry)\<close>
+section \<open>T1-D -- definition-dependent obligations (5 lemmas / 1 sorry)\<close>
 
 text \<open>These five obligations are statements about the protocol definition
   layer (spec Sec 3.4, 5, 6.2, 8), not algebraic axioms, so they are kept out
-  of T1-A: that lets T1-A honestly say 0 sorry while these 5 sorries stay
+  of T1-A: that lets T1-A honestly say 0 sorry while the remaining sorry stays
   visible here.  As of stage 2a the five objects (x1_of, t_of, adapted_of,
   deser_pk, deser_sig) are ANCHORED to the definitions of VWZ_Protocol instead
   of being uninterpreted constants; anchoring changes only the signature, it
@@ -443,7 +443,29 @@ subsection \<open>T1-D :: C2 -- every nonzero target entry lies in [1, q-1]\<clo
 lemma T1_C2:
   "\<forall>i<length (t_of pk msg).
      t_of pk msg ! i = 0 \<or> (1 \<le> t_of pk msg ! i \<and> t_of pk msg ! i \<le> 3328)"
-  sorry
+proof (intro allI impI)
+  fix i
+  assume i: "i < length (t_of pk msg)"
+  have len: "length (t_of pk msg) = par_n (pk_k pk)"
+    unfolding t_of_def hash_target_def by simp
+  with i have ip: "i < par_n (pk_k pk)" by simp
+  have entry: "t_of pk msg ! i =
+      (if i \<in> set (take (Suc (pk_k pk))
+            (fy_fuel (Suc (pk_k pk)) 0 [0..<par_n (pk_k pk)] (digest (pk_k pk) msg)))
+       then (1::int) else 0)"
+    unfolding t_of_def hash_target_def using ip by simp
+  have vals: "t_of pk msg ! i = 0 \<or> t_of pk msg ! i = 1"
+    using entry by (simp split: if_split)
+  show "t_of pk msg ! i = 0 \<or> (1 \<le> t_of pk msg ! i \<and> t_of pk msg ! i \<le> 3328)"
+  proof (cases "t_of pk msg ! i = 0")
+    case True
+    then show ?thesis by simp
+  next
+    case False
+    with vals have "t_of pk msg ! i = 1" by simp
+    then show ?thesis by simp
+  qed
+qed
 
 subsection \<open>T1-D :: C6 -- adapted[i] = 0 \<longleftrightarrow> t[i] = 0  (no zero divisors)\<close>
 

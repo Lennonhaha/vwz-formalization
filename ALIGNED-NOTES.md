@@ -705,7 +705,7 @@ three inverse laws that were still `sorry` in the probes
 (`r2_rowadd_inverse`, `r2_swap_inverse`, `r2_scale_inverse`) were **not**
 copied across, so the shipped file has no `sorry` at all.
 <!-- seg: seg-rref-4e2669767f48 -->
-﻿### 2026-10-20 -- Gauss-Jordan lands; T2_B7 turns out to be a statement defect
+### 2026-10-20 -- Gauss-Jordan lands; T2_B7 turns out to be a statement defect
 
 `VWZ_RREF.thy` now carries a fuel-parameterised reduction. Fuel (`rref_fuel
 f r c A`) makes the recursion structural, so termination is free; the bound
@@ -747,7 +747,7 @@ files, 191 lemmas, 1 theorem, 17 sorry, 132,006 bytes.
 
 <!-- seg: aligned-rref-landing-20261020 -->
 <!-- seg: seg-inv-5fd5013f2ff9 -->
-﻿### 2026-10-20 (later) -- the inverse lands, T2_B5 closes by unfolding, T2_B7 gets refuted
+### 2026-10-20 (later) -- the inverse lands, T2_B5 closes by unfolding, T2_B7 gets refuted
 
 `mat_inv` is a definition now: reduce `[A | I]` and keep the right block, using
 the same fuel-counted Gauss-Jordan. Two `eval` checks (identity, the 2x2 swap).
@@ -792,7 +792,7 @@ lemmas, 1 theorem, 16 sorry, 136,093 bytes. Build RC=0.
 
 <!-- seg: aligned-inverse-refutation-20261020 -->
 <!-- seg: seg-lcg-b3e2eaa25743 -->
-﻿### 2026-10-20 (later still) -- the LCG lands, and the type is the real blocker
+### 2026-10-20 (later still) -- the LCG lands, and the type is the real blocker
 
 Spec Sec 3.1 is a 64-bit LCG: state stepped by `s * 6364136223846793005 +
 1442695040888963407` modulo `2^64`, `next_u16_mod` truncating to 32 bits
